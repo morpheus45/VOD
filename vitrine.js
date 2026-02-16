@@ -1,63 +1,82 @@
+/* global window, document, navigator, localStorage */
 
-// --- PWA install (Chrome/Android) ---
-let __deferredInstallPrompt = null;
-
-function __setInstallBtnState() {
-  const btn = document.getElementById('installBtn');
-  if (!btn) return;
-  // Toujours visible (comme demandé), mais activé seulement si le navigateur autorise prompt()
-  btn.style.display = 'inline-flex';
-  btn.disabled = !__deferredInstallPrompt;
-  btn.title = __deferredInstallPrompt
-    ? 'Installer l’application'
-    : 'Installation: menu du navigateur → "Ajouter à l’écran d’accueil" (si disponible)';
-}
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  // Sur Android/Chrome, l’app doit être "installable" pour que cet event se déclenche.
-  e.preventDefault();
-  __deferredInstallPrompt = e;
-  __setInstallBtnState();
-});
-
-window.addEventListener('appinstalled', () => {
-  __deferredInstallPrompt = null;
-  __setInstallBtnState();
-});
-
-document.addEventListener('click', async (ev) => {
-  const btn = ev.target.closest && ev.target.closest('#installBtn');
-  if (!btn) return;
-
-  // Si le navigateur ne supporte pas le prompt, on guide l’utilisateur.
-  if (!__deferredInstallPrompt) {
-    alert('Ton navigateur ne propose pas le bouton d’installation ici.\n\nEssaie:\n• Menu ⋮ du navigateur → "Ajouter à l’écran d’accueil"\n• ou ouvre avec Chrome (Android) si possible.');
-    return;
-  }
-
-  try {
-    __deferredInstallPrompt.prompt();
-    await __deferredInstallPrompt.userChoice;
-  } catch (err) {
-    console.warn('Install prompt failed:', err);
-  } finally {
-    __deferredInstallPrompt = null;
-    __setInstallBtnState();
-  }
-});
-
-// Service worker: indispensable pour que l’app devienne installable
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js')
-      .then(() => console.log('[SW] registered'))
-      .catch((e) => console.warn('[SW] register failed', e));
+//
+// Service Worker (required for real PWA install)
+//
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
   });
 }
 
-document.addEventListener('DOMContentLoaded', __setInstallBtnState);
+//
+// PWA install button (works only when browser fires beforeinstallprompt)
+//
+let deferredInstallPrompt = null;
 
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
 
+function showInstallButton(state) {
+  const btn = document.getElementById("installBtn");
+  if (!btn) return;
+  if (state === "installed") {
+    btn.style.display = "none";
+    return;
+  }
+  btn.style.display = "inline-flex";
+  btn.disabled = false;
+  btn.textContent = "Installer";
+}
+
+function showInstallHelp() {
+  const msg =
+    "Installation PWA indisponible sur ce navigateur/appareil.\n\n" +
+    "✅ Android (Chrome) : menu ⋮ → « Installer l'application » / « Ajouter à l'écran d'accueil ».\n" +
+    "⚠️ Google TV / certains navigateurs : souvent seulement un raccourci (pas une vraie PWA).";
+  alert(msg);
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  // Chrome/Edge Android/Desktop
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  showInstallButton("ready");
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  showInstallButton("installed");
+});
+
+// Button click
+window.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("installBtn");
+  if (!btn) return;
+
+  // Hide by default; show when install is available, or keep visible if you prefer.
+  // Here: keep visible, but if not available, show help.
+  btn.style.display = "inline-flex";
+
+  if (isStandalone()) {
+    btn.style.display = "none";
+    return;
+  }
+
+  btn.addEventListener("click", async () => {
+    if (!deferredInstallPrompt) {
+      showInstallHelp();
+      return;
+    }
+    deferredInstallPrompt.prompt();
+    try {
+      await deferredInstallPrompt.userChoice;
+    } finally {
+      deferredInstallPrompt = null;
+    }
+  });
+});
 
 const STORAGE="vod_m3u_entries_v4";
 const CATS="vod_m3u_cats_v4";
