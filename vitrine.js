@@ -3,6 +3,39 @@ const STORAGE="vod_m3u_entries_v4";
 const CATS="vod_m3u_cats_v4";
 const $=id=>document.getElementById(id);
 
+// --- PWA install button (Android Chrome) ---
+let deferredPrompt = null;
+function setupInstallButton(){
+  const btn = document.getElementById("installBtn");
+  if(!btn) return;
+  // Hide if already installed
+  try{
+    if(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches){
+      btn.hidden = true;
+      return;
+    }
+  }catch(_){}
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    btn.hidden = false;
+  });
+  btn.addEventListener("click", async () => {
+    if(!deferredPrompt){
+      alert("Installation non disponible sur ce navigateur / cet appareil. Sur Android: menu ⋮ > Ajouter à l’écran d’accueil.");
+      return;
+    }
+    deferredPrompt.prompt();
+    try{ await deferredPrompt.userChoice; }catch(_){}
+    deferredPrompt = null;
+    btn.hidden = true;
+  });
+  window.addEventListener("appinstalled", () => {
+    btn.hidden = true;
+    deferredPrompt = null;
+  });
+}
+
 let entries=[];
 let cats=[];
 let activeCat="Tous";
@@ -158,4 +191,5 @@ if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").catch(()=>{});});
 }
 
+setupInstallButton();
 reloadData();
