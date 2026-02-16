@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#0b1020"/>
+  <title>Lecture</title>
+  <style>
+    html,body{height:100%;margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .wrap{height:100%;display:flex;flex-direction:column}
+    header{display:flex;gap:10px;align-items:center;padding:10px;background:rgba(0,0,0,.55);backdrop-filter:blur(10px)}
+    header .title{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    header a{color:#9bb4ff;text-decoration:none}
+    video{flex:1;width:100%;height:100%;background:#000}
+    .hint{padding:10px;opacity:.85;font-size:13px}
+    button{border:0;border-radius:10px;background:#2d6bff;color:#fff;padding:10px 12px;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a href="./index.html">← Retour</a>
+      <div class="title" id="t"></div>
+      <button id="fs">Plein écran</button>
+    </header>
+    <video id="v" controls playsinline></video>
+    <div class="hint" id="h"></div>
+  </div>
+
+  <!-- hls.js (needed for .m3u8 on most Android browsers) -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <script>
+    const qs = new URLSearchParams(location.search);
+    const url = qs.get("u") || "";
+    const title = qs.get("t") || "Lecture";
+    const poster = qs.get("p") || "";
+    document.title = title;
+    document.getElementById("t").textContent = title;
+
+    const video = document.getElementById("v");
+    if (poster) video.poster = poster;
+
+    const hint = document.getElementById("h");
+
+    function tryLockLandscape(){
+      try{
+        if (screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock("landscape").catch(()=>{});
+        }
+      }catch(e){}
+    }
+
+    async function goFullscreen(){
+      try{
+        if (video.requestFullscreen) await video.requestFullscreen();
+        else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+      }catch(e){}
+      tryLockLandscape();
+    }
+
+    document.getElementById("fs").addEventListener("click", () => goFullscreen());
+
+    // Autoplay attempt (may be blocked), but clicking play will work
+    function loadSource(u){
+      if (!u) return;
+      // Native HLS support (Safari, some TVs)
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = u;
+        hint.textContent = "";
+        return;
+      }
+      // hls.js for browsers that support MSE
+      if (window.Hls && Hls.isSupported()) {
+        const hls = new Hls({ lowLatencyMode: true });
+        hls.loadSource(u);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.ERROR, function (event, data) {
+          // If HLS fails, show fallback link
+          hint.innerHTML = "Impossible de lire automatiquement ce flux ici. <a href='" + u + "' target='_blank' rel='noopener'>Ouvrir le lien direct</a>";
+        });
+        return;
+      }
+      // Fallback
+      hint.innerHTML = "Ton navigateur ne supporte pas .m3u8 ici. <a href='" + u + "' target='_blank' rel='noopener'>Ouvrir le lien direct</a>";
+    }
+
+    loadSource(url);
+
+    // On first user gesture, try fullscreen + landscape for mobile
+    let once = false;
+    video.addEventListener("play", () => {
+      if (once) return;
+      once = true;
+      goFullscreen();
+    }, { once: true });
+  </script>
+</body>
+</html>

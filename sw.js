@@ -1,69 +1,65 @@
-const CACHE_NAME = "vod-pwa-v18";
+/* VOD PWA - simple offline cache (GitHub Pages friendly) */
+const CACHE_NAME = "vod-pwa-cache-v1";
 const ASSETS = [
   "./",
   "./index.html",
-  "./panel.html",
   "./admin.html",
-  "./manifest.webmanifest",
-  "./icon-192.png",
-  "./icon-512.png",
+  "./panneau.html",
+  "./player.html",
+  "./app.js",
   "./vitrine.js",
   "./admin.js",
-  "./app.js",
-  "./vod.json"
+  "./vod.json",
+  "./manifest.webmanifest",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((k) => (k !== CACHE_NAME ? caches.delete(k) : null)));
-      await self.clients.claim();
-    })()
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+    ).then(() => self.clients.claim())
   );
 });
 
+// Navigation: network-first (fresh JSON), fallback cache
+// Static assets: cache-first
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Only handle same-origin GET requests
-  if (req.method !== "GET" || url.origin !== self.location.origin) return;
+  // Only handle same-origin
+  if (url.origin !== self.location.origin) return;
 
-  // Navigation: offline fallback to cached app shell
+  // HTML navigations
   if (req.mode === "navigate") {
     event.respondWith(
-      (async () => {
-        const cache = await caches.open(CACHE_NAME);
-        const cached = await cache.match("./?source=pwa") || await cache.match("./index.html") || await cache.match("./");
-        try {
-          const fresh = await fetch(req);
-          // update cache in background
-          cache.put(req, fresh.clone());
-          return fresh;
-        } catch (e) {
-          return cached || Response.error();
-        }
-      })()
+      fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+        return res;
+      }).catch(() => caches.match(req).then((r) => r || caches.match("./index.html")))
     );
     return;
   }
 
-  // Static assets: cache-first
-  event.respondWith(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      const cached = await cache.match(req);
-      if (cached) return cached;
-      const fresh = await fetch(req);
-      cache.put(req, fresh.clone());
-      return fresh;
-    })()
-  );
+  // Cache-first for other GET
+  if (req.method === "GET") {
+    event.respondWith(
+      caches.match(req).then((cached) => cached || fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then((c) => c.put(req, copy));
+        return res;
+      }))
+    );
+  }
 });

@@ -59,6 +59,16 @@ code{background:rgba(255,255,255,.08);padding:.12rem .35rem;border-radius:.35rem
 .modalTop h3{margin:0 0 6px;font-size:18px}
 .modalTop p{margin:0;color:var(--muted);font-size:13px}
 .modalActions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+
+/* --- Fixes v22 --- */
+.header{position:sticky; top:0; z-index:50; transition:transform .25s ease, opacity .25s ease;}
+.header.is-hidden{transform:translateY(-120%); opacity:0; pointer-events:none;}
+/* Mobile: force 3 posters per row */
+@media (max-width: 520px){
+  .gallery{grid-template-columns:repeat(3, minmax(0,1fr)) !important;}
+  .cap{font-size:12px !important;}
+}
+
 </style>
 </head>
 <body>

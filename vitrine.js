@@ -238,3 +238,20 @@ if("serviceWorker" in navigator){
 }
 
 reloadData();
+
+
+// --- Header auto-hide on scroll (vitrine) ---
+(function headerHideOnScroll(){
+  const header = document.querySelector('.header');
+  if(!header) return;
+  let lastY = window.scrollY || 0;
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY || 0;
+    const goingDown = y > lastY + 6;
+    const goingUp = y < lastY - 6;
+    if (y > 80 && goingDown) header.classList.add('is-hidden');
+    if (goingUp) header.classList.remove('is-hidden');
+    if (y < 20) header.classList.remove('is-hidden');
+    lastY = y;
+  }, { passive:true });
+})();
