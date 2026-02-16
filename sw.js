@@ -1,4 +1,4 @@
-const CACHE_NAME="vod-pwa-v10-20260216064919";
+const CACHE_NAME="vod-pwa-v17-1771264011";
 const ASSETS=[
   "./",
   "./index.html",
