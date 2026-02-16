@@ -1,40 +1,67 @@
 
+// --- PWA install (Chrome/Android) ---
+let __deferredInstallPrompt = null;
+
+function __setInstallBtnState() {
+  const btn = document.getElementById('installBtn');
+  if (!btn) return;
+  // Toujours visible (comme demandé), mais activé seulement si le navigateur autorise prompt()
+  btn.style.display = 'inline-flex';
+  btn.disabled = !__deferredInstallPrompt;
+  btn.title = __deferredInstallPrompt
+    ? 'Installer l’application'
+    : 'Installation: menu du navigateur → "Ajouter à l’écran d’accueil" (si disponible)';
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Sur Android/Chrome, l’app doit être "installable" pour que cet event se déclenche.
+  e.preventDefault();
+  __deferredInstallPrompt = e;
+  __setInstallBtnState();
+});
+
+window.addEventListener('appinstalled', () => {
+  __deferredInstallPrompt = null;
+  __setInstallBtnState();
+});
+
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest && ev.target.closest('#installBtn');
+  if (!btn) return;
+
+  // Si le navigateur ne supporte pas le prompt, on guide l’utilisateur.
+  if (!__deferredInstallPrompt) {
+    alert('Ton navigateur ne propose pas le bouton d’installation ici.\n\nEssaie:\n• Menu ⋮ du navigateur → "Ajouter à l’écran d’accueil"\n• ou ouvre avec Chrome (Android) si possible.');
+    return;
+  }
+
+  try {
+    __deferredInstallPrompt.prompt();
+    await __deferredInstallPrompt.userChoice;
+  } catch (err) {
+    console.warn('Install prompt failed:', err);
+  } finally {
+    __deferredInstallPrompt = null;
+    __setInstallBtnState();
+  }
+});
+
+// Service worker: indispensable pour que l’app devienne installable
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('[SW] registered'))
+      .catch((e) => console.warn('[SW] register failed', e));
+  });
+}
+
+document.addEventListener('DOMContentLoaded', __setInstallBtnState);
+
+
+
 const STORAGE="vod_m3u_entries_v4";
 const CATS="vod_m3u_cats_v4";
 const $=id=>document.getElementById(id);
-
-// --- PWA install button (Android Chrome) ---
-let deferredPrompt = null;
-function setupInstallButton(){
-  const btn = document.getElementById("installBtn");
-  if(!btn) return;
-  // Hide if already installed
-  try{
-    if(window.matchMedia && window.matchMedia("(display-mode: standalone)").matches){
-      btn.hidden = true;
-      return;
-    }
-  }catch(_){}
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    btn.hidden = false;
-  });
-  btn.addEventListener("click", async () => {
-    if(!deferredPrompt){
-      alert("Installation non disponible sur ce navigateur / cet appareil. Sur Android: menu ⋮ > Ajouter à l’écran d’accueil.");
-      return;
-    }
-    deferredPrompt.prompt();
-    try{ await deferredPrompt.userChoice; }catch(_){}
-    deferredPrompt = null;
-    btn.hidden = true;
-  });
-  window.addEventListener("appinstalled", () => {
-    btn.hidden = true;
-    deferredPrompt = null;
-  });
-}
 
 let entries=[];
 let cats=[];
@@ -191,5 +218,4 @@ if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").catch(()=>{});});
 }
 
-setupInstallButton();
 reloadData();
