@@ -328,8 +328,37 @@ function renderAll(){
   renderGallery();
 }
 
-window.addEventListener("beforeinstallprompt",(e)=>{e.preventDefault(); deferredPrompt=e; installBtn.hidden=false;});
-installBtn.addEventListener("click",async()=>{if(!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; installBtn.hidden=true;});
+// Install PWA (best effort).
+// The real install prompt is only available when the browser fires `beforeinstallprompt`.
+// Some browsers (notably certain Android/TV browsers) never fire it; in that case we show instructions.
+installBtn.hidden = false;
+
+function showInstallHelp(){
+  alert(
+    "Installation PWA\n\n" +
+    "Si le bouton n'ouvre pas de fenêtre d'installation, utilise le menu du navigateur :\n" +
+    "• Android Chrome : ⋮ > Installer l'application / Ajouter à l'écran d'accueil\n" +
+    "• PC Chrome/Edge : ⋮ > Installer VOD\n" +
+    "Sur certains navigateurs TV, l'installation PWA n'est pas supportée : tu auras seulement un raccourci."
+  );
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.classList.add("ready");
+});
+
+installBtn.addEventListener("click", async () => {
+  if (!deferredPrompt) {
+    showInstallHelp();
+    return;
+  }
+  deferredPrompt.prompt();
+  try { await deferredPrompt.userChoice; } catch {}
+  deferredPrompt = null;
+  installBtn.classList.remove("ready");
+});
 
 if("serviceWorker" in navigator){
   window.addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").catch(()=>{});});

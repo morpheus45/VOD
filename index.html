@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#1d4ed8" />
   <title>Vitrine VOD</title>
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" href="icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <style>:root{--bg:#0b1220;--muted:#9fb0d0;--text:#e9eefc;--border:rgba(255,255,255,.10);--shadow:0 10px 30px rgba(0,0,0,.35);--card:rgba(255,255,255,.04);--card2:rgba(255,255,255,.02);}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:radial-gradient(1200px 800px at 10% -10%, rgba(29,78,216,.35), transparent 60%),radial-gradient(1200px 800px at 110% 10%, rgba(99,102,241,.25), transparent 60%),#0b1220;color:var(--text);}
@@ -47,11 +47,9 @@ code{background:rgba(255,255,255,.08);padding:.12rem .35rem;border-radius:.35rem
 .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 12px}
 .tab{padding:8px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.06);cursor:pointer;font-size:13px}
 .tab.active{background:linear-gradient(135deg, rgba(29,78,216,.95), rgba(99,102,241,.85));border-color:rgba(255,255,255,.14)}
-.gallery{display:grid;grid-template-columns:repeat(6, minmax(0,1fr));gap:10px}
-@media(max-width:1100px){.gallery{grid-template-columns:repeat(4, minmax(0,1fr));}}
-@media(max-width:700px){.gallery{grid-template-columns:repeat(3, minmax(0,1fr));}}
+.gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .poster{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(0,0,0,.18);box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
-.poster img{width:100%;height:220px;object-fit:cover;display:block;background:rgba(255,255,255,.04)}
+.poster img{width:100%;height:auto;aspect-ratio:2/3;object-fit:cover;display:block;background:rgba(255,255,255,.04)}
 .poster .cap{padding:8px 10px;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.60);display:none;align-items:center;justify-content:center;padding:18px;z-index:50}
 .modal.open{display:flex}
