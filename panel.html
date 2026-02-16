@@ -4,11 +4,12 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#1d4ed8" />
-  <title>Vitrine VOD</title>
+  <title>VOD M3U Builder (local)</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <style>:root{--bg:#0b1220;--muted:#9fb0d0;--text:#e9eefc;--border:rgba(255,255,255,.10);--shadow:0 10px 30px rgba(0,0,0,.35);--card:rgba(255,255,255,.04);--card2:rgba(255,255,255,.02);}
 *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:radial-gradient(1200px 800px at 10% -10%, rgba(29,78,216,.35), transparent 60%),radial-gradient(1200px 800px at 110% 10%, rgba(99,102,241,.25), transparent 60%),#0b1220;color:var(--text);}
 .header{position:sticky;top:0;backdrop-filter:blur(10px);background:rgba(11,18,32,.65);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:10;}
@@ -68,48 +69,165 @@ code{background:rgba(255,255,255,.08);padding:.12rem .35rem;border-radius:.35rem
   <div class="brand">
     <div class="logo" aria-hidden="true">🎬</div>
     <div>
-      <h1>VOD</h1>
-      <p>Choisis une catégorie, puis clique sur une jaquette pour ouvrir la vidéo.</p>
+      <h1>VOD M3U Builder</h1>
+      <p>Catalogue local + export M3U. (Aperçu Netflix-like dans la PWA — Smarters garde sa propre interface.)</p>
     </div>
   </div>
+  <button id="installBtn" class="btn btn-secondary" hidden>Installer</button>
 </header>
 
 <main class="container">
   <section class="card">
+    <h2>Ajouter une entrée</h2>
+
+    <div class="grid2">
+      <div class="field">
+        <label class="label" for="title">Titre</label>
+        <input id="title" type="text" placeholder="Ex: Troll 2 (2025)" />
+      </div>
+      <div class="field">
+        <label class="label" for="category">Catégorie (section)</label>
+        <div class="row">
+          <select id="category"></select>
+          <button id="newCatBtn" class="btn btn-secondary" type="button">+ Catégorie</button>
+        </div>
+        <small class="hint">Export M3U: <code>group-title</code>. Aperçu dans la PWA: onglets + affiches.</small>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <label class="label" for="videoUrl">URL vidéo</label>
+        <input id="videoUrl" type="url" placeholder="https://.../video.mp4 ou .../stream.m3u8" />
+      </div>
+      <div class="field">
+        <label class="label" for="imageUrl">URL jaquette (poster)</label>
+        <input id="imageUrl" type="url" placeholder="https://.../poster.jpg" />
+        <small class="hint">Copie l'URL complète (pas de <code>...</code>). Image directe HTTPS (.jpg/.png).</small>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="addBtn" class="btn btn-primary" type="button">Valider / Ajouter</button>
+      <button id="addNextBtn" class="btn" type="button">Ajouter & Suivant</button>
+      <button id="clearFormBtn" class="btn btn-secondary" type="button">Effacer formulaire</button>
+    </div>
+
+    <div class="status" id="formStatus" aria-live="polite"></div>
+  </section>
+
+  <section class="card">
     <div class="rowHeader">
-      <h2>Catalogue</h2>
-      <div class="pill"><span id="count">0</span> vidéos</div>
+      <h2>Catalogue (aperçu Netflix-like dans la PWA)</h2>
+      <div class="pill"><span id="count">0</span> éléments</div>
+    </div>
+
+    <div id="tabs" class="tabs"></div>
+    <div id="gallery" class="gallery"></div>
+
+    <div class="hint">Si une affiche ne charge pas ici, elle ne chargera souvent pas non plus dans Smarters (URL image non directe, redirection, hotlink, etc.).</div>
+  </section>
+
+  <section class="card">
+    <div class="rowHeader">
+      <h2>Exporter / importer</h2>
+      <div class="pill">M3U + JSON + import M3U</div>
     </div>
 
     <div class="toolbar">
       <div class="field small">
-        <label class="label" for="filter">Recherche</label>
-        <input id="filter" type="text" placeholder="rechercher…" />
+        <label class="label" for="playlistName">Nom fichier</label>
+        <input id="playlistName" type="text" value="vod" />
+      </div>
+      <div class="field small">
+        <label class="label" for="logoMode">Logo</label>
+        <select id="logoMode">
+          <option value="both" selected>tvg-logo + logo</option>
+          <option value="tvg-logo">tvg-logo</option>
+          <option value="logo">logo</option>
+          <option value="none">aucun</option>
+        </select>
       </div>
       <div class="field small">
         <label class="label" for="sort">Tri</label>
         <select id="sort">
-          <option value="cat_title" selected>Catégorie → Titre</option>
+          <option value="added_desc" selected>Récents d’abord</option>
+          <option value="cat_title">Catégorie → Titre</option>
           <option value="title">Titre</option>
-          <option value="added_desc">Récents d’abord</option>
         </select>
       </div>
       <div class="field small">
-        <label class="label" for="refresh">Données</label>
-        <button id="refresh" class="btn">Recharger</button>
+        <label class="label" for="filter">Filtre</label>
+        <input id="filter" type="text" placeholder="rechercher…" />
       </div>
-</div>
+    </div>
 
-    <div id="tabs" class="tabs"></div>
-    <div id="gallery" class="gallery"></div>
+    <div class="actions">
+      <button id="buildBtn" class="btn">Générer</button>
+      <button id="downloadBtn" class="btn btn-primary" disabled>Télécharger .m3u</button>
+
+      <button id="exportJsonBtn" class="btn btn-secondary">Exporter JSON</button>
+      <button id="importJsonBtn" class="btn btn-secondary">Importer JSON</button>
+      <input id="jsonFile" type="file" accept="application/json" hidden />
+
+      <button id="importM3uBtn" class="btn btn-secondary">Importer M3U</button>
+      <input id="m3uFile" type="file" accept=".m3u,.m3u8,text/plain" hidden />
+
+      <button id="clearAllBtn" class="btn btn-danger">Tout supprimer</button>
+    </div>
+
     <div class="status" id="status" aria-live="polite"></div>
 
-    <div class="footer" style="padding:12px 0 0">
-      <a class="btn btn-secondary" href="admin.html">Lien Admin</a>
+    <div class="tableWrap">
+      <table class="table" aria-label="Entrées">
+        <thead>
+          <tr>
+            <th>#</th><th>Titre</th><th>Catégorie</th><th>Vidéo</th><th>Image</th><th>Ajouté</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
     </div>
+  </section>
+
+  <section class="card">
+    <h2>Aperçu M3U</h2>
+    <pre id="preview" class="preview" tabindex="0"></pre>
+  </section>
+
+  <section class="card">
+    <h2>Importer rapidement (copier-coller)</h2>
+    <div class="hint">Une ligne : <code>Titre | Catégorie | URL vidéo | URL image</code></div>
+    <textarea id="bulk" rows="5" placeholder="The Fix (2024) | Science-fiction | https://...m3u8 | https://...jpg"></textarea>
+    <div class="actions">
+      <button id="bulkBtn" class="btn btn-secondary" type="button">Importer ces lignes</button>
+    </div>
+    <div class="status" id="bulkStatus" aria-live="polite"></div>
   </section>
 </main>
 
-<script src="vitrine.js"></script>
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-label="Détails">
+  <div class="modalCard">
+    <div class="modalTop">
+      <img id="mImg" alt="Poster" />
+      <div>
+        <h3 id="mTitle"></h3>
+        <p id="mCat"></p>
+        <p class="mono" id="mUrl" style="margin-top:10px;"></p>
+        <div class="modalActions">
+          <button id="copyUrlBtn" class="btn btn-secondary">Copier URL vidéo</button>
+          <button id="copyImgBtn" class="btn btn-secondary">Copier URL image</button>
+          <button id="closeBtn" class="btn btn-primary">Fermer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <span>Note : l'affichage “Netflix” dans Smarters dépend de Smarters. Ici, l'aperçu Netflix-like est dans la PWA.</span>
+</footer>
+
+<script src="app.js"></script>
 </body>
 </html>
