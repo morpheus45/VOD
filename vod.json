@@ -10,7 +10,8 @@
     "Déjà vus",
     "Science-fiction",
     "Documentaire",
-    "Spectacles"
+    "Spectacles",
+    "Idefini"
   ],
   "entries": [
     {
@@ -292,6 +293,41 @@
       "url": "https://bram94761.bramtiv.com/files/aa/G9Nl2jn2pwxhYkd1v4Dz7skPoGoNEf2koPG.m3u8",
       "image": "https://media.themoviedb.org/t/p/original/AkvtzsvH4yFOH99dVPJmDs28Gtt.jpg",
       "added_at": "2026-02-18T06:33:49.498Z"
+    },
+    {
+      "title": "Reconnu coupable (2026) HD",
+      "category": "Science-fiction",
+      "url": "https://moo265724.moovbob.fr/files/aa/hEEs86OYjNw56xzXS6O1b6IzanHmceTuTxW.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/fk5igdZhR9p3N9t9Y7zM6UX2XOJ.jpg",
+      "added_at": "2026-02-18T06:58:44.838Z"
+    },
+    {
+      "title": "28 Ans plus tard : Le Temple des morts (2026) HD",
+      "category": "Horreur",
+      "url": "https://moo265724.moovbob.fr/files/aa/sHLGcb5sO3VfC6hO8EfkwKSjEYJX34iwL4c.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/pgglrx81AJ7uL6ytcuHdHkiipcA.jpg",
+      "added_at": "2026-02-18T06:59:41.522Z"
+    },
+    {
+      "title": "Marty Supreme (2026) HD",
+      "category": "Idefini",
+      "url": "https://bram265724.bramtiv.com/files/aa/NQq7IphLBJHa2lT7c6unHWZ67Q0uzyompOt.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/3sr8joreBtsPFNZ3RjWeYhdZBE8.jpg",
+      "added_at": "2026-02-18T07:01:49.309Z"
+    },
+    {
+      "title": "Bob l'éponge, le film : Un pour tous, tous pirates ! (2025) HD",
+      "category": "Animé",
+      "url": "https://moov265724.moovtop.fr/files/aa/a2xtV7fjs9smaO20v5PbsVi2lqfb79qhcXK.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/1WSOiU7XmLoEnYyADAEMQfGe9eN.jpg",
+      "added_at": "2026-02-18T07:02:47.587Z"
+    },
+    {
+      "title": "Zootopie 2 (2025) HD",
+      "category": "Animé",
+      "url": "https://bram265724.bramtiv.com/files/aa/TeJf8DWhWqfcMc6w6hBozDV0otmSP5yJkiY.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/hBI7Wrps6tDjhEzBxJgoPLhbmT1.jpg",
+      "added_at": "2026-02-18T07:03:24.758Z"
     }
   ]
 }
