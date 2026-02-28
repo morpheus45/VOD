@@ -11,7 +11,8 @@
     "Science-fiction",
     "Documentaire",
     "Spectacles",
-    "Idefini"
+    "Idefini",
+    "Aventure"
   ],
   "entries": [
     {
@@ -288,13 +289,6 @@
       "added_at": "2026-02-18T06:24:46.446Z"
     },
     {
-      "title": "Minority Report (2002) HD",
-      "category": "Animé",
-      "url": "https://bram94761.bramtiv.com/files/aa/G9Nl2jn2pwxhYkd1v4Dz7skPoGoNEf2koPG.m3u8",
-      "image": "https://media.themoviedb.org/t/p/original/AkvtzsvH4yFOH99dVPJmDs28Gtt.jpg",
-      "added_at": "2026-02-18T06:33:49.498Z"
-    },
-    {
       "title": "Reconnu coupable (2026) HD",
       "category": "Science-fiction",
       "url": "https://moo265724.moovbob.fr/files/aa/hEEs86OYjNw56xzXS6O1b6IzanHmceTuTxW.m3u8",
@@ -328,6 +322,83 @@
       "url": "https://bram265724.bramtiv.com/files/aa/TeJf8DWhWqfcMc6w6hBozDV0otmSP5yJkiY.m3u8",
       "image": "https://media.themoviedb.org/t/p/original/hBI7Wrps6tDjhEzBxJgoPLhbmT1.jpg",
       "added_at": "2026-02-18T07:03:24.758Z"
+    },
+    {
+      "title": "Shelter (2026) HD",
+      "category": "Action",
+      "url": "https://moov265724.moovtop.fr/files/aa/TUN9VdK28AoicLs1HuorSlxM6tSIpezi9ms.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/2OywNIynSmztN8yiL4gCt7NewEc.jpg",
+      "added_at": "2026-02-28T10:45:46.386Z"
+    },
+    {
+      "title": "The Bluff (2026) HD",
+      "category": "Action",
+      "url": "https://moo265724.moovbob.fr/files/aa/xmP4jDeJ6jPl3zmw9hM2ymfqlnlvKF4i1Tm.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/6S5lbHtWcMTMWbIiguqdCU0u1Cg.jpg",
+      "added_at": "2026-02-28T10:47:39.179Z"
+    },
+    {
+      "title": "American Sweatshop (2025) HD",
+      "category": "Thriller",
+      "url": "https://moo265724.moovbob.fr/files/aa/mTvBE7r2f6f74guzaiYHJ5lxXNirohPLblm.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/fvD0pqZtBLqLTgVdtJyXJubvNqK.jpg",
+      "added_at": "2026-02-28T10:48:30.391Z"
+    },
+    {
+      "title": "La Femme la plus riche du monde (2025) HD",
+      "category": "Drame",
+      "url": "https://moo265724.moovbob.fr/files/aa/6hw2HxOgZhz365ZgqVOroQCltdXOBRUI9qL.m3u8",
+      "image": "https://i.imgur.com/jVqwv0W.jpeg",
+      "added_at": "2026-02-28T10:49:13.979Z"
+    },
+    {
+      "title": "Reconnu coupable (2026) HD",
+      "category": "Science-fiction",
+      "url": "https://bram265724.bramtiv.com/files/aa/hEEs86OYjNw56xzXS6O1b6IzanHmceTuTxW.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/fk5igdZhR9p3N9t9Y7zM6UX2XOJ.jpg",
+      "added_at": "2026-02-28T10:50:03.338Z"
+    },
+    {
+      "title": "Le Roi des rois (2025) HD",
+      "category": "Animé",
+      "url": "https://moo265724.moovbob.fr/files/aa/4XNCdm9KODVFW6aH2ZNhdAF3FwQLhJEmGrZ.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/nR8tt8jxIZTyH6sm6mcJKx8wwMy.jpg",
+      "added_at": "2026-02-28T10:51:44.557Z"
+    },
+    {
+      "title": "Zootopie (2016) HD",
+      "category": "Animé",
+      "url": "https://moo265724.moovbob.fr/files/aa/fSJVTmhXaGfD5o9xbmeI65FE50AWMVr1ObX.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/xEx4dHi2IrTB0vkVPccrGrMcZQW.jpg",
+      "added_at": "2026-02-28T10:52:27.594Z"
+    },
+    {
+      "title": "Inspecteur Sun et la malédiction de la veuve noire (2022) HD",
+      "category": "Animé",
+      "url": "https://moo265724.moovbob.fr/files/aa/A8awHaGVrpvNn2a9R45WPYaWknmS29nChx9.m3u8",
+      "image": "https://i.imgur.com/iCvQrky.jpeg",
+      "added_at": "2026-02-28T10:53:10.583Z"
+    },
+    {
+      "title": "Running Man (2025) HD",
+      "category": "Action",
+      "url": "https://moov86131.moovtop.fr/files/aa/3r9QwrQQL3fY5fJDoLqHUMgyivDF6iS9J10.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/7IwZANZ0V9ygf0LM7NsRVeIKZJR.jpg",
+      "added_at": "2026-02-28T10:54:56.214Z"
+    },
+    {
+      "title": "Kaamelott : Premier volet (2021) HD",
+      "category": "Aventure",
+      "url": "https://moo265724.moovbob.fr/files/aa/gfJU4Oc3MpFoAFXSLF4u4gfKBhgZapLqEvk.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/4mcovnajaLoy7dbv5arykJjDFFC.jpg",
+      "added_at": "2026-02-28T10:57:23.904Z"
+    },
+    {
+      "title": "Kaamelott : Deuxième volet (Partie 1) (2025) HD",
+      "category": "Aventure",
+      "url": "https://moov265724.moovtop.fr/files/aa/FaRNmYuKiCnpO3ZfMeCRvMfuYYclkvP0GGN.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/qozUrQZwmsTEFfLziB6r6Swxdb0.jpg",
+      "added_at": "2026-02-28T10:58:07.607Z"
     }
   ]
 }
