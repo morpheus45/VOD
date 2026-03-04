@@ -12,7 +12,8 @@
     "Documentaire",
     "Spectacles",
     "Idefini",
-    "Aventure"
+    "Aventure",
+    "Catastrophe"
   ],
   "entries": [
     {
@@ -658,6 +659,125 @@
       "url": "https://moo265724.moovbob.fr/files/aa/osRoUUCVNwKFO92vYrv993PKYa7RcaaAD1Z.m3u8",
       "image": "https://media.themoviedb.org/t/p/original/hokaZVc8X4Ik0UaFSvZv4tzLiuN.jpg",
       "added_at": "2026-03-03T09:10:55.462Z"
+    },
+    {
+      "title": "Banlieusards (2019) HD",
+      "category": "Drame",
+      "url": "https://moo265724.moovbob.fr/files/aa/ghqm4RywbZ6Ry4TKzlVKHlPzt0RKdbpttQP.m3u8",
+      "image": "https://www.themoviedb.org/t/p/original/8x5zUAUaVH38Ec78eXgmTdYRENP.jpg",
+      "added_at": "2026-03-04T18:40:32.911Z"
+    },
+    {
+      "title": "Banlieusards 2 (2023) HD",
+      "category": "Drame",
+      "url": "https://moo265724.moovbob.fr/files/aa/A9vA6MVXYzRrqHyZNt9WwpowDAZLtE94NFET.m3u8",
+      "image": "https://www.themoviedb.org/t/p/original/wxTzaXQudAnSTZgct3dPi2K8tt0.jpg",
+      "added_at": "2026-03-04T18:41:05.158Z"
+    },
+    {
+      "title": "Banlieusards 3 (2026) HD",
+      "category": "Drame",
+      "url": "https://moo265724.moovbob.fr/files/aa/cpv3PWXsnrtq7D7TweE8ble9z3vd7yUkYpo.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/hm7ZSLYtAlrHFk8uMamXaVo1s3I.jpg",
+      "added_at": "2026-03-04T18:41:38.481Z"
+    },
+    {
+      "title": "Le Sifflet (2026) HD",
+      "category": "Horreur",
+      "url": "https://moo265724.moovbob.fr/files/aa/ivF2M49AQnyOj7GxViQPaUfXuEvkIBC06i3.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/8fxmvHpLAt8nZatuqy0DPBG7XdV.jpg",
+      "added_at": "2026-03-04T18:42:15.261Z"
+    },
+    {
+      "title": "Vie privée (2025) HD",
+      "category": "Thriller",
+      "url": "https://moo265724.moovbob.fr/files/aa/IGpvhApm1RbI5ZzKwT9Yxi7KSSbABAmjhMO.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/fpQoFlX73OEZlO0yWfSiKAyaCQF.jpg",
+      "added_at": "2026-03-04T18:42:50.685Z"
+    },
+    {
+      "title": "The Moment (2026) HD",
+      "category": "Comédie",
+      "url": "https://moo265724.moovbob.fr/files/aa/YAB8fv08jeVpKsP9yg4X6eBvuPYnyXExxfF.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/q7MCv8oqR3L4QTQ2GNguxFy8hNc.jpg",
+      "added_at": "2026-03-04T18:43:23.800Z"
+    },
+    {
+      "title": "Charlie the Wonderdog (2026) HD",
+      "category": "Animé",
+      "url": "https://moo265724.moovbob.fr/files/aa/2fp1ODWZQgVJWTuUKOvXVuS1Qqi0FCUISjJ.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/xXIMEq8Z5pqkUkrDWqNXzCa4Mhj.jpg",
+      "added_at": "2026-03-04T18:43:55.065Z"
+    },
+    {
+      "title": "The Royal Cat (2024) HD",
+      "category": "Animé",
+      "url": "https://moo265724.moovbob.fr/files/aa/H4xqaJt4tKbJlQ6h08h19OqSM3xAw0Ie4gF.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/lEui6J0wEk9dhgOU592D6fAC9Na.jpg",
+      "added_at": "2026-03-04T18:44:26.384Z"
+    },
+    {
+      "title": "Bark (2024) HD",
+      "category": "Thriller",
+      "url": "https://moo265724.moovbob.fr/files/aa/37zTeAzn3G1zoysg0uBNzB2CMsN8CgVFovy.m3u8",
+      "image": "https://i.imgur.com/aYmPxjz.jpeg",
+      "added_at": "2026-03-04T18:45:02.182Z"
+    },
+    {
+      "title": "Papa malgré lui (2026) HD",
+      "category": "Comédie",
+      "url": "https://moo265724.moovbob.fr/files/aa/xj1DvKz59iDJ7KxqVPyX6sOhkRQQzh57A6K.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/ytGeIzMrSu4smqhtOFr9MBMGDaC.jpg",
+      "added_at": "2026-03-04T18:45:35.593Z"
+    },
+    {
+      "title": "Jurassic Park (1993) HD",
+      "category": "Aventure",
+      "url": "https://bram94761.bramtiv.com/files/aa/BHHmJnoaJDAmuyEsbGBT7FZFSsrP74JJMr5.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/2E2dKGPTWoyiaSzgNaer9zpP49n.jpg",
+      "added_at": "2026-03-04T18:47:51.039Z"
+    },
+    {
+      "title": "Jurassic Park III (2001) HD",
+      "category": "Aventure",
+      "url": "https://bram94761.bramtiv.com/files/aa/6mIHSCKiAnaMjliwTo0MIUQhxcsQws2DOLk.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/evUJpV6wfX8mHCuuHTTdCK0EiEl.jpg",
+      "added_at": "2026-03-04T18:49:25.457Z"
+    },
+    {
+      "title": "Jurassic Park II (1997) HD",
+      "category": "Aventure",
+      "url": "https://bram94761.bramtiv.com/files/aa/yZ8Ta2yq1LIujbWN7yAsKY76VgyVjXhRXpK.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/7E1xABX8fPJgFMgjKXcNRq6qDZP.jpg",
+      "added_at": "2026-03-04T18:50:55.172Z"
+    },
+    {
+      "title": "Jurassic World (2015) HD",
+      "category": "Aventure",
+      "url": "https://bram94761.bramtiv.com/files/aa/TUfx1zgtJoOu29cC8Wr1IpO6B69znZqgUFO.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/gUY5B8OaRqPnLUwjNxITUTrPbIN.jpg",
+      "added_at": "2026-03-04T18:51:51.856Z"
+    },
+    {
+      "title": "Jurassic World : Fallen Kingdom (2018) HD",
+      "category": "Aventure",
+      "url": "https://bram94761.bramtiv.com/files/aa/FtSBAJCx605EX0mjuxwKSjJbjVzhce7SHZt.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/oseBCjfTaA5ZaeuR3NR6rgwa3kR.jpg",
+      "added_at": "2026-03-04T18:52:39.234Z"
+    },
+    {
+      "title": "Jurassic World : Renaissance (2025) HD",
+      "category": "Aventure",
+      "url": "https://bram94761.bramtiv.com/files/aa/OFUlxz5wNeietGiQGhPy3WON0EuQ7PmVugh.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/39BWHFc5J2Pp7gHcykwOkm3tWTA.jpg",
+      "added_at": "2026-03-04T18:53:53.813Z"
+    },
+    {
+      "title": "Jurassic World : Le Monde d’après (2022) HD",
+      "category": "Aventure",
+      "url": "https://share31121.sharecloudy.com/files/aa/IWC5gQYfuNtdbOKZiAbzF1Gjx8mXud7daKi.m3u8",
+      "image": "https://media.themoviedb.org/t/p/original/lfx3ilYMmvtnsSXikHGoJcSkUTs.jpg",
+      "added_at": "2026-03-04T18:54:23.730Z"
     }
   ]
 }
