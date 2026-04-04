@@ -1,6 +1,6 @@
-VOD final
+Version finale VOD + Séries
 
-Racine publique :
+Fichiers publics :
 - index.html
 - public.js
 - details.html
@@ -8,18 +8,12 @@ Racine publique :
 
 Admin :
 - admin.html
-- admin.js
+- admin-panel.html
+- admin-panel.js
 
-Icônes :
-- icon-192.png
-- icon-512.png
-- manifest.webmanifest
-- sw.js
+Données :
+- vod_catalog.json et series_catalog.json recommandés
+- fallback possible sur vod.m3u / series.m3u
 
-Fichiers à ajouter :
-- series.json ou series.m3u
-- vod.json ou vod.m3u
-
-
-Protection admin ajoutée :
-- admin.html demande le mot de passe : Morpheus45!
+Mot de passe admin :
+Morpheus45!

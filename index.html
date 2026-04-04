@@ -27,7 +27,7 @@
   button{cursor:pointer}
   .btn{padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer;width:auto;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
   .btn-primary{background:linear-gradient(135deg, rgba(29,78,216,.95), rgba(99,102,241,.85));border-color:rgba(255,255,255,.14)}
-  .hint,.status,.footer{color:var(--muted);font-size:13px}
+  .status{color:var(--muted);font-size:13px}
   .types,.tabs{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 12px}
   .tab{padding:8px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.06);cursor:pointer;font-size:13px;width:auto}
   .tab.active{background:linear-gradient(135deg, rgba(29,78,216,.95), rgba(99,102,241,.85));border-color:rgba(255,255,255,.14)}
@@ -36,7 +36,6 @@
   .poster img{width:100%;height:auto;aspect-ratio:2/3;object-fit:cover;display:block;background:rgba(255,255,255,.04)}
   .poster .cap{padding:8px 10px;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .poster .sub{padding:0 10px 10px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  code{background:#0d1732;padding:2px 6px;border-radius:6px}
   @media (max-width: 520px){.gallery{grid-template-columns:repeat(3, minmax(0,1fr)) !important;}}
   </style>
 </head>
@@ -71,17 +70,15 @@
         <select id="sort">
           <option value="cat_title" selected>Catégorie → Titre</option>
           <option value="title">Titre</option>
-          <option value="added_desc">Récents d’abord</option>
         </select>
       </div>
     </div>
 
     <div id="tabs" class="tabs"></div>
     <div id="gallery" class="gallery"></div>
-    <div class="status" id="status" aria-live="polite"></div>
+    <div class="status" id="status"></div>
   </section>
 </main>
-
 <script src="public.js"></script>
 </body>
 </html>

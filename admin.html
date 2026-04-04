@@ -7,10 +7,7 @@
   <meta name="theme-color" content="#1d4ed8" />
   <link rel="icon" href="./icon-192.png" />
   <style>
-    :root{
-      --bg:#0b1220; --panel:#121a2b; --panel2:#1a2440; --text:#eef3ff; --muted:#9fb0d0;
-      --accent:#5ea1ff; --border:#2b395f; --bad:#ff6b6b;
-    }
+    :root{--panel:#121a2b;--panel2:#1a2440;--text:#eef3ff;--muted:#9fb0d0;--accent:#5ea1ff;--border:#2b395f;--bad:#ff6b6b;}
     *{box-sizing:border-box}
     body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#10172a);color:var(--text)}
     .card{width:min(460px,92vw);background:rgba(18,26,43,.96);border:1px solid var(--border);border-radius:20px;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,.3)}
@@ -19,197 +16,23 @@
     input,button{width:100%;padding:13px 14px;border-radius:12px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:15px}
     button{cursor:pointer;background:var(--accent);color:#08101f;font-weight:700;margin-top:10px}
     .msg{margin-top:12px;color:var(--bad);min-height:20px}
-    .small{margin-top:12px;color:var(--muted);font-size:12px}
   </style>
 </head>
 <body>
-  <div class="card" id="gateCard">
+  <div class="card">
     <h1>Accès admin</h1>
-    <p>Entrez le mot de passe pour ouvrir l’administration.</p>
+    <p>Entrez le mot de passe.</p>
     <input id="pw" type="password" placeholder="Mot de passe" autocomplete="current-password" />
-    <button id="openBtn" type="button">Ouvrir l’admin</button>
+    <button id="openBtn" type="button">Ouvrir</button>
     <div id="msg" class="msg"></div>
-    <div class="small">Accès local au navigateur.</div>
   </div>
-
-  <script>
-    const ADMIN_PASSWORD = "Morpheus45!";
-    const SESSION_KEY = "morpheus_admin_ok_v1";
-
-    function renderAdmin() {
-      document.open();
-      document.write(String.raw`<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Admin Xtream</title>
-  <meta name="theme-color" content="#1d4ed8" />
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" href="./icon-192.png" />
-  <link rel="apple-touch-icon" href="./icon-192.png" />
-  <style>
-    :root{
-      --bg:#0b1220; --panel:#121a2b; --panel2:#1a2440; --text:#eef3ff; --muted:#9fb0d0;
-      --accent:#5ea1ff; --border:#2b395f; --ok:#2ecc71; --warn:#ffb020; --bad:#ff6b6b;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#10172a);color:var(--text)}
-    .wrap{max-width:1500px;margin:0 auto;padding:16px}
-    h1{margin:0 0 8px;font-size:28px}
-    p{color:var(--muted)}
-    .top,.main{display:grid;gap:16px}
-    .top{grid-template-columns:1.2fr .8fr}
-    .main{grid-template-columns:300px 1fr}
-    .card{background:rgba(18,26,43,.96);border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    .col{display:flex;flex-direction:column;gap:8px}
-    input,textarea,button{
-      border-radius:12px;border:1px solid var(--border);background:var(--panel2);color:var(--text);
-      padding:12px 14px;font-size:14px
-    }
-    textarea{min-height:88px;resize:vertical}
-    button{cursor:pointer}
-    button.primary{background:var(--accent);border-color:#6ea8ff;color:#08101f;font-weight:700}
-    button.good{background:var(--ok);border-color:#3ddc84;color:#06240f;font-weight:700}
-    button.warn{background:var(--warn);border-color:#ffc863;color:#2a1900;font-weight:700}
-    button.bad{background:var(--bad);border-color:#ff8d8d;color:#2f0909;font-weight:700}
-    .muted{color:var(--muted);font-size:13px}
-    .status{padding:10px 12px;border-radius:12px;background:#0f1730;border:1px solid var(--border);min-height:42px}
-    .pill{display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#101a33;color:var(--muted);font-size:12px}
-    .tabs{display:flex;gap:8px;flex-wrap:wrap}
-    .tab.active{outline:2px solid var(--accent)}
-    .category-list{display:flex;flex-direction:column;gap:8px;max-height:75vh;overflow:auto}
-    .category-btn{text-align:left;width:100%}
-    .category-btn.active{outline:2px solid var(--accent)}
-    .search{width:100%}
-    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
-    .item{background:#101a33;border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
-    .poster{height:300px;background:#0d1428 center/cover no-repeat}
-    .item-body{padding:12px}
-    .title{font-size:15px;font-weight:700;line-height:1.35;min-height:42px}
-    .meta{font-size:12px;color:var(--muted);margin-top:6px;min-height:18px}
-    video{width:100%;max-height:60vh;border-radius:16px;background:#000}
-    .filebox{border:1px dashed var(--border);padding:12px;border-radius:14px}
-    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-    .stat{background:#101a33;border:1px solid var(--border);border-radius:14px;padding:12px}
-    .stat strong{display:block;font-size:20px}
-    .notice{padding:10px 12px;border-radius:12px;background:#101a33;border:1px solid var(--border)}
-    hr{border-color:var(--border);width:100%}
-    a.link{color:#b8cbff}
-    @media (max-width:980px){.top,.main,.stats{grid-template-columns:1fr}}
-  </style>
-</head>
-<body>
-<div class="wrap">
-  <h1>Admin Xtream</h1>
-  <p>Page d’administration. Importe un lien Xtream, puis exporte les fichiers publics <strong>live</strong>, <strong>series</strong> et <strong>vod</strong> à déposer à la racine du dépôt GitHub.</p>
-
-  <div class="top">
-    <div class="card col">
-      <strong>1) Source Xtream / Player API</strong>
-      <textarea id="apiUrl" placeholder="http://serveur/player_api.php?username=USER&password=PASS&action=get_vod_categories"></textarea>
-      <div class="row">
-        <button id="parseBtn">Analyser le lien</button>
-        <button id="importAllBtn" class="primary">Importer Séries + VOD</button>
-        <button id="saveCredsBtn">Mémoriser URL</button>
-        <button id="clearCredsBtn" class="bad">Effacer</button>
-      </div>
-      <div class="notice muted">Les gros catalogues ne sont pas stockés dans le navigateur. Exporte ensuite les fichiers puis ajoute-les à la racine du site.</div>
-      <div class="row">
-        <span class="pill" id="baseTag">Base : -</span>
-        <span class="pill" id="userTag">Utilisateur : -</span>
-      </div>
-      <div class="status" id="status">Prêt.</div>
-    </div>
-
-    <div class="card col">
-      <strong>2) Exports séparés</strong>
-      <div class="stats">
-        
-        <div class="stat"><div class="muted">Séries</div><strong id="seriesCount">0</strong></div>
-        <div class="stat"><div class="muted">VOD</div><strong id="vodCount">0</strong></div>
-      </div>
-      <div class="row" style="margin-top:8px">
-        
-        <button id="downloadSeriesJsonBtn" class="good">series.json</button>
-        <button id="downloadVodJsonBtn" class="good">vod.json</button>
-      </div>
-      <div class="row">
-        
-        <button id="downloadSeriesM3uBtn" class="warn">series.m3u</button>
-        <button id="downloadVodM3uBtn" class="warn">vod.m3u</button>
-      </div>
-      <div class="row">
-        <button id="autoloadBtn">Charger depuis la racine</button>
-      </div>
-      <div class="filebox">
-        <div class="muted">Chargement local possible :</div>
-        <div class="row" style="margin-top:8px">
-          <input type="file" id="jsonFile" accept=".json,application/json" multiple>
-          <input type="file" id="m3uFile" accept=".m3u,.m3u8,text/plain" multiple>
-        </div>
-      </div>
-      <div class="muted">Page publique : <a class="link" href="./index.html">index.html</a></div>
-    </div>
-  </div>
-
-  <div class="main" style="margin-top:16px">
-    <div class="card">
-      <div class="col">
-        <strong>Navigation admin</strong>
-        <div class="tabs">
-          
-          <button class="tab" data-type="series">Séries</button>
-          <button class="tab" data-type="vod">VOD</button>
-        </div>
-        <input id="searchInput" class="search" placeholder="Rechercher..." />
-        <div class="category-list" id="categoryList"></div>
-      </div>
-    </div>
-
-    <div class="card col">
-      <div class="col">
-        <strong>Prévisualisation / lien</strong>
-        <video id="player" controls playsinline></video>
-        <div id="playerTitle" class="muted">Aucun média sélectionné.</div>
-      </div>
-      <hr>
-      <div class="row" style="justify-content:space-between;align-items:center">
-        <strong id="sectionTitle">Catalogue Séries</strong>
-        <span class="pill" id="countTag">0 élément</span>
-      </div>
-      <div class="grid" id="grid"></div>
-    </div>
-  </div>
-</div>
-<script src="admin.js"></script>
-</body>
-</html>
-`);
-      document.close();
-    }
-
-    function unlock() {
-      const val = document.getElementById('pw').value;
-      if (val === ADMIN_PASSWORD) {
-        try { sessionStorage.setItem(SESSION_KEY, '1'); } catch(e) {}
-        renderAdmin();
-      } else {
-        document.getElementById('msg').textContent = 'Mot de passe incorrect.';
-      }
-    }
-
-    try {
-      if (sessionStorage.getItem(SESSION_KEY) === '1') {
-        renderAdmin();
-      }
-    } catch(e) {}
-
-    document.getElementById('openBtn').addEventListener('click', unlock);
-    document.getElementById('pw').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') unlock();
-    });
-  </script>
+<script>
+const P='Morpheus45!';
+const K='morph_admin_ok_v2';
+function go(){ const v=document.getElementById('pw').value; if(v===P){ try{sessionStorage.setItem(K,'1')}catch(e){} location.href='./admin-panel.html'; } else { document.getElementById('msg').textContent='Mot de passe incorrect.'; } }
+try{ if(sessionStorage.getItem(K)==='1'){ location.href='./admin-panel.html'; } }catch(e){}
+document.getElementById('openBtn').addEventListener('click', go);
+document.getElementById('pw').addEventListener('keydown', e => { if(e.key==='Enter') go(); });
+</script>
 </body>
 </html>

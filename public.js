@@ -10,55 +10,18 @@ function sanitize(s){ return (s || "").toString().trim(); }
 function isUrl(u){ try { new URL(u); return true; } catch { return false; } }
 function safeLower(s){ return sanitize(s).toLowerCase(); }
 
-function extractPlot(e){
-  return sanitize(
-    e.plot ||
-    e.overview ||
-    (e.info && typeof e.info === "object" ? (e.info.plot || e.info.overview || e.info.synopsis || e.info.description) : "") ||
-    (e.raw && e.raw.info && typeof e.raw.info === "object" ? (e.raw.info.plot || e.raw.info.overview || e.raw.info.synopsis || e.raw.info.description) : "") ||
-    e.description ||
-    ""
-  );
-}
-
-function extractMeta(e){
-  const bits = [];
-  const year = sanitize(
-    e.year ||
-    (e.info && (e.info.releaseDate || e.info.releasedate || e.info.year)) ||
-    (e.raw && e.raw.info && (e.raw.info.releaseDate || e.raw.info.releasedate || e.raw.info.year)) ||
-    ""
-  );
-  const rating = sanitize(
-    e.rating ||
-    (e.info && e.info.rating) ||
-    (e.raw && (e.raw.rating || (e.raw.info && e.raw.info.rating))) ||
-    ""
-  );
-  if (year) bits.push(year);
-  if (rating) bits.push(`Note ${rating}`);
-  return bits.join(" • ");
-}
-
-function normalizeJsonData(obj, forcedType){
-  let items = [];
-  if (Array.isArray(obj)) items = obj;
-  else if (obj && Array.isArray(obj.items)) items = obj.items;
-  else if (obj && Array.isArray(obj.entries)) items = obj.entries;
-
-  return items
-    .filter(e => e && typeof e === "object")
-    .map(e => ({
-      title: sanitize(e.title || e.name) || "Sans titre",
-      category: sanitize(e.category_name || e.category) || "Sans catégorie",
-      url: sanitize(e.stream_url || e.url),
-      image: sanitize(e.stream_icon || e.cover || e.movie_image || e.image || (e.raw && (e.raw.stream_icon || e.raw.cover || e.raw.movie_image))),
-      added_at: sanitize(e.added || e.added_at || ""),
-      plot: extractPlot(e),
-      meta: extractMeta(e),
-      type: forcedType
-    }))
-    .filter(e => isUrl(e.url));
+function normalizeCatalogItems(items, forcedType){
+  return (items || []).filter(x => x && typeof x === "object").map(e => ({
+    title: sanitize(e.title || e.name) || "Sans titre",
+    category: sanitize(e.category_name || e.category) || "Sans catégorie",
+    url: sanitize(e.stream_url || e.url),
+    image: sanitize(e.stream_icon || e.cover || e.movie_image || e.image || ""),
+    plot: sanitize(e.plot || e.overview || e.description || (e.info && (e.info.plot || e.info.overview || e.info.description)) || ""),
+    meta: sanitize(e.meta || ""),
+    type: forcedType,
+    seasons: Array.isArray(e.seasons) ? e.seasons : [],
+    episodes: e.episodes && typeof e.episodes === "object" ? e.episodes : {}
+  })).filter(e => e.url || forcedType === "series");
 }
 
 function parseM3U(text, forcedType){
@@ -70,9 +33,9 @@ function parseM3U(text, forcedType){
     if (!line) continue;
     if (line.startsWith("#EXTINF:")) {
       const group = (line.match(/group-title="([^"]+)"/i) || [,"Sans catégorie"])[1];
-      const logo = (line.match(/tvg-logo="([^"]+)"/i) || line.match(/logo="([^"]+)"/i) || [,""])[1];
+      const logo = (line.match(/tvg-logo="([^"]+)"/i) || [,""])[1];
       const title = line.includes(",") ? line.split(",").slice(1).join(",").trim() : "Sans titre";
-      current = { title, category: group, image: logo, url: "", added_at: "", plot: "", meta: "", type: forcedType };
+      current = { title, category: group, image: logo, url: "", plot: "", meta: "", type: forcedType, seasons: [], episodes: {} };
     } else if (!line.startsWith("#") && current) {
       current.url = line;
       if (isUrl(current.url)) items.push(current);
@@ -82,22 +45,24 @@ function parseM3U(text, forcedType){
   return items;
 }
 
-async function tryLoadType(type){
-  const targets = [`${type}.json`, `${type}.m3u`];
-  for (const file of targets) {
-    try {
-      const res = await fetch(`./${file}?v=${Date.now()}`, { cache: "no-store" });
+async function loadCatalog(type){
+  const catalogTargets = [`${type}_catalog.json`, `${type}.json`, `${type}.m3u`];
+  for (const file of catalogTargets) {
+    try{
+      const res = await fetch(`./${file}?v=${Date.now()}`, { cache:"no-store" });
       if (!res.ok) continue;
       const text = await res.text();
-      if (file.endsWith(".json")) {
-        const data = JSON.parse(text);
-        const items = normalizeJsonData(data, type);
-        if (items.length) return items;
-      } else {
+      if (file.endsWith(".m3u")) {
         const items = parseM3U(text, type);
         if (items.length) return items;
+      } else {
+        const data = JSON.parse(text);
+        const items = Array.isArray(data) ? normalizeCatalogItems(data, type)
+          : Array.isArray(data.items) ? normalizeCatalogItems(data.items, type)
+          : [];
+        if (items.length) return items;
       }
-    } catch (e) {}
+    }catch(e){}
   }
   return [];
 }
@@ -114,17 +79,9 @@ function uniqCats(items){
 function getVisibleEntries(){
   const q = safeLower($("filter").value);
   let arr = (state.entriesByType[state.currentType] || []).slice();
-
-  if (state.activeCat !== "Tous") {
-    arr = arr.filter(e => safeLower(e.category) === state.activeCat.toLowerCase());
-  }
-  if (q) {
-    arr = arr.filter(e => safeLower(e.title).includes(q) || safeLower(e.category).includes(q));
-  }
-
-  const sort = $("sort").value;
-  if (sort === "title") arr.sort((a,b)=>sanitize(a.title).localeCompare(sanitize(b.title)));
-  else if (sort === "added_desc") arr.sort((a,b)=>sanitize(b.added_at).localeCompare(sanitize(a.added_at)));
+  if (state.activeCat !== "Tous") arr = arr.filter(e => safeLower(e.category) === state.activeCat.toLowerCase());
+  if (q) arr = arr.filter(e => safeLower(e.title).includes(q) || safeLower(e.category).includes(q));
+  if ($("sort").value === "title") arr.sort((a,b)=>sanitize(a.title).localeCompare(sanitize(b.title)));
   else arr.sort((a,b)=>sanitize(a.category).localeCompare(sanitize(b.category)) || sanitize(a.title).localeCompare(sanitize(b.title)));
   return arr;
 }
@@ -138,11 +95,7 @@ function renderTypeTabs(){
     const b = document.createElement("button");
     b.className = "tab" + (key === state.currentType ? " active" : "");
     b.textContent = `${label} (${count})`;
-    b.onclick = () => {
-      state.currentType = key;
-      state.activeCat = "Tous";
-      renderAll();
-    };
+    b.onclick = () => { state.currentType = key; state.activeCat = "Tous"; renderAll(); };
     wrap.appendChild(b);
   });
 }
@@ -165,7 +118,6 @@ function encodeItem(it){
 }
 
 function openItem(it){
-  if (!it || !it.url) return;
   location.href = `details.html?item=${encodeItem(it)}`;
 }
 
@@ -174,13 +126,7 @@ function renderGallery(){
   gallery.innerHTML = "";
   const arr = getVisibleEntries();
   $("count").textContent = String(arr.length);
-
-  if (!arr.length) {
-    $("status").textContent = "Aucune donnée trouvée.";
-    return;
-  }
-  $("status").textContent = "";
-
+  $("status").textContent = arr.length ? "" : "Aucune donnée trouvée.";
   for (const it of arr) {
     const d = document.createElement("div");
     d.className = "poster";
@@ -214,20 +160,18 @@ function renderAll(){
   renderGallery();
 }
 
-async function reloadData(){
+async function init(){
   $("status").textContent = "Chargement…";
-  state.entriesByType.series = await tryLoadType("series");
-  state.entriesByType.vod = await tryLoadType("vod");
-
-  const preferred = ["vod", "series"].find(k => state.entriesByType[k].length) || "vod";
+  state.entriesByType.series = await loadCatalog("series");
+  state.entriesByType.vod = await loadCatalog("vod");
+  const preferred = ["vod","series"].find(k => state.entriesByType[k].length) || "vod";
   if (!state.entriesByType[state.currentType].length) state.currentType = preferred;
   state.activeCat = "Tous";
-
   const total = Object.values(state.entriesByType).reduce((n, arr) => n + arr.length, 0);
-  $("status").textContent = total ? "" : "Ajoute tes fichiers series / vod à la racine du site.";
+  $("status").textContent = total ? "" : "Ajoute vod_catalog.json / series_catalog.json ou les fichiers .json / .m3u.";
   renderAll();
 }
 
 $("filter").addEventListener("input", renderAll);
 $("sort").addEventListener("change", renderAll);
-reloadData();
+init();

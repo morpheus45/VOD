@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin</title>
+  <link rel="icon" href="./icon-192.png" />
+  <style>
+    :root{--panel:#121a2b;--panel2:#1a2440;--text:#eef3ff;--muted:#9fb0d0;--accent:#5ea1ff;--border:#2b395f;--ok:#2ecc71}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#10172a);color:var(--text)}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
+    .card{background:rgba(18,26,43,.96);border:1px solid var(--border);border-radius:18px;padding:16px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    input,button,textarea{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--panel2);color:var(--text)}
+    button{cursor:pointer}
+    .btn{width:auto}
+    .primary{background:var(--accent);color:#08101f;font-weight:700}
+    .good{background:var(--ok);color:#06240f;font-weight:700}
+    .muted{color:var(--muted);font-size:13px}
+    .status{padding:10px 12px;border:1px solid var(--border);border-radius:12px}
+    code{background:#0d1732;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h1 style="margin:0">Admin</h1>
+      <button id="logoutBtn" class="btn">Déconnexion</button>
+    </div>
+    <div class="muted">Cette page prépare des fichiers statiques pour le site public. Dépose ensuite les fichiers exportés à la racine du dépôt.</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Fichiers source</h2>
+    <div class="row">
+      <input type="file" id="vodFile" accept=".json,.m3u,.m3u8" />
+      <input type="file" id="seriesFile" accept=".json,.m3u,.m3u8" />
+    </div>
+    <div class="muted">Les fichiers <code>vod.m3u</code> et <code>series.m3u</code> seuls ne contiennent pas les synopsis ni les saisons/épisodes. Pour les afficher publiquement, il faut des fichiers enrichis <code>vod_catalog.json</code> et <code>series_catalog.json</code>.</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Import enrichi</h2>
+    <textarea id="pasteBox" placeholder='Colle ici un tableau JSON enrichi pour vod_catalog.json ou series_catalog.json'></textarea>
+    <div class="row">
+      <button id="loadVodCatalogBtn" class="btn primary">Charger comme vod_catalog.json</button>
+      <button id="loadSeriesCatalogBtn" class="btn primary">Charger comme series_catalog.json</button>
+    </div>
+    <div class="muted">Format attendu pour les séries : chaque entrée peut contenir <code>plot</code>, <code>seasons</code> et <code>episodes</code>.</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Exports</h2>
+    <div class="row">
+      <button id="exportVodBtn" class="btn good">Télécharger vod_catalog.json</button>
+      <button id="exportSeriesBtn" class="btn good">Télécharger series_catalog.json</button>
+    </div>
+    <div id="status" class="status">Prêt.</div>
+  </div>
+</div>
+<script src="admin-panel.js"></script>
+</body>
+</html>

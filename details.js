@@ -1,45 +1,14 @@
 const $ = id => document.getElementById(id);
 function sanitize(s){ return (s || "").toString().trim(); }
+function fixImg(url){ return sanitize(url).replace(/\\\//g, "/"); }
+async function copyText(v){ try { await navigator.clipboard.writeText(v); } catch(e) {} }
 
 function readItem(){
   try {
     const qs = new URLSearchParams(location.search);
     const raw = qs.get("item");
-    if (!raw) return null;
-    return JSON.parse(decodeURIComponent(raw));
-  } catch {
-    return null;
-  }
-}
-
-function parseSeriesApiUrl(apiUrl){
-  try{
-    const u = new URL(apiUrl);
-    return {
-      base: u.origin,
-      username: u.searchParams.get("username") || "",
-      password: u.searchParams.get("password") || ""
-    };
-  }catch(e){
-    return null;
-  }
-}
-
-function buildEpisodeUrl(seriesApiUrl, episode){
-  const info = parseSeriesApiUrl(seriesApiUrl);
-  if (!info || !info.base || !info.username || !info.password) return "";
-  const episodeId = episode && (episode.id || episode.episode_id || episode.stream_id);
-  const ext = ((episode && (episode.container_extension || episode.extension)) || "mp4").toString();
-  if (!episodeId) return "";
-  return `${info.base}/series/${encodeURIComponent(info.username)}/${encodeURIComponent(info.password)}/${encodeURIComponent(episodeId)}.${ext}`;
-}
-
-function fixImg(url){
-  return sanitize(url).replace(/\\\//g, "/");
-}
-
-async function copyText(v){
-  try { await navigator.clipboard.writeText(v); } catch(e) {}
+    return raw ? JSON.parse(decodeURIComponent(raw)) : null;
+  } catch { return null; }
 }
 
 function fillBase(item){
@@ -55,7 +24,6 @@ function fillBase(item){
 
 function setupVod(item){
   $("vodActions").style.display = "flex";
-  $("playBtn").href = item.url;
   $("playBtn").addEventListener("click", (e) => {
     e.preventDefault();
     location.href = item.url;
@@ -63,140 +31,106 @@ function setupVod(item){
   $("copyBtn").addEventListener("click", () => copyText(item.url));
 }
 
-async function setupSeries(item){
+function setupSeries(item){
   $("seriesWrap").style.display = "block";
-  $("seriesStatus").textContent = "Chargement des saisons et épisodes…";
-  try{
-    const res = await fetch(item.url, { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+  const seasons = Array.isArray(item.seasons) ? item.seasons : [];
+  const episodesObj = item.episodes && typeof item.episodes === "object" ? item.episodes : {};
+  let seasonKeys = seasons.map(s => String(s.season_number || s.season || s.id || "")).filter(Boolean);
+  if (!seasonKeys.length) seasonKeys = Object.keys(episodesObj);
 
-    const info = data.info && typeof data.info === "object" ? data.info : {};
-    const enrichedPlot = sanitize(info.plot || info.overview || info.synopsis || info.description || "");
-    if (enrichedPlot) $("plot").textContent = enrichedPlot;
+  if (!seasonKeys.length) {
+    $("seriesStatus").textContent = "Aucune saison ou épisode disponible dans le fichier de catalogue.";
+    return;
+  }
 
-    const seasonTabs = $("seasonTabs");
-    const episodeGrid = $("episodeGrid");
-    const seasons = Array.isArray(data.seasons) ? data.seasons : [];
-    const episodesObj = data.episodes && typeof data.episodes === "object" ? data.episodes : {};
-    let seasonKeys = seasons.map(s => String(s.season_number || s.season || s.id || "")).filter(Boolean);
-    if (!seasonKeys.length) seasonKeys = Object.keys(episodesObj);
+  let activeSeason = seasonKeys[0];
+  function renderTabs(){
+    $("seasonTabs").innerHTML = "";
+    seasonKeys.forEach(key => {
+      const s = seasons.find(x => String(x.season_number || x.season || x.id || "") === String(key));
+      const label = (s && s.name) ? s.name : `Saison ${key}`;
+      const b = document.createElement("button");
+      b.className = "tab" + (String(key) === String(activeSeason) ? " active" : "");
+      b.textContent = label;
+      b.onclick = () => { activeSeason = String(key); renderTabs(); renderEpisodes(); };
+      $("seasonTabs").appendChild(b);
+    });
+  }
 
-    if (!seasonKeys.length){
-      $("seriesStatus").textContent = "Aucune saison ou épisode trouvé.";
+  function renderEpisodes(){
+    $("episodeGrid").innerHTML = "";
+    const eps = episodesObj[String(activeSeason)] || [];
+    if (!eps.length){
+      $("seriesStatus").textContent = "Aucun épisode trouvé dans cette saison.";
       return;
     }
+    $("seriesStatus").textContent = "";
+    eps.forEach(ep => {
+      const title = sanitize(ep.title || ep.name || `Episode ${ep.episode_num || ""}`);
+      const poster = fixImg(ep.movie_image || ep.cover_big || ep.image || item.image || "");
+      const plot = sanitize((ep.info && (ep.info.plot || ep.info.overview || ep.info.description)) || ep.plot || "");
+      const runtime = sanitize((ep.info && ep.info.duration) || ep.duration || "");
+      const epNum = sanitize(ep.episode_num || ep.ep_num || "");
+      const url = sanitize(ep.url || ep.stream_url || "");
 
-    const actions = $("seriesActions");
-    actions.innerHTML = "";
-    const copySeriesBtn = document.createElement("button");
-    copySeriesBtn.className = "btn";
-    copySeriesBtn.type = "button";
-    copySeriesBtn.textContent = "Copier le lien série";
-    copySeriesBtn.onclick = () => copyText(item.url);
-    actions.appendChild(copySeriesBtn);
+      const card = document.createElement("div");
+      card.className = "epCard";
 
-    let activeSeason = seasonKeys[0];
+      const img = document.createElement("img");
+      img.className = "epPoster";
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.src = poster || "";
+      img.alt = title;
+      img.onerror = () => { img.removeAttribute("src"); };
 
-    function renderSeasonTabs(){
-      seasonTabs.innerHTML = "";
-      seasonKeys.forEach(key => {
-        const s = seasons.find(x => String(x.season_number || x.season || x.id || "") === String(key));
-        const label = (s && s.name) ? s.name : `Saison ${key}`;
-        const b = document.createElement("button");
-        b.className = "tab" + (String(key) === String(activeSeason) ? " active" : "");
-        b.textContent = label;
-        b.onclick = () => {
-          activeSeason = String(key);
-          renderSeasonTabs();
-          renderEpisodes();
-        };
-        seasonTabs.appendChild(b);
-      });
-    }
+      const body = document.createElement("div");
+      body.className = "epBody";
 
-    function renderEpisodes(){
-      episodeGrid.innerHTML = "";
-      const eps = (data.episodes && data.episodes[String(activeSeason)]) ? data.episodes[String(activeSeason)] : [];
-      if (!eps.length){
-        $("seriesStatus").textContent = "Aucun épisode trouvé dans cette saison.";
-        return;
-      }
-      $("seriesStatus").textContent = "";
+      const ttl = document.createElement("h3");
+      ttl.style.margin = "0";
+      ttl.style.fontSize = "16px";
+      ttl.textContent = epNum ? `E${epNum} — ${title}` : title;
 
-      eps.forEach(ep => {
-        const url = buildEpisodeUrl(item.url, ep);
-        const title = sanitize(ep.title || ep.name || `Episode ${ep.episode_num || ""}`);
-        const poster = fixImg(ep.movie_image || ep.cover_big || ep.image || item.image || "");
-        const plot = sanitize((ep.info && (ep.info.plot || ep.info.overview || ep.info.description)) || ep.plot || "");
-        const runtime = sanitize((ep.info && ep.info.duration) || ep.duration || "");
-        const epNum = sanitize(ep.episode_num || ep.ep_num || "");
+      const meta = document.createElement("div");
+      meta.className = "epMeta";
+      meta.textContent = runtime || "";
 
-        const card = document.createElement("div");
-        card.className = "epCard";
+      const desc = document.createElement("div");
+      desc.className = "epMeta";
+      desc.textContent = plot || "";
 
-        const img = document.createElement("img");
-        img.className = "epPoster";
-        img.loading = "lazy";
-        img.referrerPolicy = "no-referrer";
-        img.src = poster || "";
-        img.alt = title;
-        img.onerror = () => { img.removeAttribute("src"); };
+      const actions = document.createElement("div");
+      actions.className = "actions";
 
-        const body = document.createElement("div");
-        body.className = "epBody";
+      const openBtn = document.createElement("a");
+      openBtn.className = "btn btn-primary";
+      openBtn.href = url || "#";
+      openBtn.textContent = "Lire l'épisode";
+      openBtn.onclick = (e) => { e.preventDefault(); if (url) location.href = url; };
 
-        const ttl = document.createElement("h3");
-        ttl.style.margin = "0";
-        ttl.style.fontSize = "16px";
-        ttl.textContent = epNum ? `E${epNum} — ${title}` : title;
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "btn";
+      copyBtn.type = "button";
+      copyBtn.textContent = "Copier le lien";
+      copyBtn.onclick = () => copyText(url);
 
-        const meta = document.createElement("div");
-        meta.className = "epMeta";
-        meta.textContent = runtime || "";
+      actions.appendChild(openBtn);
+      actions.appendChild(copyBtn);
 
-        const desc = document.createElement("div");
-        desc.className = "epMeta";
-        desc.textContent = plot || "";
+      body.appendChild(ttl);
+      if (runtime) body.appendChild(meta);
+      if (plot) body.appendChild(desc);
+      body.appendChild(actions);
 
-        const actions = document.createElement("div");
-        actions.className = "actions";
-
-        const openBtn = document.createElement("a");
-        openBtn.className = "btn btn-primary";
-        openBtn.href = url || "#";
-        openBtn.textContent = "Lire l'épisode";
-        openBtn.onclick = (e) => {
-          e.preventDefault();
-          if (!url) return;
-          location.href = url;
-        };
-
-        const copyBtn = document.createElement("button");
-        copyBtn.className = "btn";
-        copyBtn.type = "button";
-        copyBtn.textContent = "Copier le lien";
-        copyBtn.onclick = () => copyText(url);
-
-        actions.appendChild(openBtn);
-        actions.appendChild(copyBtn);
-
-        body.appendChild(ttl);
-        if (runtime) body.appendChild(meta);
-        if (plot) body.appendChild(desc);
-        body.appendChild(actions);
-
-        card.appendChild(img);
-        card.appendChild(body);
-        episodeGrid.appendChild(card);
-      });
-    }
-
-    renderSeasonTabs();
-    renderEpisodes();
-  }catch(e){
-    $("seriesStatus").textContent = "Impossible de charger les détails de la série.";
+      card.appendChild(img);
+      card.appendChild(body);
+      $("episodeGrid").appendChild(card);
+    });
   }
+
+  renderTabs();
+  renderEpisodes();
 }
 
 (function init(){
@@ -208,5 +142,5 @@ async function setupSeries(item){
   }
   fillBase(item);
   if (item.type === "vod") setupVod(item);
-  else if (item.type === "series") setupSeries(item);
+  else setupSeries(item);
 })();
