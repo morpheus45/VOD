@@ -19,3 +19,7 @@ Icônes :
 Fichiers à ajouter :
 - series.json ou series.m3u
 - vod.json ou vod.m3u
+
+
+Protection admin ajoutée :
+- admin.html demande le mot de passe : Morpheus45!
