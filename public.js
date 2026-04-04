@@ -178,10 +178,27 @@ function renderCategoryTabs(){
 
 function openItem(it){
   if (!it || !it.url) return;
+
+  const directHttpFromHttps = location.protocol === "https:" && /^http:\/\//i.test(it.url);
+
   if (state.currentType === "series") {
     window.open(it.url, "_blank", "noopener");
     return;
   }
+
+  if (directHttpFromHttps) {
+    const ok = confirm(
+      "Ce flux utilise HTTP alors que le site GitHub est en HTTPS. " +
+      "Le lecteur intégré peut être bloqué par le navigateur.\n\n" +
+      "OK = ouvrir le lien direct dans un nouvel onglet\n" +
+      "Annuler = tenter le lecteur intégré"
+    );
+    if (ok) {
+      window.open(it.url, "_blank", "noopener");
+      return;
+    }
+  }
+
   const qs = new URLSearchParams({
     u: it.url,
     t: it.title || "",

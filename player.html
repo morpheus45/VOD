@@ -12,8 +12,10 @@
     header .title{flex:1;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     header a{color:#9bb4ff;text-decoration:none}
     video{flex:1;width:100%;height:100%;background:#000}
-    .hint{padding:10px;opacity:.85;font-size:13px}
-    button{border:0;border-radius:10px;background:#2d6bff;color:#fff;padding:10px 12px;font-weight:700}
+    .hint{padding:10px;opacity:.92;font-size:13px;line-height:1.45}
+    button{border:0;border-radius:10px;background:#2d6bff;color:#fff;padding:10px 12px;font-weight:700;cursor:pointer}
+    .row{display:flex;gap:10px;flex-wrap:wrap;padding:10px}
+    .linkbtn{display:inline-block;border-radius:10px;background:#1f2937;color:#fff;padding:10px 12px;text-decoration:none}
   </style>
 </head>
 <body>
@@ -23,11 +25,14 @@
       <div class="title" id="t"></div>
       <button id="fs">Plein écran</button>
     </header>
-    <video id="v" controls playsinline></video>
+    <video id="v" controls playsinline crossorigin="anonymous"></video>
+    <div class="row">
+      <a class="linkbtn" id="openDirect" href="#" target="_blank" rel="noopener">Ouvrir le lien direct</a>
+      <button id="copyBtn" type="button">Copier le lien</button>
+    </div>
     <div class="hint" id="h"></div>
   </div>
 
-  <!-- hls.js (needed for .m3u8 on most Android browsers) -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
   <script>
     const qs = new URLSearchParams(location.search);
@@ -41,6 +46,17 @@
     if (poster) video.poster = poster;
 
     const hint = document.getElementById("h");
+    const openDirect = document.getElementById("openDirect");
+    openDirect.href = url || "#";
+
+    document.getElementById("copyBtn").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(url);
+        hint.textContent = "Lien copié.";
+      } catch(e) {
+        hint.textContent = "Impossible de copier le lien.";
+      }
+    });
 
     function tryLockLandscape(){
       try{
@@ -60,33 +76,94 @@
 
     document.getElementById("fs").addEventListener("click", () => goFullscreen());
 
-    // Autoplay attempt (may be blocked), but clicking play will work
-    function loadSource(u){
-      if (!u) return;
-      // Native HLS support (Safari, some TVs)
-      if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = u;
-        hint.textContent = "";
-        return;
-      }
-      // hls.js for browsers that support MSE
-      if (window.Hls && Hls.isSupported()) {
-        const hls = new Hls({ lowLatencyMode: true });
-        hls.loadSource(u);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.ERROR, function (event, data) {
-          // If HLS fails, show fallback link
-          hint.innerHTML = "Impossible de lire automatiquement ce flux ici. <a href='" + u + "' target='_blank' rel='noopener'>Ouvrir le lien direct</a>";
-        });
-        return;
-      }
-      // Fallback
-      hint.innerHTML = "Ton navigateur ne supporte pas .m3u8 ici. <a href='" + u + "' target='_blank' rel='noopener'>Ouvrir le lien direct</a>";
+    function isMixedContentBlocked(u){
+      return location.protocol === "https:" && /^http:\/\//i.test(u);
     }
+
+    function extOf(u){
+      try {
+        const path = new URL(u, location.href).pathname.toLowerCase();
+        if (path.endsWith(".m3u8")) return "m3u8";
+        if (path.endsWith(".mp4")) return "mp4";
+        if (path.endsWith(".webm")) return "webm";
+        if (path.endsWith(".ogg")) return "ogg";
+        if (path.endsWith(".ts")) return "ts";
+        if (path.endsWith(".mkv")) return "mkv";
+        return "";
+      } catch {
+        return "";
+      }
+    }
+
+    function directVideo(u){
+      video.src = u;
+      hint.textContent = "";
+    }
+
+    function setHintHtml(html){
+      hint.innerHTML = html;
+    }
+
+    function loadSource(u){
+      if (!u) {
+        hint.textContent = "Aucun lien reçu.";
+        return;
+      }
+
+      if (isMixedContentBlocked(u)) {
+        setHintHtml(
+          "Le site GitHub fonctionne en HTTPS mais ce flux est en HTTP. " +
+          "Le navigateur peut bloquer la lecture intégrée pour contenu mixte. " +
+          "Utilise le bouton « Ouvrir le lien direct »."
+        );
+        return;
+      }
+
+      const ext = extOf(u);
+
+      // HLS
+      if (ext === "m3u8" || /m3u8/i.test(u)) {
+        if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          directVideo(u);
+          return;
+        }
+        if (window.Hls && Hls.isSupported()) {
+          const hls = new Hls({ lowLatencyMode: true });
+          hls.loadSource(u);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            hint.textContent = "";
+          });
+          hls.on(Hls.Events.ERROR, function () {
+            setHintHtml("Impossible de lire automatiquement ce flux HLS ici. Utilise « Ouvrir le lien direct ».");
+          });
+          return;
+        }
+        setHintHtml("Ton navigateur ne supporte pas ce flux HLS ici. Utilise « Ouvrir le lien direct ».");
+        return;
+      }
+
+      // Formats vidéo directs
+      if (["mp4","webm","ogg"].includes(ext) || !ext || ext === "ts") {
+        directVideo(u);
+        return;
+      }
+
+      // Fallback
+      directVideo(u);
+      setHintHtml("Si la lecture ne démarre pas, utilise « Ouvrir le lien direct ».");
+    }
+
+    video.addEventListener("error", () => {
+      setHintHtml(
+        "La lecture a échoué dans le lecteur intégré. " +
+        "Ca peut venir du format, du serveur, du CORS ou du HTTPS/HTTP. " +
+        "Essaie « Ouvrir le lien direct »."
+      );
+    });
 
     loadSource(url);
 
-    // On first user gesture, try fullscreen + landscape for mobile
     let once = false;
     video.addEventListener("play", () => {
       if (once) return;
