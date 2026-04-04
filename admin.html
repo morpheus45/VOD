@@ -71,7 +71,7 @@
       <textarea id="apiUrl" placeholder="http://serveur/player_api.php?username=USER&password=PASS&action=get_vod_categories"></textarea>
       <div class="row">
         <button id="parseBtn">Analyser le lien</button>
-        <button id="importAllBtn" class="primary">Importer Live + Séries + VOD</button>
+        <button id="importAllBtn" class="primary">Importer Séries + VOD</button>
         <button id="saveCredsBtn">Mémoriser URL</button>
         <button id="clearCredsBtn" class="bad">Effacer</button>
       </div>
@@ -86,17 +86,17 @@
     <div class="card col">
       <strong>2) Exports séparés</strong>
       <div class="stats">
-        <div class="stat"><div class="muted">Live</div><strong id="liveCount">0</strong></div>
+        
         <div class="stat"><div class="muted">Séries</div><strong id="seriesCount">0</strong></div>
         <div class="stat"><div class="muted">VOD</div><strong id="vodCount">0</strong></div>
       </div>
       <div class="row" style="margin-top:8px">
-        <button id="downloadLiveJsonBtn" class="good">live.json</button>
+        
         <button id="downloadSeriesJsonBtn" class="good">series.json</button>
         <button id="downloadVodJsonBtn" class="good">vod.json</button>
       </div>
       <div class="row">
-        <button id="downloadLiveM3uBtn" class="warn">live.m3u</button>
+        
         <button id="downloadSeriesM3uBtn" class="warn">series.m3u</button>
         <button id="downloadVodM3uBtn" class="warn">vod.m3u</button>
       </div>
@@ -119,7 +119,7 @@
       <div class="col">
         <strong>Navigation admin</strong>
         <div class="tabs">
-          <button class="tab active" data-type="live">Live</button>
+          
           <button class="tab" data-type="series">Séries</button>
           <button class="tab" data-type="vod">VOD</button>
         </div>
@@ -136,7 +136,7 @@
       </div>
       <hr>
       <div class="row" style="justify-content:space-between;align-items:center">
-        <strong id="sectionTitle">Catalogue Live</strong>
+        <strong id="sectionTitle">Catalogue Séries</strong>
         <span class="pill" id="countTag">0 élément</span>
       </div>
       <div class="grid" id="grid"></div>

@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const state = {
   currentType: "vod",
   activeCat: "Tous",
-  entriesByType: { live: [], series: [], vod: [] }
+  entriesByType: { series: [], vod: [] }
 };
 
 function sanitize(s){ return (s || "").toString().trim(); }
@@ -11,20 +11,30 @@ function isUrl(u){ try { new URL(u); return true; } catch { return false; } }
 function safeLower(s){ return sanitize(s).toLowerCase(); }
 
 function extractPlot(e){
-  if (!e || typeof e !== "object") return "";
   return sanitize(
     e.plot ||
     e.overview ||
-    (e.info && typeof e.info === "object" ? (e.info.plot || e.info.overview) : "") ||
-    (e.raw && e.raw.info && typeof e.raw.info === "object" ? (e.raw.info.plot || e.raw.info.overview) : "") ||
+    (e.info && typeof e.info === "object" ? (e.info.plot || e.info.overview || e.info.synopsis || e.info.description) : "") ||
+    (e.raw && e.raw.info && typeof e.raw.info === "object" ? (e.raw.info.plot || e.raw.info.overview || e.raw.info.synopsis || e.raw.info.description) : "") ||
+    e.description ||
     ""
   );
 }
 
 function extractMeta(e){
   const bits = [];
-  const year = sanitize(e.year || (e.info && e.info.releaseDate) || (e.raw && e.raw.info && e.raw.info.releasedate) || "");
-  const rating = sanitize(e.rating || (e.info && e.info.rating) || (e.raw && e.raw.rating) || "");
+  const year = sanitize(
+    e.year ||
+    (e.info && (e.info.releaseDate || e.info.releasedate || e.info.year)) ||
+    (e.raw && e.raw.info && (e.raw.info.releaseDate || e.raw.info.releasedate || e.raw.info.year)) ||
+    ""
+  );
+  const rating = sanitize(
+    e.rating ||
+    (e.info && e.info.rating) ||
+    (e.raw && (e.raw.rating || (e.raw.info && e.raw.info.rating))) ||
+    ""
+  );
   if (year) bits.push(year);
   if (rating) bits.push(`Note ${rating}`);
   return bits.join(" • ");
@@ -122,7 +132,7 @@ function getVisibleEntries(){
 function renderTypeTabs(){
   const wrap = $("typeTabs");
   wrap.innerHTML = "";
-  [["live","Live"],["series","Séries"],["vod","VOD"]].forEach(([key,label]) => {
+  [["series","Séries"],["vod","VOD"]].forEach(([key,label]) => {
     const count = (state.entriesByType[key] || []).length;
     if (!count) return;
     const b = document.createElement("button");
@@ -156,10 +166,6 @@ function encodeItem(it){
 
 function openItem(it){
   if (!it || !it.url) return;
-  if (it.type === "live") {
-    location.href = it.url;
-    return;
-  }
   location.href = `details.html?item=${encodeItem(it)}`;
 }
 
@@ -170,7 +176,7 @@ function renderGallery(){
   $("count").textContent = String(arr.length);
 
   if (!arr.length) {
-    $("status").textContent = "Aucune donnée trouvée pour cet onglet.";
+    $("status").textContent = "Aucune donnée trouvée.";
     return;
   }
   $("status").textContent = "";
@@ -210,16 +216,15 @@ function renderAll(){
 
 async function reloadData(){
   $("status").textContent = "Chargement…";
-  state.entriesByType.live = await tryLoadType("live");
   state.entriesByType.series = await tryLoadType("series");
   state.entriesByType.vod = await tryLoadType("vod");
 
-  const preferred = ["vod", "series", "live"].find(k => state.entriesByType[k].length) || "vod";
+  const preferred = ["vod", "series"].find(k => state.entriesByType[k].length) || "vod";
   if (!state.entriesByType[state.currentType].length) state.currentType = preferred;
   state.activeCat = "Tous";
 
   const total = Object.values(state.entriesByType).reduce((n, arr) => n + arr.length, 0);
-  $("status").textContent = total ? "" : "Ajoute tes fichiers live / series / vod à la racine du site.";
+  $("status").textContent = total ? "" : "Ajoute tes fichiers series / vod à la racine du site.";
   renderAll();
 }
 

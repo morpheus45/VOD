@@ -39,9 +39,7 @@ function fixImg(url){
 }
 
 async function copyText(v){
-  try {
-    await navigator.clipboard.writeText(v);
-  } catch(e) {}
+  try { await navigator.clipboard.writeText(v); } catch(e) {}
 }
 
 function fillBase(item){
@@ -50,35 +48,35 @@ function fillBase(item){
   $("poster").src = fixImg(item.image || "");
   $("poster").alt = item.title || "poster";
   $("poster").onerror = () => { $("poster").removeAttribute("src"); };
-  $("meta").textContent = [item.type === "vod" ? "VOD" : item.type === "series" ? "Série" : "Live", item.category || "", item.meta || ""].filter(Boolean).join(" • ");
-  $("plot").textContent = item.plot || (item.type === "vod" ? "Synopsis indisponible." : "");
-  $("topType").textContent = item.type === "vod" ? "Fiche VOD" : item.type === "series" ? "Fiche Série" : "Fiche";
+  $("meta").textContent = [item.type === "vod" ? "VOD" : "Série", item.category || "", item.meta || ""].filter(Boolean).join(" • ");
+  $("plot").textContent = item.plot || "Synopsis indisponible.";
+  $("topType").textContent = item.type === "vod" ? "Fiche VOD" : "Fiche Série";
 }
 
 function setupVod(item){
   $("vodActions").style.display = "flex";
   $("playBtn").href = item.url;
-  $("playBtn").textContent = "Lire";
   $("playBtn").addEventListener("click", (e) => {
     e.preventDefault();
     location.href = item.url;
   });
   $("copyBtn").addEventListener("click", () => copyText(item.url));
-  const isMixed = location.protocol === "https:" && /^http:\/\//i.test(item.url);
-  $("notice").textContent = isMixed
-    ? "Le lien vidéo est en HTTP. Le navigateur peut bloquer l’intégration, mais l’ouverture directe fonctionne normalement."
-    : "";
 }
 
 async function setupSeries(item){
   $("seriesWrap").style.display = "block";
-  $("notice").textContent = "";
   $("seriesStatus").textContent = "Chargement des saisons et épisodes…";
   try{
     const res = await fetch(item.url, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
+    const info = data.info && typeof data.info === "object" ? data.info : {};
+    const enrichedPlot = sanitize(info.plot || info.overview || info.synopsis || info.description || "");
+    if (enrichedPlot) $("plot").textContent = enrichedPlot;
+
+    const seasonTabs = $("seasonTabs");
+    const episodeGrid = $("episodeGrid");
     const seasons = Array.isArray(data.seasons) ? data.seasons : [];
     const episodesObj = data.episodes && typeof data.episodes === "object" ? data.episodes : {};
     let seasonKeys = seasons.map(s => String(s.season_number || s.season || s.id || "")).filter(Boolean);
@@ -89,11 +87,19 @@ async function setupSeries(item){
       return;
     }
 
+    const actions = $("seriesActions");
+    actions.innerHTML = "";
+    const copySeriesBtn = document.createElement("button");
+    copySeriesBtn.className = "btn";
+    copySeriesBtn.type = "button";
+    copySeriesBtn.textContent = "Copier le lien série";
+    copySeriesBtn.onclick = () => copyText(item.url);
+    actions.appendChild(copySeriesBtn);
+
     let activeSeason = seasonKeys[0];
 
     function renderSeasonTabs(){
-      const wrap = $("seasonTabs");
-      wrap.innerHTML = "";
+      seasonTabs.innerHTML = "";
       seasonKeys.forEach(key => {
         const s = seasons.find(x => String(x.season_number || x.season || x.id || "") === String(key));
         const label = (s && s.name) ? s.name : `Saison ${key}`;
@@ -105,13 +111,12 @@ async function setupSeries(item){
           renderSeasonTabs();
           renderEpisodes();
         };
-        wrap.appendChild(b);
+        seasonTabs.appendChild(b);
       });
     }
 
     function renderEpisodes(){
-      const grid = $("episodeGrid");
-      grid.innerHTML = "";
+      episodeGrid.innerHTML = "";
       const eps = (data.episodes && data.episodes[String(activeSeason)]) ? data.episodes[String(activeSeason)] : [];
       if (!eps.length){
         $("seriesStatus").textContent = "Aucun épisode trouvé dans cette saison.";
@@ -123,7 +128,7 @@ async function setupSeries(item){
         const url = buildEpisodeUrl(item.url, ep);
         const title = sanitize(ep.title || ep.name || `Episode ${ep.episode_num || ""}`);
         const poster = fixImg(ep.movie_image || ep.cover_big || ep.image || item.image || "");
-        const plot = sanitize((ep.info && ep.info.plot) || ep.plot || "");
+        const plot = sanitize((ep.info && (ep.info.plot || ep.info.overview || ep.info.description)) || ep.plot || "");
         const runtime = sanitize((ep.info && ep.info.duration) || ep.duration || "");
         const epNum = sanitize(ep.episode_num || ep.ep_num || "");
 
@@ -183,7 +188,7 @@ async function setupSeries(item){
 
         card.appendChild(img);
         card.appendChild(body);
-        grid.appendChild(card);
+        episodeGrid.appendChild(card);
       });
     }
 

@@ -3,11 +3,10 @@
   const $ = (id) => document.getElementById(id);
   const state = {
     source: null,
-    currentType: 'live',
+    currentType: 'series',
     selectedCategory: 'all',
     search: '',
     libraries: {
-      live: {meta:{kind:'live'}, categories: [], items: []},
       series: {meta:{kind:'series'}, categories: [], items: []},
       vod: {meta:{kind:'vod'}, categories: [], items: []}
     }
@@ -49,7 +48,7 @@
   }
 
   function updateCounts() {
-    $('liveCount').textContent = state.libraries.live.items.length;
+    $('seriesCount').textContent = state.libraries.series.items.length;
     $('seriesCount').textContent = state.libraries.series.items.length;
     $('vodCount').textContent = state.libraries.vod.items.length;
   }
@@ -68,11 +67,7 @@
       stream_url: `${src.base}/live/${encodeURIComponent(src.username)}/${encodeURIComponent(src.password)}/${encodeURIComponent(s.stream_id)}.${s.container_extension || 'ts'}`,
       type: 'live'
     }));
-    state.libraries.live = {
-      meta: {kind:'live', created_at:new Date().toISOString(), source_base:src.base, username:src.username},
-      categories: [...new Map(items.map(i => [i.category_id, {category_id:i.category_id, category_name:i.category_name}])).values()],
-      items
-    };
+    
   }
 
   async function importVod(src) {
@@ -140,8 +135,6 @@
     try { localStorage.setItem('xtream_api_url', raw); } catch (e) {}
 
     try {
-      await importLive(parsed);
-      updateCounts(); renderAll();
       await importSeries(parsed);
       updateCounts(); renderAll();
       await importVod(parsed);
@@ -256,7 +249,7 @@
     const items = filteredItems();
     const grid = $('grid');
     $('countTag').textContent = `${items.length} élément${items.length > 1 ? 's' : ''}`;
-    $('sectionTitle').textContent = state.currentType === 'live' ? 'Catalogue Live' : state.currentType === 'series' ? 'Catalogue Séries' : 'Catalogue VOD';
+    $('sectionTitle').textContent = state.currentType === 'series' ? 'Catalogue Séries' : 'Catalogue VOD';
     grid.innerHTML = '';
     if (!items.length) {
       const empty = document.createElement('div');
@@ -306,7 +299,7 @@
   }
 
   async function tryAutoload() {
-    const targets = [['live.json','live'],['series.json','series'],['vod.json','vod'],['live.m3u','live'],['series.m3u','series'],['vod.m3u','vod']];
+    const targets = [['series.json','series'],['vod.json','vod'],['series.m3u','series'],['vod.m3u','vod']];
     let loaded = 0;
     for (const [name, type] of targets) {
       try {
@@ -350,7 +343,6 @@
     $('apiUrl').value = '';
     state.source = null;
     state.libraries = {
-      live: {meta:{kind:'live'}, categories: [], items: []},
       series: {meta:{kind:'series'}, categories: [], items: []},
       vod: {meta:{kind:'vod'}, categories: [], items: []}
     };
@@ -359,10 +351,10 @@
     setStatus("Données effacées.", 'ok');
   };
 
-  $('downloadLiveJsonBtn').onclick = () => state.libraries.live.items.length ? downloadText('live.json', JSON.stringify(state.libraries.live, null, 2), 'application/json;charset=utf-8') : setStatus('Aucune donnée live.', 'error');
+  $('downloadLiveJsonBtn').onclick = () => state.libraries.series.items.length ? downloadText('live.json', JSON.stringify(state.libraries.live, null, 2), 'application/json;charset=utf-8') : setStatus('Aucune donnée live.', 'error');
   $('downloadSeriesJsonBtn').onclick = () => state.libraries.series.items.length ? downloadText('series.json', JSON.stringify(state.libraries.series, null, 2), 'application/json;charset=utf-8') : setStatus('Aucune donnée séries.', 'error');
   $('downloadVodJsonBtn').onclick = () => state.libraries.vod.items.length ? downloadText('vod.json', JSON.stringify(state.libraries.vod, null, 2), 'application/json;charset=utf-8') : setStatus('Aucune donnée VOD.', 'error');
-  $('downloadLiveM3uBtn').onclick = () => state.libraries.live.items.length ? downloadText('live.m3u', buildM3U('live'), 'audio/x-mpegurl;charset=utf-8') : setStatus('Aucune donnée live.', 'error');
+  $('downloadLiveM3uBtn').onclick = () => state.libraries.series.items.length ? downloadText('live.m3u', buildM3U('live'), 'audio/x-mpegurl;charset=utf-8') : setStatus('Aucune donnée live.', 'error');
   $('downloadSeriesM3uBtn').onclick = () => state.libraries.series.items.length ? downloadText('series.m3u', buildM3U('series'), 'audio/x-mpegurl;charset=utf-8') : setStatus('Aucune donnée séries.', 'error');
   $('downloadVodM3uBtn').onclick = () => state.libraries.vod.items.length ? downloadText('vod.m3u', buildM3U('vod'), 'audio/x-mpegurl;charset=utf-8') : setStatus('Aucune donnée VOD.', 'error');
   $('autoloadBtn').onclick = tryAutoload;
