@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#1d4ed8" />
+  <title>VOD</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <style>
+  :root{--bg:#0b1220;--muted:#9fb0d0;--text:#e9eefc;--border:rgba(255,255,255,.10);--shadow:0 10px 30px rgba(0,0,0,.35);--card:rgba(255,255,255,.04);--card2:rgba(255,255,255,.02);}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:radial-gradient(1200px 800px at 10% -10%, rgba(29,78,216,.35), transparent 60%),radial-gradient(1200px 800px at 110% 10%, rgba(99,102,241,.25), transparent 60%),#0b1220;color:var(--text);}
+  .header{position:sticky;top:0;backdrop-filter:blur(10px);background:rgba(11,18,32,.65);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:50;transition:transform .25s ease, opacity .25s ease;}
+  .header.is-hidden{transform:translateY(-120%); opacity:0; pointer-events:none;}
+  .brand{display:flex;gap:12px;align-items:center}
+  .logo{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg, rgba(29,78,216,.95), rgba(99,102,241,.85));box-shadow:var(--shadow);font-size:20px;}
+  .header h1{margin:0;font-size:18px}.header p{margin:2px 0 0;color:var(--muted);font-size:12px}
+  .container{max-width:1280px;margin:18px auto 40px;padding:0 16px;display:grid;gap:14px}
+  .card{background:linear-gradient(180deg, var(--card), var(--card2));border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:var(--shadow);}
+  .rowHeader{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .pill{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.06);font-size:12px}
+  .toolbar{display:grid;grid-template-columns:1fr 220px;gap:10px;margin-top:8px}
+  @media(max-width:980px){.toolbar{grid-template-columns:1fr}}
+  .label{display:block;margin:10px 0 6px;font-size:12px;color:var(--muted)}
+  input,select,button{width:100%;padding:10px 10px;border-radius:12px;border:1px solid var(--border);background:rgba(0,0,0,.18);color:var(--text);outline:none}
+  button{cursor:pointer}
+  .btn{padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer}
+  .btn-primary{background:linear-gradient(135deg, rgba(29,78,216,.95), rgba(99,102,241,.85));border-color:rgba(255,255,255,.14)}
+  .hint,.status,.footer{color:var(--muted);font-size:13px}
+  .types,.tabs{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 12px}
+  .tab{padding:8px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.06);cursor:pointer;font-size:13px;width:auto}
+  .tab.active{background:linear-gradient(135deg, rgba(29,78,216,.95), rgba(99,102,241,.85));border-color:rgba(255,255,255,.14)}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .poster{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(0,0,0,.18);box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
+  .poster img{width:100%;height:auto;aspect-ratio:2/3;object-fit:cover;display:block;background:rgba(255,255,255,.04)}
+  .poster .cap{padding:8px 10px;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  @media (max-width: 520px){.gallery{grid-template-columns:repeat(3, minmax(0,1fr)) !important;}}
+  </style>
+</head>
+<body>
+<header class="header">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">🎬</div>
+    <div>
+      <h1>VOD</h1>
+      <p>Affichage public : catégories et contenus uniquement.</p>
+    </div>
+  </div>
+  <button id="installBtn" class="btn btn-primary" type="button">Installer l’app</button>
+</header>
+
+<main class="container">
+  <section class="card">
+    <div class="rowHeader">
+      <h2 style="margin:0">Catalogue</h2>
+      <div class="pill"><span id="count">0</span> éléments</div>
+    </div>
+
+    <div class="types" id="typeTabs"></div>
+
+    <div class="toolbar">
+      <div>
+        <label class="label" for="filter">Recherche</label>
+        <input id="filter" type="text" placeholder="rechercher…" />
+      </div>
+      <div>
+        <label class="label" for="sort">Tri</label>
+        <select id="sort">
+          <option value="cat_title" selected>Catégorie → Titre</option>
+          <option value="title">Titre</option>
+          <option value="added_desc">Récents d’abord</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="tabs" class="tabs"></div>
+    <div id="gallery" class="gallery"></div>
+    <div class="status" id="status" aria-live="polite"></div>
+    <div class="footer" style="padding:12px 0 0">Ajoute <code>live.json</code>, <code>series.json</code>, <code>vod.json</code> ou leurs fichiers <code>.m3u</code> à la racine.</div>
+  </section>
+</main>
+
+<script src="public.js"></script>
+</body>
+</html>
