@@ -1,13 +1,13 @@
-Release fusionnée
+Smarters Web full release
 
-L’existant est conservé.
 Ajouts :
-- admin protégé par mot de passe : Morpheus45!
-- admin-panel avec génération Xtream de vod_catalog.json et series_catalog.json
-- site public compatible live + vod + séries
-- détails VOD avec synopsis si disponible
-- détails séries avec saisons / épisodes / synopsis si disponibles dans series_catalog.json
+- interface style OTT full web
+- live / vod / séries
+- admin protégé : Morpheus45!
+- extraction Xtream brute et enrichie
+- exports séparés :
+  live.m3u / live.json
+  vod.m3u / vod.json / vod_catalog.json
+  series.m3u / series.json / series_catalog.json
 
-Important :
-- les synopsis et saisons/épisodes ne peuvent apparaître que si le catalogue enrichi existe
-- si le serveur Xtream bloque le CORS, la génération depuis GitHub Pages peut échouer
+Les fichiers enrichis sont lus en priorité côté public.

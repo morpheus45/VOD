@@ -24,10 +24,7 @@ function fillBase(item){
 
 function setupVod(item){
   $("vodActions").style.display = "flex";
-  $("playBtn").addEventListener("click", (e) => {
-    e.preventDefault();
-    location.href = item.url;
-  });
+  $("playBtn").addEventListener("click", e => { e.preventDefault(); location.href = item.url; });
   $("copyBtn").addEventListener("click", () => copyText(item.url));
 }
 
@@ -37,12 +34,10 @@ function setupSeries(item){
   const episodesObj = item.episodes && typeof item.episodes === "object" ? item.episodes : {};
   let seasonKeys = seasons.map(s => String(s.season_number || s.season || s.id || "")).filter(Boolean);
   if (!seasonKeys.length) seasonKeys = Object.keys(episodesObj);
-
   if (!seasonKeys.length) {
     $("seriesStatus").textContent = "Aucune saison ou épisode disponible dans le fichier de catalogue.";
     return;
   }
-
   let activeSeason = seasonKeys[0];
 
   function renderTabs(){
@@ -61,7 +56,7 @@ function setupSeries(item){
   function renderEpisodes(){
     $("episodeGrid").innerHTML = "";
     const eps = episodesObj[String(activeSeason)] || [];
-    if (!eps.length){
+    if (!eps.length) {
       $("seriesStatus").textContent = "Aucun épisode trouvé dans cette saison.";
       return;
     }
@@ -108,7 +103,7 @@ function setupSeries(item){
       openBtn.className = "btn btn-primary";
       openBtn.href = url || "#";
       openBtn.textContent = "Lire l'épisode";
-      openBtn.onclick = (e) => { e.preventDefault(); if (url) location.href = url; };
+      openBtn.onclick = e => { e.preventDefault(); if (url) location.href = url; };
 
       const copyBtn = document.createElement("button");
       copyBtn.className = "btn";

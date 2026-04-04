@@ -6,7 +6,7 @@
   <title>Admin</title>
   <link rel="icon" href="./icon-192.png" />
   <style>
-    :root{--panel:#121a2b;--panel2:#1a2440;--text:#eef3ff;--muted:#9fb0d0;--accent:#5ea1ff;--border:#2b395f;--ok:#2ecc71;--warn:#ffb020}
+    :root{--panel:#121a2b;--panel2:#1a2440;--text:#eef3ff;--muted:#9fb0d0;--accent:#5ea1ff;--border:#2b395f;--ok:#2ecc71}
     *{box-sizing:border-box}
     body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#10172a);color:var(--text)}
     .wrap{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
@@ -18,7 +18,6 @@
     .btn{width:auto}
     .primary{background:var(--accent);color:#08101f;font-weight:700}
     .good{background:var(--ok);color:#06240f;font-weight:700}
-    .warn{background:var(--warn);color:#2a1900;font-weight:700}
     .muted{color:var(--muted);font-size:13px}
     .status{padding:10px 12px;border:1px solid var(--border);border-radius:12px;min-height:44px}
     code{background:#0d1732;padding:2px 6px;border-radius:6px}
@@ -35,31 +34,29 @@
       <h1 style="margin:0">Admin</h1>
       <button id="logoutBtn" class="btn">Déconnexion</button>
     </div>
-    <div class="muted">Conserve l’existant et ajoute des catalogues enrichis pour VOD et Séries. Le live reste disponible tel quel.</div>
+    <div class="muted">Extraction brute et enrichie des fichiers live, VOD et séries.</div>
   </div>
 
   <div class="card">
     <h2 style="margin-top:0">Source Xtream</h2>
     <textarea id="apiUrl" placeholder="http://serveur/player_api.php?username=USER&password=PASS"></textarea>
     <div class="row">
-      <button id="parseBtn" class="btn">Analyser le lien</button>
-      <button id="genVodBtn" class="btn primary">Générer vod_catalog.json</button>
-      <button id="genSeriesBtn" class="btn primary">Générer series_catalog.json</button>
+      <button id="parseBtn" class="btn">Analyser</button>
+      <button id="genLiveBtn" class="btn primary">Générer live.json</button>
+      <button id="genVodBtn" class="btn primary">Générer vod.json</button>
+      <button id="genSeriesBtn" class="btn primary">Générer series.json</button>
+      <button id="genVodCatBtn" class="btn primary">Générer vod_catalog.json</button>
+      <button id="genSeriesCatBtn" class="btn primary">Générer series_catalog.json</button>
     </div>
-    <div class="muted">Depuis GitHub Pages, la génération dépend du CORS autorisé par le serveur Xtream.</div>
+    <div class="muted">La génération directe sur GitHub dépend du CORS autorisé par le serveur Xtream.</div>
   </div>
 
   <div class="card">
-    <h2 style="margin-top:0">Fichiers source</h2>
+    <h2 style="margin-top:0">Imports</h2>
     <div class="row">
       <input type="file" id="liveFile" accept=".json,.m3u,.m3u8" />
       <input type="file" id="vodFile" accept=".json,.m3u,.m3u8" />
       <input type="file" id="seriesFile" accept=".json,.m3u,.m3u8" />
-    </div>
-    <textarea id="pasteBox" placeholder='Colle ici un tableau JSON enrichi pour vod_catalog.json ou series_catalog.json'></textarea>
-    <div class="row">
-      <button id="loadVodCatalogBtn" class="btn">Charger comme vod_catalog.json</button>
-      <button id="loadSeriesCatalogBtn" class="btn">Charger comme series_catalog.json</button>
     </div>
   </div>
 
@@ -71,13 +68,18 @@
       <div class="stat"><div class="muted">Séries</div><strong id="seriesCount">0</strong></div>
     </div>
     <div class="row" style="margin-top:10px">
-      <button id="exportLiveBtn" class="btn good">Télécharger live_catalog.json</button>
-      <button id="exportVodBtn" class="btn good">Télécharger vod_catalog.json</button>
-      <button id="exportSeriesBtn" class="btn good">Télécharger series_catalog.json</button>
+      <button id="dlLiveM3u" class="btn good">live.m3u</button>
+      <button id="dlVodM3u" class="btn good">vod.m3u</button>
+      <button id="dlSeriesM3u" class="btn good">series.m3u</button>
+      <button id="dlLiveJson" class="btn good">live.json</button>
+      <button id="dlVodJson" class="btn good">vod.json</button>
+      <button id="dlSeriesJson" class="btn good">series.json</button>
+      <button id="dlVodCatalog" class="btn good">vod_catalog.json</button>
+      <button id="dlSeriesCatalog" class="btn good">series_catalog.json</button>
     </div>
     <div id="status" class="status">Prêt.</div>
   </div>
 </div>
-<script src="admin-panel.js"></script>
+<script src="./admin-panel.js"></script>
 </body>
 </html>
