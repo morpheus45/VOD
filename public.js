@@ -3,7 +3,7 @@ const $ = id => document.getElementById(id);
 const state = {
   currentType: "vod",
   activeCat: "Tous",
-  entriesByType: { series: [], vod: [] }
+  entriesByType: { live: [], series: [], vod: [] }
 };
 
 function sanitize(s){ return (s || "").toString().trim(); }
@@ -16,7 +16,10 @@ function normalizeCatalogItems(items, forcedType){
     category: sanitize(e.category_name || e.category) || "Sans catégorie",
     url: sanitize(e.stream_url || e.url),
     image: sanitize(e.stream_icon || e.cover || e.movie_image || e.image || ""),
-    plot: sanitize(e.plot || e.overview || e.description || (e.info && (e.info.plot || e.info.overview || e.info.description)) || ""),
+    plot: sanitize(
+      e.plot || e.overview || e.description ||
+      (e.info && (e.info.plot || e.info.overview || e.info.description || e.info.synopsis)) || ""
+    ),
     meta: sanitize(e.meta || ""),
     type: forcedType,
     seasons: Array.isArray(e.seasons) ? e.seasons : [],
@@ -46,8 +49,8 @@ function parseM3U(text, forcedType){
 }
 
 async function loadCatalog(type){
-  const catalogTargets = [`${type}_catalog.json`, `${type}.json`, `${type}.m3u`];
-  for (const file of catalogTargets) {
+  const targets = [`${type}_catalog.json`, `${type}.json`, `${type}.m3u`];
+  for (const file of targets) {
     try{
       const res = await fetch(`./${file}?v=${Date.now()}`, { cache:"no-store" });
       if (!res.ok) continue;
@@ -89,7 +92,7 @@ function getVisibleEntries(){
 function renderTypeTabs(){
   const wrap = $("typeTabs");
   wrap.innerHTML = "";
-  [["series","Séries"],["vod","VOD"]].forEach(([key,label]) => {
+  [["live","Live"],["series","Séries"],["vod","VOD"]].forEach(([key,label]) => {
     const count = (state.entriesByType[key] || []).length;
     if (!count) return;
     const b = document.createElement("button");
@@ -118,6 +121,11 @@ function encodeItem(it){
 }
 
 function openItem(it){
+  if (!it) return;
+  if (it.type === "live") {
+    location.href = it.url;
+    return;
+  }
   location.href = `details.html?item=${encodeItem(it)}`;
 }
 
@@ -162,13 +170,14 @@ function renderAll(){
 
 async function init(){
   $("status").textContent = "Chargement…";
+  state.entriesByType.live = await loadCatalog("live");
   state.entriesByType.series = await loadCatalog("series");
   state.entriesByType.vod = await loadCatalog("vod");
-  const preferred = ["vod","series"].find(k => state.entriesByType[k].length) || "vod";
+  const preferred = ["vod","series","live"].find(k => state.entriesByType[k].length) || "vod";
   if (!state.entriesByType[state.currentType].length) state.currentType = preferred;
   state.activeCat = "Tous";
   const total = Object.values(state.entriesByType).reduce((n, arr) => n + arr.length, 0);
-  $("status").textContent = total ? "" : "Ajoute vod_catalog.json / series_catalog.json ou les fichiers .json / .m3u.";
+  $("status").textContent = total ? "" : "Ajoute les fichiers de données à la racine.";
   renderAll();
 }
 

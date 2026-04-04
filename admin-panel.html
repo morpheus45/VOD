@@ -6,20 +6,26 @@
   <title>Admin</title>
   <link rel="icon" href="./icon-192.png" />
   <style>
-    :root{--panel:#121a2b;--panel2:#1a2440;--text:#eef3ff;--muted:#9fb0d0;--accent:#5ea1ff;--border:#2b395f;--ok:#2ecc71}
+    :root{--panel:#121a2b;--panel2:#1a2440;--text:#eef3ff;--muted:#9fb0d0;--accent:#5ea1ff;--border:#2b395f;--ok:#2ecc71;--warn:#ffb020}
     *{box-sizing:border-box}
     body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#10172a);color:var(--text)}
     .wrap{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
     .card{background:rgba(18,26,43,.96);border:1px solid var(--border);border-radius:18px;padding:16px}
     .row{display:flex;gap:10px;flex-wrap:wrap}
-    input,button,textarea{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--panel2);color:var(--text)}
+    textarea,input,button{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--panel2);color:var(--text)}
+    textarea{min-height:92px;resize:vertical}
     button{cursor:pointer}
     .btn{width:auto}
     .primary{background:var(--accent);color:#08101f;font-weight:700}
     .good{background:var(--ok);color:#06240f;font-weight:700}
+    .warn{background:var(--warn);color:#2a1900;font-weight:700}
     .muted{color:var(--muted);font-size:13px}
-    .status{padding:10px 12px;border:1px solid var(--border);border-radius:12px}
+    .status{padding:10px 12px;border:1px solid var(--border);border-radius:12px;min-height:44px}
     code{background:#0d1732;padding:2px 6px;border-radius:6px}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .stat{background:#101a33;border:1px solid var(--border);border-radius:14px;padding:12px}
+    .stat strong{display:block;font-size:22px}
+    @media(max-width:780px){.stats{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -29,31 +35,43 @@
       <h1 style="margin:0">Admin</h1>
       <button id="logoutBtn" class="btn">Déconnexion</button>
     </div>
-    <div class="muted">Cette page prépare des fichiers statiques pour le site public. Dépose ensuite les fichiers exportés à la racine du dépôt.</div>
+    <div class="muted">Conserve l’existant et ajoute des catalogues enrichis pour VOD et Séries. Le live reste disponible tel quel.</div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Source Xtream</h2>
+    <textarea id="apiUrl" placeholder="http://serveur/player_api.php?username=USER&password=PASS"></textarea>
+    <div class="row">
+      <button id="parseBtn" class="btn">Analyser le lien</button>
+      <button id="genVodBtn" class="btn primary">Générer vod_catalog.json</button>
+      <button id="genSeriesBtn" class="btn primary">Générer series_catalog.json</button>
+    </div>
+    <div class="muted">Depuis GitHub Pages, la génération dépend du CORS autorisé par le serveur Xtream.</div>
   </div>
 
   <div class="card">
     <h2 style="margin-top:0">Fichiers source</h2>
     <div class="row">
+      <input type="file" id="liveFile" accept=".json,.m3u,.m3u8" />
       <input type="file" id="vodFile" accept=".json,.m3u,.m3u8" />
       <input type="file" id="seriesFile" accept=".json,.m3u,.m3u8" />
     </div>
-    <div class="muted">Les fichiers <code>vod.m3u</code> et <code>series.m3u</code> seuls ne contiennent pas les synopsis ni les saisons/épisodes. Pour les afficher publiquement, il faut des fichiers enrichis <code>vod_catalog.json</code> et <code>series_catalog.json</code>.</div>
-  </div>
-
-  <div class="card">
-    <h2 style="margin-top:0">Import enrichi</h2>
     <textarea id="pasteBox" placeholder='Colle ici un tableau JSON enrichi pour vod_catalog.json ou series_catalog.json'></textarea>
     <div class="row">
-      <button id="loadVodCatalogBtn" class="btn primary">Charger comme vod_catalog.json</button>
-      <button id="loadSeriesCatalogBtn" class="btn primary">Charger comme series_catalog.json</button>
+      <button id="loadVodCatalogBtn" class="btn">Charger comme vod_catalog.json</button>
+      <button id="loadSeriesCatalogBtn" class="btn">Charger comme series_catalog.json</button>
     </div>
-    <div class="muted">Format attendu pour les séries : chaque entrée peut contenir <code>plot</code>, <code>seasons</code> et <code>episodes</code>.</div>
   </div>
 
   <div class="card">
     <h2 style="margin-top:0">Exports</h2>
-    <div class="row">
+    <div class="stats">
+      <div class="stat"><div class="muted">Live</div><strong id="liveCount">0</strong></div>
+      <div class="stat"><div class="muted">VOD</div><strong id="vodCount">0</strong></div>
+      <div class="stat"><div class="muted">Séries</div><strong id="seriesCount">0</strong></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="exportLiveBtn" class="btn good">Télécharger live_catalog.json</button>
       <button id="exportVodBtn" class="btn good">Télécharger vod_catalog.json</button>
       <button id="exportSeriesBtn" class="btn good">Télécharger series_catalog.json</button>
     </div>

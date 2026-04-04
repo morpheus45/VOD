@@ -1,19 +1,13 @@
-Version finale VOD + Séries
+Release fusionnée
 
-Fichiers publics :
-- index.html
-- public.js
-- details.html
-- details.js
+L’existant est conservé.
+Ajouts :
+- admin protégé par mot de passe : Morpheus45!
+- admin-panel avec génération Xtream de vod_catalog.json et series_catalog.json
+- site public compatible live + vod + séries
+- détails VOD avec synopsis si disponible
+- détails séries avec saisons / épisodes / synopsis si disponibles dans series_catalog.json
 
-Admin :
-- admin.html
-- admin-panel.html
-- admin-panel.js
-
-Données :
-- vod_catalog.json et series_catalog.json recommandés
-- fallback possible sur vod.m3u / series.m3u
-
-Mot de passe admin :
-Morpheus45!
+Important :
+- les synopsis et saisons/épisodes ne peuvent apparaître que si le catalogue enrichi existe
+- si le serveur Xtream bloque le CORS, la génération depuis GitHub Pages peut échouer

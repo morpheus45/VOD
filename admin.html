@@ -28,7 +28,7 @@
   </div>
 <script>
 const P='Morpheus45!';
-const K='morph_admin_ok_v2';
+const K='morph_admin_ok_v3';
 function go(){ const v=document.getElementById('pw').value; if(v===P){ try{sessionStorage.setItem(K,'1')}catch(e){} location.href='./admin-panel.html'; } else { document.getElementById('msg').textContent='Mot de passe incorrect.'; } }
 try{ if(sessionStorage.getItem(K)==='1'){ location.href='./admin-panel.html'; } }catch(e){}
 document.getElementById('openBtn').addEventListener('click', go);

@@ -17,9 +17,9 @@ function fillBase(item){
   $("poster").src = fixImg(item.image || "");
   $("poster").alt = item.title || "poster";
   $("poster").onerror = () => { $("poster").removeAttribute("src"); };
-  $("meta").textContent = [item.type === "vod" ? "VOD" : "Série", item.category || "", item.meta || ""].filter(Boolean).join(" • ");
+  $("meta").textContent = [item.type === "vod" ? "VOD" : item.type === "series" ? "Série" : "Live", item.category || "", item.meta || ""].filter(Boolean).join(" • ");
   $("plot").textContent = item.plot || "Synopsis indisponible.";
-  $("topType").textContent = item.type === "vod" ? "Fiche VOD" : "Fiche Série";
+  $("topType").textContent = item.type === "vod" ? "Fiche VOD" : item.type === "series" ? "Fiche Série" : "Fiche Live";
 }
 
 function setupVod(item){
@@ -44,6 +44,7 @@ function setupSeries(item){
   }
 
   let activeSeason = seasonKeys[0];
+
   function renderTabs(){
     $("seasonTabs").innerHTML = "";
     seasonKeys.forEach(key => {
@@ -68,7 +69,7 @@ function setupSeries(item){
     eps.forEach(ep => {
       const title = sanitize(ep.title || ep.name || `Episode ${ep.episode_num || ""}`);
       const poster = fixImg(ep.movie_image || ep.cover_big || ep.image || item.image || "");
-      const plot = sanitize((ep.info && (ep.info.plot || ep.info.overview || ep.info.description)) || ep.plot || "");
+      const plot = sanitize((ep.info && (ep.info.plot || ep.info.overview || ep.info.description || ep.info.synopsis)) || ep.plot || "");
       const runtime = sanitize((ep.info && ep.info.duration) || ep.duration || "");
       const epNum = sanitize(ep.episode_num || ep.ep_num || "");
       const url = sanitize(ep.url || ep.stream_url || "");
@@ -142,5 +143,5 @@ function setupSeries(item){
   }
   fillBase(item);
   if (item.type === "vod") setupVod(item);
-  else setupSeries(item);
+  else if (item.type === "series") setupSeries(item);
 })();
