@@ -8,18 +8,16 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="./icon-192.png" />
   <link rel="apple-touch-icon" href="./icon-192.png" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
   <style>
   :root{--bg:#0b1220;--muted:#9fb0d0;--text:#e9eefc;--border:rgba(255,255,255,.10);--shadow:0 10px 30px rgba(0,0,0,.35);--card:rgba(255,255,255,.04);--card2:rgba(255,255,255,.02);}
   *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:radial-gradient(1200px 800px at 10% -10%, rgba(29,78,216,.35), transparent 60%),radial-gradient(1200px 800px at 110% 10%, rgba(99,102,241,.25), transparent 60%),#0b1220;color:var(--text);}
-  .header{position:sticky;top:0;backdrop-filter:blur(10px);background:rgba(11,18,32,.65);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:50;transition:transform .25s ease, opacity .25s ease;}
-  .header.is-hidden{transform:translateY(-120%); opacity:0; pointer-events:none;}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:radial-gradient(1200px 800px at 10% -10%, rgba(29,78,216,.35), transparent 60%),radial-gradient(1200px 800px at 110% 10%, rgba(99,102,241,.25), transparent 60%),#0b1220;color:var(--text);}
+  .header{position:sticky;top:0;backdrop-filter:blur(10px);background:rgba(11,18,32,.65);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:50}
   .brand{display:flex;gap:12px;align-items:center}
-  .logo{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg, rgba(29,78,216,.95), rgba(99,102,241,.85));box-shadow:var(--shadow);font-size:20px;}
+  .logo{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg, rgba(29,78,216,.95), rgba(99,102,241,.85));box-shadow:var(--shadow);font-size:20px}
   .header h1{margin:0;font-size:18px}.header p{margin:2px 0 0;color:var(--muted);font-size:12px}
   .container{max-width:1280px;margin:18px auto 40px;padding:0 16px;display:grid;gap:14px}
-  .card{background:linear-gradient(180deg, var(--card), var(--card2));border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:var(--shadow);}
+  .card{background:linear-gradient(180deg, var(--card), var(--card2));border:1px solid var(--border);border-radius:18px;padding:16px;box-shadow:var(--shadow)}
   .rowHeader{display:flex;align-items:center;justify-content:space-between;gap:10px}
   .pill{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:rgba(255,255,255,.06);font-size:12px}
   .toolbar{display:grid;grid-template-columns:1fr 220px;gap:10px;margin-top:8px}
@@ -27,7 +25,7 @@
   .label{display:block;margin:10px 0 6px;font-size:12px;color:var(--muted)}
   input,select,button{width:100%;padding:10px 10px;border-radius:12px;border:1px solid var(--border);background:rgba(0,0,0,.18);color:var(--text);outline:none}
   button{cursor:pointer}
-  .btn{padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer}
+  .btn{padding:10px 12px;border-radius:14px;border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer;width:auto;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
   .btn-primary{background:linear-gradient(135deg, rgba(29,78,216,.95), rgba(99,102,241,.85));border-color:rgba(255,255,255,.14)}
   .hint,.status,.footer{color:var(--muted);font-size:13px}
   .types,.tabs{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 12px}
@@ -37,35 +35,21 @@
   .poster{border:1px solid var(--border);border-radius:14px;overflow:hidden;background:rgba(0,0,0,.18);box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}
   .poster img{width:100%;height:auto;aspect-ratio:2/3;object-fit:cover;display:block;background:rgba(255,255,255,.04)}
   .poster .cap{padding:8px 10px;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .poster .sub{padding:0 10px 10px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  code{background:#0d1732;padding:2px 6px;border-radius:6px}
   @media (max-width: 520px){.gallery{grid-template-columns:repeat(3, minmax(0,1fr)) !important;}}
-  
-  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:16px;z-index:120}
-  .overlay.open{display:flex}
-  .modal{width:min(1100px,100%);max-height:90vh;overflow:auto;background:linear-gradient(180deg, rgba(16,23,42,.98), rgba(11,18,32,.98));border:1px solid var(--border);border-radius:22px;box-shadow:var(--shadow);padding:16px}
-  .modalHead{display:flex;gap:14px;align-items:flex-start;justify-content:space-between}
-  .modalTitle{margin:0;font-size:22px}
-  .closeBtn{width:auto;padding:10px 12px}
-  .seasonTabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
-  .seasonTab{width:auto}
-  .epGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
-  .epCard{border:1px solid var(--border);background:rgba(255,255,255,.04);border-radius:16px;overflow:hidden}
-  .epPoster{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:rgba(255,255,255,.04)}
-  .epBody{padding:10px}
-  .epMeta{font-size:12px;color:var(--muted);margin-top:6px}
-  .epActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-
-</style>
+  </style>
 </head>
 <body>
 <header class="header">
   <div class="brand">
-    <div class="logo" aria-hidden="true">🎬</div>
+    <div class="logo">🎬</div>
     <div>
       <h1>VOD</h1>
-      <p>Affichage public : catégories et contenus uniquement.</p>
+      <p>Version publique simplifiée et compatible mobile.</p>
     </div>
   </div>
-  <button id="installBtn" class="btn btn-primary" type="button">Installer l’app</button>
+  <a class="btn btn-primary" href="./admin.html">Admin</a>
 </header>
 
 <main class="container">
@@ -95,26 +79,10 @@
     <div id="tabs" class="tabs"></div>
     <div id="gallery" class="gallery"></div>
     <div class="status" id="status" aria-live="polite"></div>
-    <div class="footer" style="padding:12px 0 0">Ajoute <code>live.json</code>, <code>series.json</code>, <code>vod.json</code> ou leurs fichiers <code>.m3u</code> à la racine.</div>
+    <div class="footer" style="padding:12px 0 0">Dépose à la racine : <code>live.json</code> ou <code>live.m3u</code>, <code>series.json</code> ou <code>series.m3u</code>, <code>vod.json</code> ou <code>vod.m3u</code>.</div>
   </section>
 </main>
 
 <script src="public.js"></script>
-
-<div id="seriesOverlay" class="overlay" aria-hidden="true">
-  <div class="modal">
-    <div class="modalHead">
-      <div>
-        <h3 id="seriesModalTitle" class="modalTitle">Série</h3>
-        <div id="seriesModalMeta" class="hint"></div>
-      </div>
-      <button id="seriesCloseBtn" class="btn closeBtn" type="button">Fermer</button>
-    </div>
-    <div id="seasonTabs" class="seasonTabs"></div>
-    <div id="episodeGrid" class="epGrid"></div>
-    <div id="seriesModalStatus" class="status"></div>
-  </div>
-</div>
-
 </body>
 </html>

@@ -1,30 +1,31 @@
-# GitHub VOD App
+GitHub VOD App – version fonctionnelle simplifiée
 
-Fichiers à laisser à la racine :
-- index.html → partie publique
-- admin.html → partie administration
-- admin.js
+Partie publique :
+- index.html
 - public.js
-- player.html
-- manifest.webmanifest
-- sw.js
+- details.html
+- details.js
+
+Partie admin :
+- admin.html
+- admin.js
+
+Icônes / manifeste :
 - icon-192.png
 - icon-512.png
+- manifest.webmanifest
+- sw.js
 
-Fichiers de données à ajouter toi-même à la racine :
+Fichiers à ajouter toi-même à la racine :
 - live.json ou live.m3u
 - series.json ou series.m3u
 - vod.json ou vod.m3u
 
-Usage :
-1. Ouvrir admin.html
-2. Importer Live + Séries + VOD depuis Xtream
-3. Télécharger les fichiers live / series / vod
-4. Déposer ces fichiers à la racine du dépôt GitHub
-5. index.html affichera automatiquement la partie visible
+Comportement :
+- Live : ouvre directement le lien
+- VOD : ouvre une fiche avec synopsis + bouton Lire
+- Séries : ouvre une fiche avec saisons/épisodes + lecture directe de l’épisode
 
-
-Version direct_links :
-- VOD ouvre toujours le lien direct
-- Live ouvre toujours le lien direct
-- Séries : clic série -> saisons/épisodes -> ouverture directe de l'épisode
+Important :
+- cette version neutralise l’ancien service worker pour éviter les pages vides sur mobile
+- après mise à jour sur GitHub, fais un rechargement complet sur téléphone
