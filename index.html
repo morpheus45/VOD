@@ -43,6 +43,7 @@
     .name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .sub{font-size:11px;color:var(--muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .status{font-size:13px;color:var(--muted)}
+    .notice{font-size:12px;color:#c8d3ff}
     @media(max-width:980px){.hero{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr 1fr}}
     @media(max-width:720px){.app{grid-template-columns:1fr}.sidebar{position:sticky;top:0;height:auto;flex-direction:row;justify-content:space-between;padding:10px 12px;z-index:100}.main{padding:14px}.searchWrap{width:100%}input{min-width:0;width:100%}.stats{grid-template-columns:1fr}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.thumb{aspect-ratio:2/3}.name{font-size:12px}}
   </style>
@@ -60,7 +61,7 @@
     <div class="topbar">
       <div class="titleWrap">
         <h1 id="pageTitle">Live</h1>
-        <p id="pageSub">Interface full web style OTT.</p>
+        <p id="pageSub">Chargement strict par type : aucun mélange entre les sources.</p>
       </div>
       <div class="searchWrap">
         <input id="search" type="text" placeholder="Rechercher..." />
@@ -74,7 +75,7 @@
     <section class="hero">
       <div class="card heroCard">
         <h2 id="heroTitle">Smarters Web</h2>
-        <p id="heroText">Choisis une section, une catégorie puis un contenu.</p>
+        <p id="heroText">Chaque onglet lit uniquement ses propres fichiers.</p>
       </div>
       <div class="card">
         <div class="stats">
@@ -91,6 +92,7 @@
         <div class="status" id="status">Chargement…</div>
       </div>
       <div class="categories" id="categories"></div>
+      <div class="notice" id="sourceNotice"></div>
     </section>
 
     <section class="sectionHead">

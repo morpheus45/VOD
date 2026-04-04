@@ -1,6 +1,11 @@
 const $ = id => document.getElementById(id);
 
-const state = { currentType:"live", activeCat:"Tous", data:{ live:[], vod:[], series:[] } };
+const state = {
+  currentType: "live",
+  activeCat: "Tous",
+  data: { live: [], vod: [], series: [] },
+  sourceUsed: { live: "", vod: "", series: "" }
+};
 
 const uiMeta = {
   live:{ title:"Live", pageSub:"Chaînes en direct", hero:"Télévision en direct" },
@@ -23,7 +28,7 @@ function normalizeItems(items, type){
     type,
     seasons: Array.isArray(e.seasons) ? e.seasons : [],
     episodes: e.episodes && typeof e.episodes === "object" ? e.episodes : {}
-  })).filter(e => e.url || type === "series");
+  }));
 }
 
 function parseM3U(text, type){
@@ -47,23 +52,44 @@ function parseM3U(text, type){
   return items;
 }
 
-async function loadOne(type){
-  const targets = [`${type}_catalog.json`, `${type}.json`, `${type}.m3u`];
+function strictFilter(items, type){
+  const arr = (items || []).slice();
+  if (type === "live") return arr.filter(x => sanitize(x.url).includes("/live/"));
+  if (type === "vod") return arr.filter(x => sanitize(x.url).includes("/movie/"));
+  if (type === "series") return arr.filter(x => {
+    const u = sanitize(x.url);
+    return u.includes("get_series_info") || u.includes("/series/");
+  });
+  return arr;
+}
+
+async function loadType(type){
+  const targets = [
+    `${type}_catalog.json`,
+    `${type}.json`,
+    `${type}.m3u`
+  ];
   for (const file of targets) {
     try {
       const res = await fetch(`./${file}?v=${Date.now()}`, { cache:"no-store" });
       if (!res.ok) continue;
       const text = await res.text();
-      if (file.endsWith(".m3u")) {
-        const items = parseM3U(text, type);
-        if (items.length) return items;
-      } else {
+      let items = [];
+      if (file.endsWith(".m3u")) items = parseM3U(text, type);
+      else {
         const data = JSON.parse(text);
-        const items = Array.isArray(data) ? normalizeItems(data, type) : Array.isArray(data.items) ? normalizeItems(data.items, type) : [];
-        if (items.length) return items;
+        items = Array.isArray(data) ? normalizeItems(data, type)
+          : Array.isArray(data.items) ? normalizeItems(data.items, type)
+          : [];
       }
-    } catch(e){}
+      items = strictFilter(items, type);
+      if (items.length) {
+        state.sourceUsed[type] = file;
+        return items;
+      }
+    } catch(e) {}
   }
+  state.sourceUsed[type] = "aucune";
   return [];
 }
 
@@ -140,8 +166,11 @@ function renderMeta(){
   $("pageSub").textContent = meta.pageSub;
   $("heroTitle").textContent = meta.hero;
   $("heroText").textContent = state.currentType === "series"
-    ? "Ouvre une série pour afficher ses saisons et ses épisodes."
-    : "Appuie sur une jaquette pour lancer le contenu.";
+    ? "Cet onglet lit uniquement series.json / series.m3u / series_catalog.json."
+    : state.currentType === "vod"
+      ? "Cet onglet lit uniquement vod.json / vod.m3u / vod_catalog.json."
+      : "Cet onglet lit uniquement live.json / live.m3u / live_catalog.json.";
+  $("sourceNotice").textContent = `Source utilisée pour ${meta.title.toLowerCase()} : ${state.sourceUsed[state.currentType] || "aucune"}`;
 }
 
 function renderGrid(){
@@ -188,9 +217,9 @@ function renderAll(){
 
 async function boot(){
   $("status").textContent = "Chargement…";
-  state.data.live = await loadOne("live");
-  state.data.vod = await loadOne("vod");
-  state.data.series = await loadOne("series");
+  state.data.live = await loadType("live");
+  state.data.vod = await loadType("vod");
+  state.data.series = await loadType("series");
   const preferred = ["live","vod","series"].find(k => state.data[k].length) || "live";
   if (!state.data[state.currentType].length) state.currentType = preferred;
   state.activeCat = "Tous";

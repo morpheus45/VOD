@@ -18,7 +18,7 @@ function fillBase(item){
   $("poster").alt = item.title || "poster";
   $("poster").onerror = () => { $("poster").removeAttribute("src"); };
   $("meta").textContent = [item.type === "vod" ? "VOD" : item.type === "series" ? "Série" : "Live", item.category || "", item.meta || ""].filter(Boolean).join(" • ");
-  $("plot").textContent = item.plot || "Synopsis indisponible.";
+  $("plot").textContent = item.plot || "Aucun synopsis disponible dans cette source.";
   $("topType").textContent = item.type === "vod" ? "Fiche VOD" : item.type === "series" ? "Fiche Série" : "Fiche Live";
 }
 
@@ -35,7 +35,7 @@ function setupSeries(item){
   let seasonKeys = seasons.map(s => String(s.season_number || s.season || s.id || "")).filter(Boolean);
   if (!seasonKeys.length) seasonKeys = Object.keys(episodesObj);
   if (!seasonKeys.length) {
-    $("seriesStatus").textContent = "Aucune saison ou épisode disponible dans le fichier de catalogue.";
+    $("seriesStatus").textContent = "Ce fichier series.json ne contient pas de saisons/épisodes enrichis. Utilise series_catalog.json pour les afficher ici.";
     return;
   }
   let activeSeason = seasonKeys[0];
