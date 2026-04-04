@@ -22,3 +22,9 @@ Usage :
 3. Télécharger les fichiers live / series / vod
 4. Déposer ces fichiers à la racine du dépôt GitHub
 5. index.html affichera automatiquement la partie visible
+
+
+Version direct_links :
+- VOD ouvre toujours le lien direct
+- Live ouvre toujours le lien direct
+- Séries : clic série -> saisons/épisodes -> ouverture directe de l'épisode

@@ -179,37 +179,13 @@ function renderCategoryTabs(){
 function openItem(it){
   if (!it || !it.url) return;
 
-  const directHttpFromHttps = location.protocol === "https:" && /^http:\/\//i.test(it.url);
-
   if (state.currentType === "series") {
     openSeriesItem(it);
     return;
   }
 
-  if (state.currentType === "live" && /\.ts($|\?)/i.test(it.url) && directHttpFromHttps) {
-    window.open(it.url, "_blank", "noopener");
-    return;
-  }
-
-  if (directHttpFromHttps) {
-    const ok = confirm(
-      "Ce flux utilise HTTP alors que le site GitHub est en HTTPS. " +
-      "Le lecteur intégré peut être bloqué par le navigateur.\n\n" +
-      "OK = ouvrir le lien direct dans un nouvel onglet\n" +
-      "Annuler = tenter le lecteur intégré"
-    );
-    if (ok) {
-      window.open(it.url, "_blank", "noopener");
-      return;
-    }
-  }
-
-  const qs = new URLSearchParams({
-    u: it.url,
-    t: it.title || "",
-    p: it.image || ""
-  });
-  location.href = `player.html?${qs.toString()}`;
+  // Live et VOD : ouverture directe systématique
+  window.open(it.url, "_blank", "noopener");
 }
 
 function renderGallery(){
@@ -440,27 +416,24 @@ function renderEpisodesForSeason(seasonKey){
 
     const playBtn = document.createElement("button");
     playBtn.className = "btn btn-primary";
-    playBtn.textContent = "Lire";
+    playBtn.textContent = "Ouvrir";
     playBtn.onclick = () => {
-      if (!url) return;
-      const qs = new URLSearchParams({
-        u: url,
-        t: ttl.textContent || title,
-        p: poster || ""
-      });
-      location.href = `player.html?${qs.toString()}`;
-    };
-
-    const directBtn = document.createElement("button");
-    directBtn.className = "btn";
-    directBtn.textContent = "Lien direct";
-    directBtn.onclick = () => {
       if (!url) return;
       window.open(url, "_blank", "noopener");
     };
 
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "btn";
+    copyBtn.textContent = "Copier le lien";
+    copyBtn.onclick = async () => {
+      if (!url) return;
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch(e) {}
+    };
+
     actions.appendChild(playBtn);
-    actions.appendChild(directBtn);
+    actions.appendChild(copyBtn);
 
     body.appendChild(ttl);
     if (runtime) body.appendChild(meta);
