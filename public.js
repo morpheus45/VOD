@@ -182,6 +182,11 @@ function openItem(it){
   const directHttpFromHttps = location.protocol === "https:" && /^http:\/\//i.test(it.url);
 
   if (state.currentType === "series") {
+    openSeriesItem(it);
+    return;
+  }
+
+  if (state.currentType === "live" && /\.ts($|\?)/i.test(it.url) && directHttpFromHttps) {
     window.open(it.url, "_blank", "noopener");
     return;
   }
@@ -277,3 +282,193 @@ reloadData();
     lastY = y;
   }, { passive:true });
 })();
+
+
+
+const seriesState = { raw: null, item: null, activeSeason: null };
+
+function sanitizeSeriesUrl(s){
+  return (s || "").toString().replace(/\\\//g, "/").trim();
+}
+
+function parseSeriesApiUrl(apiUrl){
+  try{
+    const u = new URL(apiUrl);
+    return {
+      base: u.origin,
+      username: u.searchParams.get("username") || "",
+      password: u.searchParams.get("password") || ""
+    };
+  }catch(e){
+    return null;
+  }
+}
+
+function buildEpisodeUrl(seriesApiUrl, episode){
+  const info = parseSeriesApiUrl(seriesApiUrl);
+  if (!info || !info.base || !info.username || !info.password) return "";
+  const episodeId = episode && (episode.id || episode.episode_id || episode.stream_id);
+  const ext = ((episode && (episode.container_extension || episode.extension)) || "mp4").toString();
+  if (!episodeId) return "";
+  return `${info.base}/series/${encodeURIComponent(info.username)}/${encodeURIComponent(info.password)}/${encodeURIComponent(episodeId)}.${ext}`;
+}
+
+function openSeriesModal(){
+  const o = $("seriesOverlay");
+  if (!o) return;
+  o.classList.add("open");
+  o.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+function closeSeriesModal(){
+  const o = $("seriesOverlay");
+  if (!o) return;
+  o.classList.remove("open");
+  o.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target && e.target.id === "seriesCloseBtn") closeSeriesModal();
+  if (e.target && e.target.id === "seriesOverlay") closeSeriesModal();
+});
+
+async function openSeriesItem(it){
+  seriesState.item = it;
+  seriesState.raw = null;
+  seriesState.activeSeason = null;
+
+  $("seriesModalTitle").textContent = it.title || "Série";
+  $("seriesModalMeta").textContent = it.category || "";
+  $("seriesModalStatus").textContent = "Chargement des saisons et épisodes…";
+  $("seasonTabs").innerHTML = "";
+  $("episodeGrid").innerHTML = "";
+  openSeriesModal();
+
+  try{
+    const res = await fetch(it.url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    seriesState.raw = data || {};
+
+    const seasons = Array.isArray(data.seasons) ? data.seasons : [];
+    const episodesObj = data.episodes && typeof data.episodes === "object" ? data.episodes : {};
+    let seasonKeys = seasons.map(s => String(s.season_number || s.season || s.id || "")).filter(Boolean);
+    if (!seasonKeys.length) seasonKeys = Object.keys(episodesObj);
+
+    if (!seasonKeys.length){
+      $("seriesModalStatus").textContent = "Aucune saison ou épisode trouvé pour cette série.";
+      return;
+    }
+
+    seriesState.activeSeason = seasonKeys[0];
+    renderSeasonTabs(seasons, seasonKeys);
+    renderEpisodesForSeason(seriesState.activeSeason);
+    $("seriesModalStatus").textContent = "";
+  }catch(err){
+    $("seriesModalStatus").textContent = "Impossible de charger les détails de la série.";
+  }
+}
+
+function renderSeasonTabs(seasons, seasonKeys){
+  const wrap = $("seasonTabs");
+  wrap.innerHTML = "";
+  seasonKeys.forEach(key => {
+    const s = seasons.find(x => String(x.season_number || x.season || x.id || "") === String(key));
+    const label = (s && s.name) ? s.name : `Saison ${key}`;
+    const b = document.createElement("button");
+    b.className = "tab seasonTab" + (String(key) === String(seriesState.activeSeason) ? " active" : "");
+    b.textContent = label;
+    b.onclick = () => {
+      seriesState.activeSeason = String(key);
+      renderSeasonTabs(seasons, seasonKeys);
+      renderEpisodesForSeason(String(key));
+    };
+    wrap.appendChild(b);
+  });
+}
+
+function renderEpisodesForSeason(seasonKey){
+  const grid = $("episodeGrid");
+  grid.innerHTML = "";
+  const data = seriesState.raw || {};
+  const eps = (data.episodes && data.episodes[String(seasonKey)]) ? data.episodes[String(seasonKey)] : [];
+
+  if (!eps.length){
+    $("seriesModalStatus").textContent = "Aucun épisode trouvé dans cette saison.";
+    return;
+  }
+  $("seriesModalStatus").textContent = "";
+
+  eps.forEach(ep => {
+    const title = (ep.title || ep.name || `Episode ${ep.episode_num || ""}`).toString();
+    const poster = sanitizeSeriesUrl(ep.movie_image || ep.cover_big || ep.image || seriesState.item?.image || "");
+    const plot = (ep.info && ep.info.plot ? ep.info.plot : ep.plot || "").toString();
+    const runtime = ((ep.info && ep.info.duration) ? ep.info.duration : ep.duration || "").toString();
+    const epNum = (ep.episode_num || ep.ep_num || "").toString();
+    const url = buildEpisodeUrl(seriesState.item?.url || "", ep);
+
+    const card = document.createElement("div");
+    card.className = "epCard";
+
+    const img = document.createElement("img");
+    img.className = "epPoster";
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    img.src = poster || "";
+    img.alt = title;
+    img.onerror = () => { img.removeAttribute("src"); };
+
+    const body = document.createElement("div");
+    body.className = "epBody";
+
+    const ttl = document.createElement("div");
+    ttl.className = "title";
+    ttl.style.minHeight = "unset";
+    ttl.textContent = epNum ? `E${epNum} — ${title}` : title;
+
+    const meta = document.createElement("div");
+    meta.className = "epMeta";
+    meta.textContent = runtime || "";
+
+    const desc = document.createElement("div");
+    desc.className = "epMeta";
+    desc.textContent = plot || "";
+
+    const actions = document.createElement("div");
+    actions.className = "epActions";
+
+    const playBtn = document.createElement("button");
+    playBtn.className = "btn btn-primary";
+    playBtn.textContent = "Lire";
+    playBtn.onclick = () => {
+      if (!url) return;
+      const qs = new URLSearchParams({
+        u: url,
+        t: ttl.textContent || title,
+        p: poster || ""
+      });
+      location.href = `player.html?${qs.toString()}`;
+    };
+
+    const directBtn = document.createElement("button");
+    directBtn.className = "btn";
+    directBtn.textContent = "Lien direct";
+    directBtn.onclick = () => {
+      if (!url) return;
+      window.open(url, "_blank", "noopener");
+    };
+
+    actions.appendChild(playBtn);
+    actions.appendChild(directBtn);
+
+    body.appendChild(ttl);
+    if (runtime) body.appendChild(meta);
+    if (plot) body.appendChild(desc);
+    body.appendChild(actions);
+
+    card.appendChild(img);
+    card.appendChild(body);
+    grid.appendChild(card);
+  });
+}
