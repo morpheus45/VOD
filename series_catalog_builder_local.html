@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Générateur local series_catalog.json</title>
+  <style>
+    :root{--bg:#0b1020;--panel:#121a2b;--panel2:#1a2440;--text:#eef3ff;--muted:#9fb0d0;--accent:#5ea1ff;--border:#2b395f;--ok:#2ecc71;--warn:#ffb020;--bad:#ff6b6b}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#0a1020,#10172a);color:var(--text)}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px}
+    .card{background:rgba(18,26,43,.96);border:1px solid var(--border);border-radius:18px;padding:16px}
+    h1,h2{margin:0 0 10px}
+    .muted{color:var(--muted);font-size:13px;line-height:1.45}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    input,button,textarea{width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--panel2);color:var(--text)}
+    textarea{min-height:110px;resize:vertical}
+    button{cursor:pointer}
+    .btn{width:auto}
+    .primary{background:var(--accent);color:#08101f;font-weight:700}
+    .good{background:var(--ok);color:#06240f;font-weight:700}
+    .warn{background:var(--warn);color:#2a1900;font-weight:700}
+    .status{padding:10px 12px;border:1px solid var(--border);border-radius:12px;min-height:44px;white-space:pre-wrap}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .stat{background:#101a33;border:1px solid var(--border);border-radius:14px;padding:12px}
+    .stat strong{display:block;font-size:24px}
+    code{background:#0d1732;padding:2px 6px;border-radius:6px}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Générateur local de <code>series_catalog.json</code></h1>
+    <div class="muted">
+      Utilisation locale uniquement. Cette page lit ton <code>series.json</code>, appelle chaque URL
+      <code>get_series_info</code>, puis construit un vrai <code>series_catalog.json</code> avec saisons et épisodes.
+      <br><br>
+      Important : si le serveur Xtream bloque le CORS, le navigateur empêchera l’enrichissement.
+      Dans ce cas, le problème vient du serveur, pas de cette page.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1. Charger le fichier brut</h2>
+    <div class="row">
+      <input id="fileInput" type="file" accept=".json" />
+      <button id="loadBtn" class="btn">Charger series.json</button>
+    </div>
+    <div class="muted">Le fichier attendu ressemble à ton <code>series.json</code> actuel avec des URLs <code>get_series_info</code>.</div>
+  </div>
+
+  <div class="card">
+    <h2>2. Lancer l’enrichissement</h2>
+    <div class="row">
+      <input id="delayInput" type="number" min="0" step="50" value="100" />
+      <button id="enrichBtn" class="btn primary">Construire series_catalog.json</button>
+      <button id="stopBtn" class="btn warn">Stop</button>
+    </div>
+    <div class="muted">Champ numérique = pause entre deux requêtes, en millisecondes. Monte à 300–500 ms si le serveur réagit mal.</div>
+  </div>
+
+  <div class="card">
+    <h2>3. Télécharger</h2>
+    <div class="row">
+      <button id="downloadBtn" class="btn good">Télécharger series_catalog.json</button>
+      <button id="sampleBtn" class="btn">Voir un extrait JSON</button>
+    </div>
+    <textarea id="preview" placeholder="Aperçu…"></textarea>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <div class="stat"><div class="muted">Entrées chargées</div><strong id="countLoaded">0</strong></div>
+      <div class="stat"><div class="muted">Entrées enrichies</div><strong id="countOk">0</strong></div>
+      <div class="stat"><div class="muted">Erreurs</div><strong id="countErr">0</strong></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Journal</h2>
+    <div id="status" class="status">Prêt.</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let rawSeries = [];
+let outputSeries = [];
+let stopRequested = false;
+
+function setStatus(msg){
+  $("status").textContent = msg;
+}
+function appendStatus(msg){
+  $("status").textContent += "\\n" + msg;
+}
+function sleep(ms){
+  return new Promise(r => setTimeout(r, ms));
+}
+function sanitize(s){
+  return (s || "").toString().trim();
+}
+function updateStats(){
+  $("countLoaded").textContent = String(rawSeries.length);
+  $("countOk").textContent = String(outputSeries.length);
+}
+function updateErrors(n){
+  $("countErr").textContent = String(n);
+}
+function fixImg(url){
+  return sanitize(url).replace(/\\\//g, "/");
+}
+function buildEpisodeUrl(seriesApiUrl, episode){
+  try{
+    const u = new URL(seriesApiUrl);
+    const base = u.origin;
+    const username = u.searchParams.get("username") || "";
+    const password = u.searchParams.get("password") || "";
+    const episodeId = episode?.id || episode?.episode_id || episode?.stream_id || "";
+    const ext = episode?.container_extension || episode?.extension || "mp4";
+    if (!base || !username || !password || !episodeId) return "";
+    return `${base}/series/${encodeURIComponent(username)}/${encodeURIComponent(password)}/${encodeURIComponent(episodeId)}.${ext}`;
+  }catch(e){
+    return "";
+  }
+}
+
+function normalizeRawEntries(data){
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.items)) return data.items;
+  return [];
+}
+
+async function loadFromFile(){
+  const file = $("fileInput").files && $("fileInput").files[0];
+  if (!file){
+    setStatus("Choisis d’abord un fichier series.json.");
+    return;
+  }
+  const text = await file.text();
+  const data = JSON.parse(text);
+  rawSeries = normalizeRawEntries(data).filter(x => x && typeof x === "object");
+  outputSeries = [];
+  updateStats();
+  updateErrors(0);
+  setStatus(`Fichier chargé : ${rawSeries.length} entrées.`);
+}
+
+async function enrichAll(){
+  if (!rawSeries.length){
+    setStatus("Charge d’abord ton series.json.");
+    return;
+  }
+  stopRequested = false;
+  outputSeries = [];
+  updateStats();
+  updateErrors(0);
+
+  let errCount = 0;
+  const delay = Math.max(0, Number($("delayInput").value || 0));
+
+  for (let i = 0; i < rawSeries.length; i++){
+    if (stopRequested){
+      appendStatus("Stop demandé.");
+      break;
+    }
+
+    const item = rawSeries[i];
+    const apiUrl = sanitize(item.stream_url || item.url);
+    const title = sanitize(item.title || item.name || `Série ${i+1}`);
+
+    setStatus(`Traitement ${i+1}/${rawSeries.length} : ${title}`);
+
+    try{
+      const res = await fetch(apiUrl, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const info = await res.json();
+
+      const seasons = Array.isArray(info?.seasons) ? info.seasons : [];
+      const episodes = info?.episodes && typeof info.episodes === "object" ? info.episodes : {};
+
+      Object.keys(episodes).forEach(k => {
+        const eps = Array.isArray(episodes[k]) ? episodes[k] : [];
+        eps.forEach(ep => {
+          ep.url = buildEpisodeUrl(apiUrl, ep);
+        });
+      });
+
+      outputSeries.push({
+        title: sanitize(item.title || item.name || info?.info?.name),
+        category: sanitize(item.category_name || item.category),
+        image: fixImg(item.stream_icon || item.image || item.cover || info?.info?.cover || ""),
+        url: apiUrl,
+        plot: sanitize(info?.info?.plot || info?.info?.overview || info?.info?.description || ""),
+        meta: "",
+        type: "series",
+        seasons,
+        episodes
+      });
+      updateStats();
+    }catch(e){
+      errCount += 1;
+      updateErrors(errCount);
+      appendStatus(`Erreur sur "${title}" : ${e.message}`);
+    }
+
+    if (delay) await sleep(delay);
+  }
+
+  setStatus(`Terminé.\nEntrées enrichies : ${outputSeries.length}\nErreurs : ${errCount}`);
+}
+
+function downloadOutput(){
+  if (!outputSeries.length){
+    setStatus("Aucune donnée enrichie à télécharger.");
+    return;
+  }
+  const blob = new Blob([JSON.stringify(outputSeries, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "series_catalog.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function previewOutput(){
+  if (!outputSeries.length){
+    $("preview").value = "Aucune donnée enrichie.";
+    return;
+  }
+  $("preview").value = JSON.stringify(outputSeries.slice(0, 2), null, 2);
+}
+
+$("loadBtn").addEventListener("click", () => {
+  loadFromFile().catch(e => setStatus("Erreur chargement fichier : " + e.message));
+});
+$("enrichBtn").addEventListener("click", () => {
+  enrichAll().catch(e => setStatus("Erreur enrichissement : " + e.message));
+});
+$("stopBtn").addEventListener("click", () => {
+  stopRequested = true;
+});
+$("downloadBtn").addEventListener("click", downloadOutput);
+$("sampleBtn").addEventListener("click", previewOutput);
+</script>
+</body>
+</html>
