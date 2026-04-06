@@ -86,7 +86,8 @@ function normalizeItems(arr, type){
     stream_url: x.stream_url || x.url || "",
     url: x.url || x.stream_url || "",
     plot: x.plot || x.description || x.overview || "",
-    type: x.type || type,
+    // force assignation pour éviter mélange VOD/SERIES entre onglets
+    type,
     quality: inferQuality([x.title, x.name, x.category_name, x.category, x.plot, x.description].join(" ")),
     seasons: Array.isArray(x.seasons) ? x.seasons : [],
     episodes: x.episodes && typeof x.episodes === "object" ? x.episodes : {}
@@ -278,26 +279,14 @@ async function loadShardedCatalog(type){
 }
 
 async function loadType(type){
-  // 1) sharded catalog
-  const sharded = await loadShardedCatalog(type);
-  if(sharded.length){
-    state.sourceUsed[type] = `${type}_catalog_index.json`;
-    return sharded;
+  // Priorité M3U pour lecture directe
+  const m3uText = await safeFetchText(`${type}.m3u`);
+  if(m3uText){
+    state.sourceUsed[type] = `${type}.m3u`;
+    return normalizeItems(parseM3U(m3uText, type), type);
   }
 
-  // 2) full catalog json
-  const catalogJson = await safeFetchJson(`${type}_catalog.json`);
-  const catalogItems = extractJsonItems(catalogJson);
-  if(catalogItems.length){
-    state.sourceUsed[type] = `${type}_catalog.json`;
-    return normalizeItems(catalogItems, type);
-  }
-  if(Array.isArray(catalogJson)){
-    state.sourceUsed[type] = `${type}_catalog.json`;
-    return normalizeItems(catalogJson, type);
-  }
-
-  // 3) plain json
+  // JSON simple
   const rawJson = await safeFetchJson(`${type}.json`);
   const extracted = extractJsonItems(rawJson);
   if(extracted.length){
@@ -309,11 +298,23 @@ async function loadType(type){
     return normalizeItems(rawJson, type);
   }
 
-  // 4) m3u
-  const m3uText = await safeFetchText(`${type}.m3u`);
-  if(m3uText){
-    state.sourceUsed[type] = `${type}.m3u`;
-    return normalizeItems(parseM3U(m3uText, type), type);
+  // catalog json
+  const catalogJson = await safeFetchJson(`${type}_catalog.json`);
+  const catalogItems = extractJsonItems(catalogJson);
+  if(catalogItems.length){
+    state.sourceUsed[type] = `${type}_catalog.json`;
+    return normalizeItems(catalogItems, type);
+  }
+  if(Array.isArray(catalogJson)){
+    state.sourceUsed[type] = `${type}_catalog.json`;
+    return normalizeItems(catalogJson, type);
+  }
+
+  // sharded catalog
+  const sharded = await loadShardedCatalog(type);
+  if(sharded.length){
+    state.sourceUsed[type] = `${type}_catalog_index.json`;
+    return sharded;
   }
 
   state.sourceUsed[type] = "aucune";
@@ -509,50 +510,17 @@ function findItemByKey(key){
 function openItem(item){
   pushHistory(item);
 
-  // Direct playback for VOD/Series/Live
-  const isSeries = item.type === "series";
-  const isVod = item.type === "vod";
-  const isLive = item.type === "live";
-
-  // Build episode URL if series has episodes
-  function firstEpisodeUrl(){
-    if(!item.episodes || typeof item.episodes !== "object") return "";
-    const seasons = Object.keys(item.episodes).sort((a,b)=>Number(a)-Number(b));
-    for(const season of seasons){
-      const eps = Array.isArray(item.episodes[season]) ? item.episodes[season] : [];
-      if(eps.length){
-        const ep = eps[0];
-        const raw = item.stream_url || item.url || "";
-        try{
-          const parsed = new URL(raw);
-          const username = parsed.searchParams.get("username");
-          const password = parsed.searchParams.get("password");
-          const ext = ep.container_extension || "mp4";
-          if(username && password && ep.id){
-            return `${parsed.origin}/series/${username}/${password}/${ep.id}.${ext}`;
-          }
-        }catch{}
-      }
-    }
-    return "";
-  }
-
-  const seriesUrl = isSeries ? firstEpisodeUrl() : "";
-  const targetUrl = seriesUrl || item.stream_url || item.url || "";
-
-  if(targetUrl){
-    // If live over http on https page, open new tab to avoid mixed content block
-    const isHttpOnHttps = location.protocol === "https:" && targetUrl.startsWith("http://");
-    if(isLive && isHttpOnHttps){
-      window.open(targetUrl, "_blank");
+  const directUrl = item.stream_url || item.url || "";
+  const httpMismatch = location.protocol === "https:" && directUrl.startsWith("http://");
+  if(directUrl){
+    if(httpMismatch){
+      window.open(directUrl, "_blank");
       return;
     }
-    // Redirect directly to stream
-    location.href = targetUrl;
+    location.href = directUrl;
     return;
   }
 
-  // Fallback to player page if no direct URL
   sessionStorage.setItem("iptv_current_item", JSON.stringify(item));
   location.href = "player.html";
 }
@@ -628,8 +596,18 @@ if(filtersToggle && filtersPanel){
   const updateToggleLabel = () => {
     filtersToggle.textContent = filtersPanel.classList.contains("open") ? "Filtres ▴" : "Filtres ▾";
   };
+  const isMobile = () => window.innerWidth <= 700;
+  if(!isMobile()) filtersPanel.classList.add("open");
   filtersToggle.addEventListener("click", () => {
     filtersPanel.classList.toggle("open");
+    updateToggleLabel();
+  });
+  window.addEventListener("resize", () => {
+    if(!isMobile()){
+      filtersPanel.classList.add("open");
+    }else{
+      filtersPanel.classList.remove("open");
+    }
     updateToggleLabel();
   });
   updateToggleLabel();
