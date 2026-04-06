@@ -93,6 +93,30 @@ function normalizeItems(arr, type){
   }));
 }
 
+function mergeSeriesDetails(baseItems, detailItems){
+  if(!baseItems.length || !detailItems.length) return baseItems;
+
+  const byId = new Map();
+  const byTitle = new Map();
+
+  for(const item of detailItems){
+    if(item.id !== undefined && item.id !== null) byId.set(String(item.id), item);
+    if(item.title) byTitle.set(String(item.title).toLowerCase(), item);
+  }
+
+  return baseItems.map(item => {
+    const match = byId.get(String(item.id)) || byTitle.get(String(item.title || "").toLowerCase());
+    if(!match) return item;
+    return {
+      ...item,
+      stream_icon: match.stream_icon || item.stream_icon,
+      plot: match.plot || item.plot,
+      seasons: Array.isArray(match.seasons) && match.seasons.length ? match.seasons : item.seasons,
+      episodes: match.episodes && Object.keys(match.episodes).length ? match.episodes : item.episodes
+    };
+  });
+}
+
 function parseM3U(text, type){
   const lines = text.split(/\r?\n/);
   const out = [];
@@ -254,39 +278,47 @@ async function loadShardedCatalog(type){
 }
 
 async function loadType(type){
+  const candidates = [];
+
   const sharded = await loadShardedCatalog(type);
-  if(sharded.length) return sharded;
+  if(sharded.length) candidates.push({ source: `${type}_catalog_index.json`, items: sharded });
 
   const catalogJson = await safeFetchJson(`${type}_catalog.json`);
-  const catalogItems = extractJsonItems(catalogJson);
-  if(catalogItems.length){
-    state.sourceUsed[type] = `${type}_catalog.json`;
-    return normalizeItems(catalogItems, type);
-  }
-  if(Array.isArray(catalogJson)){
-    state.sourceUsed[type] = `${type}_catalog.json`;
-    return normalizeItems(catalogJson, type);
-  }
+  const catalogItemsRaw = extractJsonItems(catalogJson);
+  if(catalogItemsRaw.length) candidates.push({ source: `${type}_catalog.json`, items: normalizeItems(catalogItemsRaw, type) });
+  else if(Array.isArray(catalogJson)) candidates.push({ source: `${type}_catalog.json`, items: normalizeItems(catalogJson, type) });
 
   const rawJson = await safeFetchJson(`${type}.json`);
   const extracted = extractJsonItems(rawJson);
-  if(extracted.length){
-    state.sourceUsed[type] = `${type}.json`;
-    return normalizeItems(extracted, type);
-  }
-  if(Array.isArray(rawJson)){
-    state.sourceUsed[type] = `${type}.json`;
-    return normalizeItems(rawJson, type);
-  }
+  if(extracted.length) candidates.push({ source: `${type}.json`, items: normalizeItems(extracted, type) });
+  else if(Array.isArray(rawJson)) candidates.push({ source: `${type}.json`, items: normalizeItems(rawJson, type) });
 
   const m3uText = await safeFetchText(`${type}.m3u`);
-  if(m3uText){
-    state.sourceUsed[type] = `${type}.m3u`;
-    return normalizeItems(parseM3U(m3uText, type), type);
+  if(m3uText) candidates.push({ source: `${type}.m3u`, items: normalizeItems(parseM3U(m3uText, type), type) });
+
+  if(!candidates.length){
+    state.sourceUsed[type] = "aucune";
+    return [];
   }
 
-  state.sourceUsed[type] = "aucune";
-  return [];
+  candidates.sort((a, b) => b.items.length - a.items.length);
+  let selected = candidates[0];
+
+  if(type === "series"){
+    const detailCandidate = candidates.find(candidate =>
+      candidate.items.some(item => Array.isArray(item.seasons) && item.seasons.length) ||
+      candidate.items.some(item => item.episodes && Object.keys(item.episodes).length)
+    );
+    if(detailCandidate && detailCandidate !== selected){
+      selected = {
+        source: `${selected.source} + details ${detailCandidate.source}`,
+        items: mergeSeriesDetails(selected.items, detailCandidate.items)
+      };
+    }
+  }
+
+  state.sourceUsed[type] = selected.source;
+  return selected.items;
 }
 
 function setActiveNav(type){
@@ -302,6 +334,9 @@ function buildCategorySelect(){
 
   select.innerHTML = '<option value="">Toutes les sections</option>' +
     categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
+  if(state.filters.category && !categories.includes(state.filters.category)){
+    state.filters.category = "";
+  }
   select.value = state.filters.category;
 }
 
@@ -414,6 +449,13 @@ function render(){
   buildCategorySelect();
   updateSourceFolderLabel();
 
+  const availableQualities = new Set(state.items[state.type].map(item => item.quality || "Autres"));
+  if(state.filters.quality && !availableQualities.has(state.filters.quality)){
+    state.filters.quality = "";
+  }
+  if($("qualitySelect")) $("qualitySelect").value = state.filters.quality;
+  if($("sortSelect")) $("sortSelect").value = state.filters.sort;
+
   const featured = state.items[state.type][0] || null;
   $("heroTitle").textContent = TYPE_LABELS[state.type];
   $("heroSubtitle").textContent = featured
@@ -504,7 +546,9 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     state.type = btn.dataset.type;
     state.filters.category = "";
     state.filters.search = "";
+    state.filters.quality = "";
     $("searchInput").value = "";
+    if($("qualitySelect")) $("qualitySelect").value = "";
     render();
   });
 });
