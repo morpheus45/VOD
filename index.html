@@ -20,20 +20,27 @@
       <div class="nav-row">
         <button class="nav-btn active" data-type="live">Live</button>
         <button class="nav-btn" data-type="vod">Films</button>
-        <button class="nav-btn" data-type="series">Séries</button>
+        <button class="nav-btn" data-type="series">Series</button>
       </div>
     </header>
 
     <section class="sticky-controls">
-      <div class="controls-grid">
+      <div class="controls-grid controls-grid--four">
         <select id="categorySelect">
           <option value="">Toutes les sections</option>
         </select>
         <input id="searchInput" type="text" placeholder="Rechercher..." />
+        <select id="qualitySelect">
+          <option value="">Toutes les qualites</option>
+          <option value="4K">4K</option>
+          <option value="HD">HD</option>
+          <option value="SD">SD</option>
+          <option value="Autres">Autres</option>
+        </select>
         <select id="sortSelect">
           <option value="title">Titre</option>
           <option value="category">Section</option>
-          <option value="recent">Récents</option>
+          <option value="recent">Recents</option>
         </select>
       </div>
 
@@ -48,11 +55,11 @@
     <main class="content">
       <section class="hero" id="hero">
         <div class="hero-text">
-          <h1 id="heroTitle">Chargement…</h1>
-          <p id="heroSubtitle">Chargement intelligent JSON / M3U / catalogue découpé.</p>
+          <h1 id="heroTitle">Chargement...</h1>
+          <p id="heroSubtitle">Chargement intelligent JSON / M3U / catalogue decoupe.</p>
           <div class="hero-stats">
             <span id="statType">Live</span>
-            <span id="statCount">0 éléments</span>
+            <span id="statCount">0 elements</span>
             <span id="statSource">source inconnue</span>
           </div>
         </div>
@@ -75,10 +82,10 @@
       <section class="section-block">
         <div class="section-title-row">
           <h2 id="catalogTitle">Catalogue</h2>
-          <span id="catalogCount">0 éléments</span>
+          <span id="catalogCount">0 elements</span>
         </div>
         <div id="grid" class="grid"></div>
-        <div id="emptyState" class="empty-state" hidden>Aucun élément trouvé.</div>
+        <div id="emptyState" class="empty-state" hidden>Aucun element trouve.</div>
       </section>
     </main>
   </div>

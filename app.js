@@ -14,7 +14,7 @@ const state = {
   type: "live",
   items: { live: [], vod: [], series: [] },
   sourceUsed: { live: "", vod: "", series: "" },
-  filters: { category: "", search: "", mode: "all", sort: "title" },
+  filters: { category: "", search: "", quality: "", mode: "all", sort: "title" },
   bootStatus: "Chargement des flux live, films et series..."
 };
 
@@ -252,6 +252,10 @@ function currentCollection(){
     arr = arr.filter(x => x.category_name === state.filters.category);
   }
 
+  if(state.filters.quality){
+    arr = arr.filter(x => (x.quality || "Autres") === state.filters.quality);
+  }
+
   if(search){
     arr = arr.filter(x =>
       (x.title || "").toLowerCase().includes(search) ||
@@ -286,26 +290,34 @@ function groupedByQuality(items){
     .filter(group => group.items.length);
 }
 
-function cardTemplate(item){
+function cardTemplate(item, compact=false){
   const fav = isFavorite(item);
   const meta = item.category_name || "";
   const poster = escapeHtml(item.stream_icon || "");
   const typeLabel = item.type === "vod" ? "Film" : item.type === "series" ? "Series" : "Live";
   const posterClass = item.type === "live" ? "poster poster--logo" : "poster";
+  const cardClass = compact ? "card card--compact" : "card";
+  const wrapClass = compact ? "poster-wrap poster-wrap--compact" : "poster-wrap";
+  const badgesClass = compact ? "badges badges--compact" : "badges";
+  const badgeClass = compact ? "badge badge--compact" : "badge";
+  const favClass = compact ? "fav-btn fav-btn--compact" : "fav-btn";
+  const bodyClass = compact ? "card-body card-body--compact" : "card-body";
+  const titleClass = compact ? "card-title card-title--compact" : "card-title";
+  const metaClass = compact ? "card-meta card-meta--compact" : "card-meta";
 
   return `
-    <article class="card" data-key="${escapeHtml(itemKey(item))}">
-      <div class="poster-wrap">
+    <article class="${cardClass}" data-key="${escapeHtml(itemKey(item))}">
+      <div class="${wrapClass}">
         <img class="${posterClass}" src="${poster}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.style.visibility='hidden'">
-        <div class="badges">
-          <span class="badge">${escapeHtml(typeLabel)}</span>
-          <span class="badge">${escapeHtml(item.quality || "Autres")}</span>
+        <div class="${badgesClass}">
+          <span class="${badgeClass}">${escapeHtml(typeLabel)}</span>
+          <span class="${badgeClass}">${escapeHtml(item.quality || "Autres")}</span>
         </div>
-        <button class="fav-btn" data-fav="${escapeHtml(itemKey(item))}" type="button">${fav ? "Retirer" : "Favori"}</button>
+        <button class="${favClass}" data-fav="${escapeHtml(itemKey(item))}" type="button">${fav ? "Retirer" : "Favori"}</button>
       </div>
-      <div class="card-body">
-        <div class="card-title">${escapeHtml(item.title)}</div>
-        <div class="card-meta">${escapeHtml(meta)}</div>
+      <div class="${bodyClass}">
+        <div class="${titleClass}">${escapeHtml(item.title)}</div>
+        <div class="${metaClass}">${escapeHtml(meta)}</div>
       </div>
     </article>
   `;
@@ -342,7 +354,7 @@ function renderAuxBlocks(){
 
   if(progress.length){
     continueBlock.hidden = false;
-    continueGrid.innerHTML = progress.map(x => cardTemplate(x.item)).join("");
+    continueGrid.innerHTML = progress.map(x => cardTemplate(x.item, true)).join("");
   }else{
     continueBlock.hidden = true;
     continueGrid.innerHTML = "";
@@ -350,7 +362,7 @@ function renderAuxBlocks(){
 
   if(history.length){
     historyBlock.hidden = false;
-    historyGrid.innerHTML = history.map(x => cardTemplate(x.item)).join("");
+    historyGrid.innerHTML = history.map(x => cardTemplate(x.item, true)).join("");
   }else{
     historyBlock.hidden = true;
     historyGrid.innerHTML = "";
@@ -372,6 +384,7 @@ function render(){
   $("catalogTitle").textContent = `Catalogue ${TYPE_LABELS[state.type]}`;
 
   const collection = currentCollection();
+  const compactMode = state.filters.mode === "favorites" || state.filters.mode === "history" || state.filters.mode === "continue";
   $("catalogCount").textContent = `${collection.length} elements`;
 
   const grid = $("grid");
@@ -385,7 +398,7 @@ function render(){
           <span class="quality-count">${group.items.length} flux</span>
         </div>
         <div class="quality-grid">
-          ${group.items.map(cardTemplate).join("")}
+          ${group.items.map(item => cardTemplate(item, compactMode)).join("")}
         </div>
       </section>
     `).join("");
@@ -465,6 +478,11 @@ $("categorySelect").addEventListener("change", e => {
 
 $("searchInput").addEventListener("input", e => {
   state.filters.search = e.target.value;
+  render();
+});
+
+$("qualitySelect").addEventListener("change", e => {
+  state.filters.quality = e.target.value;
   render();
 });
 
