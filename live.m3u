@@ -17,7 +17,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/57005.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/57072.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/ARTE.png" group-title="EU | FRANCE GENERAL",FR - ARTE FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/57002.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/W9.png" group-title="EU | FRANCE GENERAL",FR - W9 FHD ◉ 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/W9.png" group-title="EU | FRANCE GENERAL",FR - W9 FHD ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/60133.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/T18.png" group-title="EU | FRANCE GENERAL",FR - T18 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1248794.ts
@@ -45,8 +45,6 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/60122.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/231638.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/novelas.png" group-title="EU | FRANCE GENERAL",FR - NOVELAS TV FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56977.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/AFRICA/EGYPT/ONE_TV.png" group-title="EU | FRANCE GENERAL",FR - TECH & CO SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60124.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RTL9.png" group-title="EU | FRANCE GENERAL",FR - RTL 9 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56990.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/lovetheplanet.png" group-title="EU | FRANCE GENERAL",FR - LOVE THE PLANET FHD
@@ -179,7 +177,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/323519.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/60105.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CARAC_3.png" group-title="EU | FRANCE GENERAL",FR - CARAC 3 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/60101.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/M6.png" group-title="EU | FRANCE GENERAL",FR - M6 HEVC ◉ 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/M6.png" group-title="EU | FRANCE GENERAL",FR - M6 HEVC ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/57042.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/NAUTICAL_CHANNEL.png" group-title="EU | FRANCE GENERAL",FR - NAUTICAL CHANNEL HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/231642.ts
@@ -207,117 +205,39 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/56932.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/60100.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/W9.png" group-title="EU | FRANCE GENERAL",FR - W9 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/60113.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE GENERAL",##### FRANCE GENERAL SD #####
-http://goldenlink.live/live/E5G5E39/RE88M4E/56922.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/TF1_FRANCE.png" group-title="EU | FRANCE GENERAL",FR - TF1 SD 
-http://goldenlink.live/live/E5G5E39/RE88M4E/56902.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/francetv.png" group-title="EU | FRANCE GENERAL",FR - FRANCE 2 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56917.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/noa3.png" group-title="EU | FRANCE GENERAL",FR - FRANCE 3 NOA SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/310626.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/francetv.png" group-title="EU | FRANCE GENERAL",FR - FRANCE 3 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56911.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/FRANCE4FHD.png" group-title="EU | FRANCE GENERAL",FR - FRANCE 4 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56918.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/francetv.png" group-title="EU | FRANCE GENERAL",FR - FRANCE 5 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56919.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/6TER.png" group-title="EU | FRANCE GENERAL",FR - 6TER SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56920.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/AB11.png" group-title="EU | FRANCE GENERAL",FR - AB1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57034.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/ab33.png" group-title="EU | FRANCE GENERAL",FR - AB3 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60088.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/ARTE.png" group-title="EU | FRANCE GENERAL",FR - ARTE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56916.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BET1.png" group-title="EU | FRANCE GENERAL",FR - BET SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56899.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/idf.png" group-title="EU | FRANCE GENERAL",FR - IDF 1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56894.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/KTO_1.png" group-title="EU | FRANCE GENERAL",FR - KTO SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/323520.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CARAC_1.png" group-title="EU | FRANCE GENERAL",FR - CARAC 1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60086.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CARAC_3.png" group-title="EU | FRANCE GENERAL",FR - CARAC 3 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60083.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/M6.png" group-title="EU | FRANCE GENERAL",FR - M6  SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57012.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MYCUISINE-1.png" group-title="EU | FRANCE GENERAL",FR - MY CUISINE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56914.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/NAUTICAL_CHANNEL.png" group-title="EU | FRANCE GENERAL",FR - NAUTICAL CHANNEL SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/231647.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/novelas.png" group-title="EU | FRANCE GENERAL",FR - NOVELAS TV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56891.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/AFRICA/EGYPT/ONE_TV.png" group-title="EU | FRANCE GENERAL",FR - TECH & CO SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60085.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/PARISPREMIERE.png" group-title="EU | FRANCE GENERAL",FR - PARIS PREMIERE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56896.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RTL9.png" group-title="EU | FRANCE GENERAL",FR - RTL 9 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56904.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TEVA_SD.png" group-title="EU | FRANCE GENERAL",FR - TEVA SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56913.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TL7.png" group-title="EU | FRANCE GENERAL",FR - TL7 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/310592.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TMC_PLUS.png" group-title="EU | FRANCE GENERAL",FR - TMC PLUS 1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/333601.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TREKFHD.png" group-title="EU | FRANCE GENERAL",FR - TREK SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56897.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TVBREIZH.png" group-title="EU | FRANCE GENERAL",FR - TV BREIZH SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56901.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/Tv5_monde_HD.png" group-title="EU | FRANCE GENERAL",FR - TV5 MONDE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56889.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TVM3.png" group-title="EU | FRANCE GENERAL",FR - TVM3 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60082.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/W9.png" group-title="EU | FRANCE GENERAL",FR - W9 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60095.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE GENERAL",#### FRANCE 4K ####
-http://goldenlink.live/live/E5G5E39/RE88M4E/1121095.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/TF1_FRANCE.png" group-title="EU | FRANCE GENERAL",FR - TF1 4K HDR
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044109.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/francetv.png" group-title="EU | FRANCE GENERAL",FR - FRANCE 2 4K HDR
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044110.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/AFRICA/M6.png" group-title="EU | FRANCE GENERAL",FR - M6 4K HDR
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044107.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/EXYU/EXYO/FTV.png" group-title="EU | FRANCE GENERAL",FR - FASHION TV 4K HDR
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044101.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/novo19.png" group-title="EU | FRANCE GENERAL",FR - NOVO 19 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1296057.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/novo19.png" group-title="EU | FRANCE GENERAL",FR - NOVO 19 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/1296058.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE BEIN SPORTS #####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1121053.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_1.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 1 FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_1.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 1 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56655.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_1.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 1 HEVC 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_1.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 1 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56580.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_1.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 1 SD 
-http://goldenlink.live/live/E5G5E39/RE88M4E/56544.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_2.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 2 FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_2.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 2 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56654.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_2.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 2 FHD²
 http://goldenlink.live/live/E5G5E39/RE88M4E/157012.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_2.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 2 HEVC 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_2.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 2 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56579.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_2.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 2 SD 
-http://goldenlink.live/live/E5G5E39/RE88M4E/56543.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_3.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 3 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56653.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_3.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 3 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56578.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BEIN_SPORTS_3.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS 3 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56542.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_4.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 4 FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_4.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 4 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/62502.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_5.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 5 FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_5.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 5 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/62501.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_6.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 6 FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_6.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 6 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/62500.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_7.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 7 FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_7.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 7 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/62499.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_8.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 8 FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_8.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 8 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/62498.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_9.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 9 FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_9.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 9 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/62497.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_10.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 10 FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORTS_MAX_10.png" group-title="EU | FRANCE SPORTS",FR - BEIN SPORTS MAX 10 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/211992.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE CANAL+ #####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1121052.ts
@@ -325,28 +245,20 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1121052.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56644.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORT_HEVC.png" group-title="EU | FRANCE SPORTS",FR - CANAL + SPORT HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56569.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SPORT_HEVC.png" group-title="EU | FRANCE SPORTS",FR - CANAL + SPORT SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56533.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/360_SD.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ 360 FHD ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/311207.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/360_SD.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ 360 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/311208.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/360_SD.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ 360 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/311209.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+FOOT.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ FOOT FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+FOOT.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ FOOT FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/311116.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+FOOT.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ FOOT HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/853546.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+FOOT.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ FOOT HEVC 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+FOOT.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ FOOT HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/311117.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+FOOT.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ FOOT SD 
-http://goldenlink.live/live/E5G5E39/RE88M4E/311118.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/canalpre.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ PREMIER LEAGUE FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/203876.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/canalpre.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ PREMIER LEAGUE HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/203880.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/canalpre.png" group-title="EU | FRANCE SPORTS",FR - CANAL+ PREMIER LEAGUE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/203881.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/GOLF%20FHD.png" group-title="EU | FRANCE SPORTS",FR - GOLF FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/330263.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/GOLF%20FHD.png" group-title="EU | FRANCE SPORTS",FR - GOLF HEVC
@@ -355,14 +267,10 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/330262.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56636.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/GOLF%2B.png" group-title="EU | FRANCE SPORTS",FR - GOLF+ HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56561.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/GOLF%2B.png" group-title="EU | FRANCE SPORTS",FR - GOLF+ SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56525.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/INFOSPORT%2B.png" group-title="EU | FRANCE SPORTS",FR - INFO SPORT+  FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56641.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/INFOSPORT%2B.png" group-title="EU | FRANCE SPORTS",FR - INFO SPORT  HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56566.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/INFOSPORT%2B.png" group-title="EU | FRANCE SPORTS",FR - INFO SPORT SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56530.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE CANAL + LIVE #####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1137128.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/canal[1].png" group-title="EU | FRANCE SPORTS",FR - CANAL+ LIVE 1 FHD
@@ -487,42 +395,30 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/923162.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56642.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/LEQUIPE21HD.png" group-title="EU | FRANCE SPORTS",FR - L'EQUIPE LIVE 21 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56567.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/LEQUIPE21HD.png" group-title="EU | FRANCE SPORTS",FR - L'EQUIPE LIVE 21 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56531.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EQUIPE.png" group-title="EU | FRANCE SPORTS",FR - L'EQUIPE LIVE FOOT FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1140768.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EQUIPE.png" group-title="EU | FRANCE SPORTS",FR - L'EQUIPE LIVE FOOT HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1140769.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EQUIPE.png" group-title="EU | FRANCE SPORTS",FR - L'EQUIPE LIVE FOOT SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/1140770.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE RMC SPORT #####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1121066.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE1.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE UHD
-http://goldenlink.live/live/E5G5E39/RE88M4E/152649.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE1.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 1 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56671.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE1.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 1 FHD² 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE1.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 1 FHD²
 http://goldenlink.live/live/E5G5E39/RE88M4E/157017.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE1.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 1 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56596.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE1.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 1 HEVC²
 http://goldenlink.live/live/E5G5E39/RE88M4E/157027.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE1.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56560.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE2.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 2 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/349337.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE2.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 2 FHD²
 http://goldenlink.live/live/E5G5E39/RE88M4E/163513.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE2.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 2 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56595.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE2.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 2 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56559.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE3.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 3 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/215571.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE3.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 3 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/215572.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE3.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 3 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/215573.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE4.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 4 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/215574.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_SPORT_LIVE4.png" group-title="EU | FRANCE SPORTS",FR - RMC SPORT LIVE 4 HEVC
@@ -537,14 +433,10 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1121056.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56652.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EUROSPORT1HD.png" group-title="EU | FRANCE SPORTS",FR - EUROSPORT 1 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56577.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EUROSPORT1HD.png" group-title="EU | FRANCE SPORTS",FR - EUROSPORT 1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56541.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EUROSPORT2HD.png" group-title="EU | FRANCE SPORTS",FR - EUROSPORT 2 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56651.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EUROSPORT2HD.png" group-title="EU | FRANCE SPORTS",FR - EUROSPORT 2 HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56576.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EUROSPORT2HD.png" group-title="EU | FRANCE SPORTS",FR - EUROSPORT 2 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56540.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/360.png" group-title="EU | FRANCE SPORTS",FR - EUROSPORT 360 1 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/210229.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/360.png" group-title="EU | FRANCE SPORTS",FR - EUROSPORT 360 2 FHD
@@ -637,32 +529,24 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/56635.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56643.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/OL_TV.png" group-title="EU | FRANCE SPORTS",FR - OL TV HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56568.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/OL_TV.png" group-title="EU | FRANCE SPORTS",FR - OL TV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56532.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE OLYMPIA #####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1121078.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/OLYMPIA_FHD.png" group-title="EU | FRANCE SPORTS",FR - OLYMPIA FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/79396.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/OLYMPIA_FHD.png" group-title="EU | FRANCE SPORTS",FR - OLYMPIA HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/79394.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/OLYMPIA_FHD.png" group-title="EU | FRANCE SPORTS",FR - OLYMPIA SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/79395.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE TRACE SPORTS STAR #####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1121077.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TRACE_SPORT_STARS.png" group-title="EU | FRANCE SPORTS",FR - TRACE SPORT STARS FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/231636.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TRACE_SPORT_STARS.png" group-title="EU | FRANCE SPORTS",FR - TRACE SPORT STARS HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/231644.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TRACE_SPORT_STARS.png" group-title="EU | FRANCE SPORTS",FR - TRACE SPORT STARS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/231649.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE AUTO MOTO #####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1213311.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/AUTOMOTO.png" group-title="EU | FRANCE SPORTS",FR - AUTO MOTO FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56637.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/AUTOMOTO.png" group-title="EU | FRANCE SPORTS",FR - AUTO MOTO HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56562.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/AUTOMOTO.png" group-title="EU | FRANCE SPORTS",FR - AUTO MOTO SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56526.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/AUTOMOTO.png" group-title="EU | FRANCE SPORTS",FR - AUTOMOTO LA CHAINE FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1231356.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE EQUIDIA #####
@@ -671,8 +555,6 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1213312.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56639.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EQUIDIALIVEFHD.png" group-title="EU | FRANCE SPORTS",FR - EQUIDIA HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56564.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EQUIDIALIVEFHD.png" group-title="EU | FRANCE SPORTS",FR - EQUIDIA SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56528.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE ROLAND GARROS#####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1229330.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/ROLAND_GARROS.png" group-title="EU | FRANCE SPORTS",FR - ROLAND GARROS 1 FHD
@@ -683,10 +565,6 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1229207.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/1229208.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/ROLAND_GARROS.png" group-title="EU | FRANCE SPORTS",FR - ROLAND GARROS 1 HD²
 http://goldenlink.live/live/E5G5E39/RE88M4E/1232529.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE SPORTS",##### FRANCE 4K #####
-http://goldenlink.live/live/E5G5E39/RE88M4E/1121068.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EVENEMENT_SPORT_UHD.png" group-title="EU | FRANCE SPORTS",FR - EVENEMENT SPORT UHD 4K
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044111.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/che.png" group-title="EU | FRANCE SPORTS",FR - CHEVAL TV FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1296411.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/flag_france.png" group-title="EU | FRANCE LIGUE 1+",##### FR-LIGUE 1+ #####
@@ -1019,34 +897,6 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/56930.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56862.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EURONEWSHD.png" group-title="EU | FRANCE NEWS",FR - EURONEWS FRENCH HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56864.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE NEWS",#####  FRANCE NEWS SD #####
-http://goldenlink.live/live/E5G5E39/RE88M4E/56861.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/FRANCE24.png" group-title="EU | FRANCE NEWS",FR - FRANCE 24 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60078.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frinfo.png" group-title="EU | FRANCE NEWS",FR - FRANCE INFO SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56854.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/I24NEWSFHD.png" group-title="EU | FRANCE NEWS",FR - I24 NEWS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56856.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/C_NEWS.png" group-title="EU | FRANCE NEWS",FR - C NEWS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56860.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/C_NEWS.png" group-title="EU | FRANCE NEWS",FR -  C NEWS SD ²
-http://goldenlink.live/live/E5G5E39/RE88M4E/60079.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/LCI.png" group-title="EU | FRANCE NEWS",FR - LCI SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56859.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/lcpna.png" group-title="EU | FRANCE NEWS",FR - LCP SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56858.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BFM_TV.png" group-title="EU | FRANCE NEWS",FR - BFM TV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56921.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BFM_BUSINESS.png" group-title="EU | FRANCE NEWS",FR - BFM BUSINESS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56984.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BFM_PARIS.png" group-title="EU | FRANCE NEWS",FR - BFM PARIS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56887.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BFM_GRAND_LITTORAL.png" group-title="EU | FRANCE NEWS",FR - BFM GRAND LITTORAL SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/287001.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/LACHAINEMETEO.png" group-title="EU | FRANCE NEWS",FR - LA CHAINE METEO SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56853.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EURONEWSHD.png" group-title="EU | FRANCE NEWS",FR - EURONEWS FRENCH SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56855.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE DOCUMENTAIRE",#### FRANCE DOCUMANTARY FHD ####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1119459.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/ANIMAUX.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - ANIMAUX FHD
@@ -1149,50 +999,6 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/57054.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/57055.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/USHUAIA_FHD.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - USHUAIA HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56924.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE DOCUMENTAIRE",#####  FRANCE DOCUMANTARY SD #####
-http://goldenlink.live/live/E5G5E39/RE88M4E/1119454.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/ANIMAUX.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - ANIMAUX SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57036.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/DISCOVERYCHANNELHD.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - DISCOVERY CHANNEL SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57026.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MY_ZEN_NATURE.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - MY ZEN NATURE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/231646.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/EXYU/EXYO/NATGEOWILD-1.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - NAT GEO WILD SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57028.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/NATIONIALGEOGRAPHICCHANNELHD.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - NATIONAL GEO SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57019.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/PLANETE-1.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - PLANETE  SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57035.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/avent.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - PLANETE  A&E SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57023.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/PLANETE-1.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - PLANETE  CI SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57032.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/15.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - RMC DECOUVERTE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57033.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RMC_STORY.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - RMC STORY SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57027.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CRIME_DISTRICT.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - CRIME DISTRICT SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/62677.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SCIENCE_VIE.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - SCIENCE&VIE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57022.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/HISTOIRE_sd.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - HISTOIRE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/62674.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TOUTELHISTOIRE.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - TOUTE L'HISTOIRE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57020.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/LATINO/DiscoveryInv.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - DISCOVERY ID SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/62680.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/AFRICA/CANAL+/Discovery-Channel.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - DISCOVERY INVESTIGATION SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57029.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CHASSE_PECHE.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - CHASSE&PECHE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57031.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SEASONS_SD.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - SEASONS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57021.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MUSEUM_SD.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - MUSEUM SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57024.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TLC.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - TLC SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57025.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/USHUAIA_FHD.png" group-title="EU | FRANCE DOCUMENTAIRE",FR - USHUAIA SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56881.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE ENTERTAINMENT",##### FRANCE  ENTERTAINMENT FHD #####
 http://goldenlink.live/live/E5G5E39/RE88M4E/57098.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/E_ENTERTAINMENT.png" group-title="EU | FRANCE ENTERTAINMENT",FR - E! ENTERTAINMENT FHD
@@ -1211,7 +1017,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/56971.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/57069.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/C_STAR_HITS_FRANCE.png" group-title="EU | FRANCE ENTERTAINMENT",FR - C STAR HITS FRANCE FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/57077.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/M6_INTERNATIONAL.png" group-title="EU | FRANCE ENTERTAINMENT",FR - M6 INTERNATIONAL FHD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/M6_INTERNATIONAL.png" group-title="EU | FRANCE ENTERTAINMENT",FR - M6 INTERNATIONAL FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/250135.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/m6mu.png" group-title="EU | FRANCE ENTERTAINMENT",FR - M6 MUSIC FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/62685.ts
@@ -1313,56 +1119,8 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1062887.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/57045.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MEZZOLIVE.png" group-title="EU | FRANCE ENTERTAINMENT",FR - MEZZO LIVE HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/60099.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE ENTERTAINMENT",#####  FRANCE ENTERTAINMENT SD #####
-http://goldenlink.live/live/E5G5E39/RE88M4E/57038.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/E_ENTERTAINMENT.png" group-title="EU | FRANCE ENTERTAINMENT",FR - E! ENTERTAINMENT SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57037.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MCM_FHD.png" group-title="EU | FRANCE ENTERTAINMENT",FR - MCM SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57011.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MCM_TOP.png" group-title="EU | FRANCE ENTERTAINMENT",FR - MCM TOP SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57010.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/AMERICA/USA/MTV.png" group-title="EU | FRANCE ENTERTAINMENT",FR - MTV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57014.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/NRJHITS.png" group-title="EU | FRANCE ENTERTAINMENT",FR - NRJ HITS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57013.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/C_STAR.png" group-title="EU | FRANCE ENTERTAINMENT",FR - C STAR SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56885.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/C_STAR.png" group-title="EU | FRANCE ENTERTAINMENT",FR - C STAR HIT SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57009.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/C_STAR_HITS_FRANCE.png" group-title="EU | FRANCE ENTERTAINMENT",FR - C STAR HITS FRENANCE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57017.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/STAR_ACADEMY.png" group-title="EU | FRANCE ENTERTAINMENT",FR - STAR ACADEMY SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/1062886.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TRACE_URBAN.png" group-title="EU | FRANCE ENTERTAINMENT",FR - TRACE URBAN SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56882.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TV8 MONT-BLANC.png" group-title="EU | FRANCE ENTERTAINMENT",FR - TV8 MONT-BLANC SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/263577.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MELODY_SD.png" group-title="EU | FRANCE ENTERTAINMENT",FR - MELODY SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/57015.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/RFMTV.png" group-title="EU | FRANCE ENTERTAINMENT",FR - RFM TV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/62653.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/emci-tv-logo-1(1).png" group-title="EU | FRANCE ENTERTAINMENT",FR - EMCI TV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/287010.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BIP_TV.png" group-title="EU | FRANCE ENTERTAINMENT",FR - BIP TV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/287011.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MOSELLE.png" group-title="EU | FRANCE ENTERTAINMENT",FR - MOSELLE TV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/287008.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MDL.png" group-title="EU | FRANCE ENTERTAINMENT",FR - MDL SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/287002.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MEZZOLIVE.png" group-title="EU | FRANCE ENTERTAINMENT",FR - MEZZO LIVE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60081.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MEZZO.png" group-title="EU | FRANCE ENTERTAINMENT",FR - MEZZO FR
 http://goldenlink.live/live/E5G5E39/RE88M4E/60115.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE ENTERTAINMENT",####### FRANCE 4K #######
-http://goldenlink.live/live/E5G5E39/RE88M4E/1121106.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/CHAINE_EVENEMENT_UHD_HDR.png" group-title="EU | FRANCE ENTERTAINMENT",FR - CHAINE EVENEMENT UHD HDR
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044108.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/STRINGRAY_FESTIVAL_4K_HDR.png" group-title="EU | FRANCE ENTERTAINMENT",FR - STRINGRAY FESTIVAL 4K HDR
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044102.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/MALTA/LUXE_TV.png" group-title="EU | FRANCE ENTERTAINMENT",FR - LUXE TV 4K+
-http://goldenlink.live/live/E5G5E39/RE88M4E/427660.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/INULTRA_4K_HDR.png" group-title="EU | FRANCE ENTERTAINMENT",FR - INULTRA 4K HDR
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044105.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FINLAND/Discovery_Science.png" group-title="EU | FRANCE ENTERTAINMENT",FR - DISCOVERY SCIENCE HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/1345964.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE CINEMA",#####  FRANCE CINEMA FHD #####
@@ -1373,7 +1131,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/56840.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/285950.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/GRANDECRAN.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ GRAND ECRAN FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/288410.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/canal+.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ FHD ◉ 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/canal+.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ FHD ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/56993.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/canal+.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ FHD ²
 http://goldenlink.live/live/E5G5E39/RE88M4E/906760.ts
@@ -1387,7 +1145,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1085107.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56836.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/cinefa.png" group-title="EU | FRANCE CINEMA",FR - CINE+ FAMIZ FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56849.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CINEFRISSON.png" group-title="EU | FRANCE CINEMA",FR - CINE+ FRISSON FHD ◉ 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CINEFRISSON.png" group-title="EU | FRANCE CINEMA",FR - CINE+ FRISSON FHD ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/56832.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/cinepre.png" group-title="EU | FRANCE CINEMA",FR - CINE+ PREMIER FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56835.ts
@@ -1421,7 +1179,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/56844.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56794.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TF1_SERIES-FILMS.png" group-title="EU | FRANCE CINEMA",FR - TF1 SERIES-FILMS FHD ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/63504.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TFX.png" group-title="EU | FRANCE CINEMA",FR - TFX FHD ◉ 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TFX.png" group-title="EU | FRANCE CINEMA",FR - TFX FHD ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/60130.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TMC_1.png" group-title="EU | FRANCE CINEMA",FR - TMC FHD ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/56848.ts
@@ -1475,7 +1233,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/56805.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/56819.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TF1_SERIES-FILMS.png" group-title="EU | FRANCE CINEMA",FR - TF1 SERIES-FILMS HEVC ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/60110.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TFX.png" group-title="EU | FRANCE CINEMA",FR - TFX HEVC ◉ 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TFX.png" group-title="EU | FRANCE CINEMA",FR - TFX HEVC ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/60104.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TMC_1.png" group-title="EU | FRANCE CINEMA",FR - TMC HEVC ◉
 http://goldenlink.live/live/E5G5E39/RE88M4E/56823.ts
@@ -1507,54 +1265,6 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/876959.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/487235.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/france.png" group-title="EU | FRANCE CINEMA",FR - FRANCE TV SERIES HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1134189.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE CINEMA",#####  FRANCE CINEMA  SD #####
-http://goldenlink.live/live/E5G5E39/RE88M4E/56802.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+CINEMA.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ CINEMA SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56790.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+KIDS.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ KIDS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56788.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/canal+.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56907.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+SERIES.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ SERIES SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56787.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/cinec.png" group-title="EU | FRANCE CINEMA",FR - CINE+ CLASSIC SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56801.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CINECLUB.png" group-title="EU | FRANCE CINEMA",FR - CINE+ CLUB SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56800.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/cinee.png" group-title="EU | FRANCE CINEMA",FR - CINE+ EMOTION SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56786.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/cinefa.png" group-title="EU | FRANCE CINEMA",FR - CINE+ FAMIZ SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56799.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CINEFRISSON.png" group-title="EU | FRANCE CINEMA",FR - CINE+ FRISSON SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56782.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/cinepre.png" group-title="EU | FRANCE CINEMA",FR - CINE+ PREMIER SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56785.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/13-EME-RUE.png" group-title="EU | FRANCE CINEMA",FR - 13EME RUE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56908.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/ACTIONHD-1.png" group-title="EU | FRANCE CINEMA",FR - ACTION SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56792.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CHERIE25.png" group-title="EU | FRANCE CINEMA",FR - CHERIE 25 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60087.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/COMEDIE.png" group-title="EU | FRANCE CINEMA",FR - COMEDIE  SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56915.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/COMEDYCENTRAL-1.png" group-title="EU | FRANCE CINEMA",FR - COMEDY CENTRAL SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56784.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/POLAR.png" group-title="EU | FRANCE CINEMA",FR - POLAR+ SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56795.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SERIE_CLUB.png" group-title="EU | FRANCE CINEMA",FR - SERIE CLUB SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56783.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/SYFYHD.png" group-title="EU | FRANCE CINEMA",FR - SYFY SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56780.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TFX.png" group-title="EU | FRANCE CINEMA",FR - TFX SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60092.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/WARNER.png" group-title="EU | FRANCE CINEMA",FR - WARNER TV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56793.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TF1_SERIES-FILMS.png" group-title="EU | FRANCE CINEMA",FR - TF1 SERIES-FILMS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60091.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/france.png" group-title="EU | FRANCE CINEMA",FR - FRANCE TV SERIES SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/1134188.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/WARNER.png" group-title="EU | FRANCE CINEMA",FR - WARNER TV NEXT SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/1179960.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE CINEMA",##### FRANCE CANAL PLAY #####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1139597.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANALPLAY.png" group-title="EU | FRANCE CINEMA",FR - CANAL PLAY 1 FHD
@@ -1579,14 +1289,6 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/329176.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/329177.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANALPLAY.png" group-title="EU | FRANCE CINEMA",FR - CANAL PLAY 9 FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/329178.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE CINEMA",###### FRANCE CINEMA  4K ######
-http://goldenlink.live/live/E5G5E39/RE88M4E/1121104.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/canal+.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ 4K HDR
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044112.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/canal+.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ 4K+
-http://goldenlink.live/live/E5G5E39/RE88M4E/427609.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/canal+.png" group-title="EU | FRANCE CINEMA",FR - CANAL+ UHD
-http://goldenlink.live/live/E5G5E39/RE88M4E/1044106.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/em.png" group-title="EU | FRANCE CINEMA",FR - EMOTION'L HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1282775.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE KIDS",##### FRANCE  KIDS  FHD #####
@@ -1615,7 +1317,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/56770.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/310624.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CARTOONITO_FHD.png" group-title="EU | FRANCE KIDS",FR - CARTOONITO FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56992.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CARTOONITO_FHD.png" group-title="EU | FRANCE KIDS",FR - CARTOONITO FHD ² 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CARTOONITO_FHD.png" group-title="EU | FRANCE KIDS",FR - CARTOONITO FHD ²
 http://goldenlink.live/live/E5G5E39/RE88M4E/1028715.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CARTOONNETWORKFHD.png" group-title="EU | FRANCE KIDS",FR - CARTOON NETWORK FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/56759.ts
@@ -1687,52 +1389,6 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/56952.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/1028713.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/JONE111.png" group-title="EU | FRANCE KIDS",FR - J ONE HEVC
 http://goldenlink.live/live/E5G5E39/RE88M4E/56948.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE KIDS",##### FRANCE  KIDS SD #####
-http://goldenlink.live/live/E5G5E39/RE88M4E/56776.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL+KIDS.png" group-title="EU | FRANCE KIDS",FR - CANAL+ KIDS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/1135528.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/NICKELODEON_1.png" group-title="EU | FRANCE KIDS",FR - NICKELODEON +1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/263870.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/NICKELODEON_4_TEEN.png" group-title="EU | FRANCE KIDS",FR - NICKELODEON 4 TEEN SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56735.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/NICKELODEON.png" group-title="EU | FRANCE KIDS",FR - NICKELODEON SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56732.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/NICKELODEON_JUNIOR.png" group-title="EU | FRANCE KIDS",FR - NICKELODEON JUNIOR SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56731.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/DISNEY_CHANNEL.png" group-title="EU | FRANCE KIDS",FR - DISNEY CHANNEL SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56729.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/DISNEY_JUNIOR.png" group-title="EU | FRANCE KIDS",FR - DISNEY JUNIOR SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56728.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/DISNEY_CHANNEL.png" group-title="EU | FRANCE KIDS",FR - C DISNEY CHANNEL  1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56739.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TELETOON+.png" group-title="EU | FRANCE KIDS",FR - TELE TOON  SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56737.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TELETOON+.png" group-title="EU | FRANCE KIDS",FR - TELE TOON +1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56736.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CARTOONITO_FHD.png" group-title="EU | FRANCE KIDS",FR - CARTOONITO SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56906.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CARTOONNETWORKFHD.png" group-title="EU | FRANCE KIDS",FR - CARTOON NETWORK SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56725.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BABYTV-1.png" group-title="EU | FRANCE KIDS",FR - BABY TV SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/64682.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BOOMERANGFHD.png" group-title="EU | FRANCE KIDS",FR - BOOMERANG SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56726.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/BOOMERANGFHD.png" group-title="EU | FRANCE KIDS",FR - BOOMERANG +1 SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/1377581.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/CANAL-J-FHD.png" group-title="EU | FRANCE KIDS",FR - CANAL J SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56733.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/PIWI+.png" group-title="EU | FRANCE KIDS",FR - PIWI +  SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56738.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/GULLI.png" group-title="EU | FRANCE KIDS",FR - GULLI SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/60080.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/MANGAS_FHD.png" group-title="EU | FRANCE KIDS",FR - MANGAS SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/64685.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/TIJIFHD.png" group-title="EU | FRANCE KIDS",FR - TIJI SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56723.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/gameone.png" group-title="EU | FRANCE KIDS",FR - GAME ONE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56909.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/JONE111.png" group-title="EU | FRANCE KIDS",FR - J ONE SD
-http://goldenlink.live/live/E5G5E39/RE88M4E/56905.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/frlog.png" group-title="EU | FRANCE KIDS",#### GOLD TV - 24/7 FRANCE ####
 http://goldenlink.live/live/E5G5E39/RE88M4E/1137129.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/GOLDTV/gold tv.png" group-title="EU | FRANCE KIDS",FR - GOLD TV 24/7 | ENFANT 1 FHD
@@ -1877,7 +1533,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/363803.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/363806.ts
 #EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/5f8ecee24576bc0007a13b79/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - PLUTO TV RETRO TOONS
 http://goldenlink.live/live/E5G5E39/RE88M4E/363823.ts
-#EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/63b579961bdba100071214cb/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV", FR - C'EST PAS SORCIER
+#EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/63b579961bdba100071214cb/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - C'EST PAS SORCIER
 http://goldenlink.live/live/E5G5E39/RE88M4E/363829.ts
 #EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/60925a44f0350600075a1fdc/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - PLUTO TV ANIMAUX
 http://goldenlink.live/live/E5G5E39/RE88M4E/363833.ts
@@ -1889,13 +1545,13 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/363837.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/363840.ts
 #EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/617bae1d69bca3000729561e/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - DIGIMON ADVENTURE
 http://goldenlink.live/live/E5G5E39/RE88M4E/363845.ts
-#EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/5f8ecc1b37867f00071469e9/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - TORTUES NINJA TV 
+#EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/5f8ecc1b37867f00071469e9/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - TORTUES NINJA TV
 http://goldenlink.live/live/E5G5E39/RE88M4E/363847.ts
 #EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/611e71322f5f180007001dde/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - DEGRASSI
 http://goldenlink.live/live/E5G5E39/RE88M4E/363848.ts
-#EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/5f8eba14a4ffb8000764e950/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - PLUTO TV KIDS ANIMATION 
+#EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/5f8eba14a4ffb8000764e950/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - PLUTO TV KIDS ANIMATION
 http://goldenlink.live/live/E5G5E39/RE88M4E/363850.ts
-#EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/611e6ddc7fcd580007d1eb5f/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - PLUTO TV KIDS GAMING 
+#EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/611e6ddc7fcd580007d1eb5f/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - PLUTO TV KIDS GAMING
 http://goldenlink.live/live/E5G5E39/RE88M4E/363854.ts
 #EXTINF:-1 tvg-logo="https://images.pluto.tv/channels/5f8ecb336537e8000764a17f/colorLogoPNG.png" group-title="EU | FRANCE PLUTO TV",FR - PLUTO TV JUNIOR
 http://goldenlink.live/live/E5G5E39/RE88M4E/363859.ts
@@ -1967,7 +1623,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1099675.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/987050.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/KANALAUSTRALTVHD.png" group-title="EU | FRANCE DOM TOM",FR-REU - KANAL AUSTRAL TV HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/987125.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/AFRICA/C-AFRECA/KOLO-TV-MADAGASCAR.png" group-title="EU | FRANCE DOM TOM",FR-REU - KOLO TV HD   
+#EXTINF:-1 tvg-logo="https://go4.pw/AFRICA/C-AFRECA/KOLO-TV-MADAGASCAR.png" group-title="EU | FRANCE DOM TOM",FR-REU - KOLO TV HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/987126.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/EQUIDIALIVEFHD.png" group-title="EU | FRANCE DOM TOM",FR-REU - EQUIDIA HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/987112.ts
@@ -1977,7 +1633,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1099659.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/1099669.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/IOTV_HD.png" group-title="EU | FRANCE DOM TOM",FR-CAR - IOTV  HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1099672.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/FRANCEINFO.png" group-title="EU | FRANCE DOM TOM",FR-CAR - FRANCE INFO HD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/FRANCEINFO.png" group-title="EU | FRANCE DOM TOM",FR-CAR - FRANCE INFO HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1099666.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/FRANCE/Kouroutv.png" group-title="EU | FRANCE DOM TOM",FR-CAR - KOUROU TV HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1099673.ts
@@ -2027,7 +1683,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1099686.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/987131.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/LUDIKIDS.png" group-title="EU | FRANCE DOM TOM",FR-CAR - LUDI KIDS HD ²
 http://goldenlink.live/live/E5G5E39/RE88M4E/1099678.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/gameone.png" group-title="EU | FRANCE DOM TOM",FR-CAR - GAME ONE HD 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/gameone.png" group-title="EU | FRANCE DOM TOM",FR-CAR - GAME ONE HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1099668.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/NICKELODEON.png" group-title="EU | FRANCE DOM TOM",FR-REU - NICKELODEON HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/987030.ts
@@ -2143,7 +1799,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1170772.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/987037.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/OCS_MAX_HD.png" group-title="EU | FRANCE DOM TOM",FR-CAR - OCS HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1170767.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/USA/SD/37.png" group-title="EU | FRANCE DOM TOM",FR-REU - SYFY HD 
+#EXTINF:-1 tvg-logo="https://go4.pw/USA/SD/37.png" group-title="EU | FRANCE DOM TOM",FR-REU - SYFY HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/987052.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/USA/SD/37.png" group-title="EU | FRANCE DOM TOM",FR-CAR - SYFY HD ²
 http://goldenlink.live/live/E5G5E39/RE88M4E/1099701.ts
@@ -2271,7 +1927,7 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1099747.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/987129.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/MALTA/MTV_HITS.png" group-title="EU | FRANCE DOM TOM",FR-REU - MTV HITS HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/987136.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/MALTA/MTV_HITS.png" group-title="EU | FRANCE DOM TOM",FR-CAR - MTV HITS HD ² 
+#EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/MALTA/MTV_HITS.png" group-title="EU | FRANCE DOM TOM",FR-CAR - MTV HITS HD ²
 http://goldenlink.live/live/E5G5E39/RE88M4E/1099682.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/EUROPE/FRANCE/FUSIONTV.png" group-title="EU | FRANCE DOM TOM",FR-CAR - FUSION TV HD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1099667.ts
@@ -2373,8 +2029,6 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1393427.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/1393428.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/ADULT.png" group-title="For Adults",XXX - COMPILATION FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1393429.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/ADULT.png" group-title="For Adults",XXX - CUM 4K FHD
-http://goldenlink.live/live/E5G5E39/RE88M4E/1393431.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/ADULT.png" group-title="For Adults",XXX - CZECH STREETS FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1393432.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/ADULT.png" group-title="For Adults",XXX - DDF NETWORK FHD
@@ -2519,5 +2173,3 @@ http://goldenlink.live/live/E5G5E39/RE88M4E/1393514.ts
 http://goldenlink.live/live/E5G5E39/RE88M4E/1393515.ts
 #EXTINF:-1 tvg-logo="https://go4.pw/ADULT.png" group-title="For Adults",XXX - RUSSIA FHD
 http://goldenlink.live/live/E5G5E39/RE88M4E/1393523.ts
-#EXTINF:-1 tvg-logo="https://go4.pw/ADULT.png" group-title="For Adults",XXX - CUM 4K FHD
-http://goldenlink.live/live/E5G5E39/RE88M4E/1393576.ts
