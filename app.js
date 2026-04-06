@@ -235,7 +235,7 @@ async function resetSourceFolder(){
 
 async function safeFetchText(path){
   try{
-    const response = await fetch(`${path}?v=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch(path, { cache: "no-store" });
     if(!response.ok) return "";
     return await response.text();
   }catch{
@@ -245,7 +245,7 @@ async function safeFetchText(path){
 
 async function safeFetchJson(path){
   try{
-    const response = await fetch(`${path}?v=${Date.now()}`, { cache: "no-store" });
+    const response = await fetch(path, { cache: "no-store" });
     if(!response.ok) return null;
     return await response.json();
   }catch{
