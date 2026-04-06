@@ -53,7 +53,7 @@ button,select,input{font:inherit}
 .quality-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .quality-title{margin:0;font-size:24px;color:#eef4ff;letter-spacing:.02em}
 .quality-count{font-size:13px;color:var(--muted);padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
-.quality-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+.quality-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,220px));justify-content:start;gap:14px}
 .card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;transition:transform .18s ease, box-shadow .18s ease}
 .card:hover{transform:translateY(-4px)}
 .card--compact{border-radius:16px}
