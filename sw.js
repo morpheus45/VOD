@@ -1,4 +1,4 @@
-const CACHE_NAME = "iptv-premium-v2-shell-v1";
+const CACHE_NAME = "pipsiflix-shell-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,8 +8,8 @@ const APP_SHELL = [
   "./app.js",
   "./player.js",
   "./manifest.webmanifest",
-  "./icons/icon-192.svg",
-  "./icons/icon-512.svg"
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 self.addEventListener("install", event => {
@@ -30,17 +30,25 @@ self.addEventListener("fetch", event => {
   const { request } = event;
   if (request.method !== "GET") return;
 
+  const url = new URL(request.url);
+  const isData = url.pathname.endsWith(".json") || url.pathname.endsWith(".m3u");
+
+  if (isData) {
+    event.respondWith(fetch(request).catch(() => caches.match(request)));
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then(cached => {
-      if (cached) return cached;
-      return fetch(request).then(response => {
-        const url = new URL(request.url);
-        if (url.origin === self.location.origin && !url.pathname.endsWith(".json") && !url.pathname.endsWith(".m3u")) {
+      const network = fetch(request).then(response => {
+        if (url.origin === self.location.origin) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(request, copy)).catch(() => {});
         }
         return response;
       });
-    }).catch(() => caches.match("./index.html"))
+
+      return cached || network.catch(() => (request.mode === "navigate" ? caches.match("./index.html") : cached));
+    })
   );
 });

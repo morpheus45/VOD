@@ -122,6 +122,7 @@ function firstSeriesEpisode(){
 }
 
 function buildSeriesEpisodeUrl(episode){
+  if(episode?.url || episode?.stream_url) return episode.url || episode.stream_url;
   const raw = item?.stream_url || item?.url || "";
   if(!raw || !episode?.id) return "";
 
@@ -137,8 +138,28 @@ function buildSeriesEpisodeUrl(episode){
   }
 }
 
+function selectedEpisode(){
+  if(!item || item.type !== "series") return null;
+  if(item.selected_episode) return item.selected_episode;
+  return null;
+}
+
 function resolvePlaybackItem(){
   if(!item) return null;
+
+  const manualEpisode = selectedEpisode();
+  if(manualEpisode){
+    const manualUrl = manualEpisode.url || manualEpisode.stream_url || buildSeriesEpisodeUrl(manualEpisode);
+    return {
+      type: "series",
+      title: manualEpisode.title || item.title || "Episode",
+      category_name: item.category_name || item.category || "",
+      plot: manualEpisode.info?.plot || manualEpisode.plot || item.plot || "",
+      stream_icon: manualEpisode.info?.movie_image || item.stream_icon || "",
+      stream_url: manualUrl,
+      url: manualUrl
+    };
+  }
 
   if(item.type === "series"){
     const episode = firstSeriesEpisode();

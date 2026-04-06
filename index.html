@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>IPTV Premium V2</title>
-  <meta name="theme-color" content="#0d3b8e" />
+  <title>PIPSIFLIX</title>
+  <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="IPTV Premium V2" />
+  <meta name="apple-mobile-web-app-title" content="PIPSIFLIX" />
   <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="icon" href="icons/icon-192.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="icons/icon-192.svg" />
+  <link rel="icon" href="icons/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand">IPTV Premium V2</div>
+      <div class="brand">PIPSIFLIX</div>
       <div class="nav-row">
         <button class="nav-btn active" data-type="live">Live</button>
         <button class="nav-btn" data-type="vod">Films</button>
@@ -48,8 +48,8 @@
     <main class="content">
       <section class="hero" id="hero">
         <div class="hero-text">
-          <h1 id="heroTitle">Chargement...</h1>
-          <p id="heroSubtitle">Chargement intelligent JSON / M3U / catalogue decoupe.</p>
+          <h1 id="heroTitle">PIPSIFLIX</h1>
+          <p id="heroSubtitle">Chargement intelligent des flux JSON / M3U, sans buffers.</p>
           <div class="hero-stats">
             <span id="statType">Live</span>
             <span id="statCount">0 elements</span>
@@ -68,6 +68,8 @@
       </section>
     </main>
   </div>
+
+  <div id="seriesPanel" class="series-panel" hidden></div>
 
   <script src="app.js"></script>
   <script>

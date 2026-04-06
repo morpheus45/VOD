@@ -17,7 +17,8 @@ const state = {
   filters: { category: "", search: "", quality: "", sort: "title" },
   bootStatus: "Chargement des flux live, films et series...",
   localFiles: {},
-  sourceFolderName: ""
+  sourceFolderName: "",
+  selectedSeries: null
 };
 
 function $(id){ return document.getElementById(id); }
@@ -279,11 +280,26 @@ async function loadShardedCatalog(type){
 }
 
 async function loadType(type){
-  // Priorité M3U pour lecture directe
-  const m3uText = await safeFetchText(`${type}.m3u`);
-  if(m3uText){
-    state.sourceUsed[type] = `${type}.m3u`;
-    return normalizeItems(parseM3U(m3uText, type), type);
+  const preferM3u = type !== "series";
+
+  if(type === "series"){
+    const shardedSeries = await loadShardedCatalog(type);
+    if(shardedSeries.length){
+      state.sourceUsed[type] = `${type}_catalog_index.json`;
+      return shardedSeries;
+    }
+  }
+
+  if(preferM3u){
+    // Priorité M3U pour lecture directe
+    const m3uText = await safeFetchText(`${type}.m3u`);
+    if(m3uText){
+      const parsedM3u = parseM3U(m3uText, type);
+      if(parsedM3u.length){
+        state.sourceUsed[type] = `${type}.m3u`;
+        return normalizeItems(parsedM3u, type);
+      }
+    }
   }
 
   // JSON simple
@@ -315,6 +331,18 @@ async function loadType(type){
   if(sharded.length){
     state.sourceUsed[type] = `${type}_catalog_index.json`;
     return sharded;
+  }
+
+  // Pour les séries, on ne tente le M3U qu'en dernier recours pour conserver les saisons/épisodes.
+  if(!preferM3u){
+    const m3uText = await safeFetchText(`${type}.m3u`);
+    if(m3uText){
+      const parsedM3u = parseM3U(m3uText, type);
+      if(parsedM3u.length){
+        state.sourceUsed[type] = `${type}.m3u`;
+        return normalizeItems(parsedM3u, type);
+      }
+    }
   }
 
   state.sourceUsed[type] = "aucune";
@@ -427,7 +455,11 @@ function bindCardEvents(scope){
     if(!item) return;
     el.addEventListener("click", e => {
       if(e.target.closest(".fav-btn")) return;
-      openItem(item);
+      if(item.type === "series"){
+        openSeriesPanel(item);
+      }else{
+        openItem(item);
+      }
     });
   });
 
@@ -444,10 +476,124 @@ function renderAuxBlocks(){
   return;
 }
 
+function openSeriesPanel(item){
+  state.selectedSeries = item;
+  renderSeriesPanel();
+}
+
+function closeSeriesPanel(){
+  state.selectedSeries = null;
+  renderSeriesPanel();
+}
+
+function openSeriesEpisode(series, episode, seasonLabel){
+  if(!series || !episode) return;
+  const { episodes, ...rest } = series;
+  const slim = { ...rest, seasons: series.seasons || [], episodes: {} };
+  const payloadEpisode = {
+    id: episode.id,
+    title: episode.title,
+    episode_num: episode.episode_num,
+    season: seasonLabel || episode.season || "",
+    url: episode.url || episode.stream_url || "",
+    stream_url: episode.url || episode.stream_url || "",
+    container_extension: episode.container_extension,
+    info: episode.info || {}
+  };
+  slim.selected_episode = payloadEpisode;
+  sessionStorage.setItem("iptv_current_item", JSON.stringify(slim));
+  location.href = "player.html";
+}
+
+function renderSeriesPanel(){
+  const panel = $("seriesPanel");
+  if(!panel) return;
+
+  const series = state.selectedSeries;
+  if(!series){
+    panel.hidden = true;
+    return;
+  }
+
+  const seasonsMap = series.episodes && typeof series.episodes === "object" ? series.episodes : {};
+  const seasonKeys = Object.keys(seasonsMap).sort((a, b) => Number(a) - Number(b));
+  const poster = escapeHtml(series.stream_icon || series.image || "");
+  const metaBits = [
+    series.category_name || series.category || "",
+    seasonKeys.length ? `${seasonKeys.length} saison${seasonKeys.length > 1 ? "s" : ""}` : ""
+  ].filter(Boolean).join(" • ");
+
+  const seasonsHtml = seasonKeys.map(season => {
+    const episodes = Array.isArray(seasonsMap[season]) ? seasonsMap[season] : [];
+    const epsHtml = episodes.map((ep, idx) => `
+      <button class="episode-btn" data-season="${escapeHtml(season)}" data-idx="${idx}" type="button">
+        <span class="episode-code">S${String(season).padStart(2, "0")}E${String(ep.episode_num || idx+1).padStart(2, "0")}</span>
+        <span class="episode-title">${escapeHtml(ep.title || "Episode")}</span>
+      </button>
+    `).join("");
+    return `
+      <div class="season-block">
+        <div class="season-title">Saison ${escapeHtml(season)}</div>
+        <div class="episode-list">
+          ${epsHtml || "<div class='episode-empty'>Aucun episode detecte pour cette saison.</div>"}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  const noEpisodes = !seasonKeys.length;
+  const directUrl = series.stream_url || series.url || "";
+
+  panel.innerHTML = `
+    <div class="series-panel__header">
+      <div class="series-panel__titleblock">
+        <div class="series-kicker">Series</div>
+        <h3>${escapeHtml(series.title || "Sans titre")}</h3>
+        <div class="series-meta">${escapeHtml(metaBits)}</div>
+      </div>
+      <button id="seriesCloseBtn" class="series-close" type="button">Fermer</button>
+    </div>
+    <div class="series-panel__body">
+      <div class="series-hero">
+        ${poster ? `<img class="series-cover" src="${poster}" alt="${escapeHtml(series.title || "")}" loading="lazy">` : ""}
+        <p class="series-plot">${escapeHtml(series.plot || "Aucun synopsis disponible.")}</p>
+      </div>
+      ${seasonsHtml || "<div class='episode-empty'>Aucune saison trouvee dans cette serie.</div>"}
+      ${noEpisodes && directUrl ? `<button id="seriesPlayDirect" class="episode-btn" type="button"><span class="episode-code">Lire</span><span class="episode-title">Lire le flux direct</span></button>` : ""}
+    </div>
+  `;
+
+  panel.hidden = false;
+
+  panel.querySelectorAll(".episode-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const season = btn.dataset.season;
+      const idx = Number(btn.dataset.idx);
+      const episodes = Array.isArray(seasonsMap[season]) ? seasonsMap[season] : [];
+      const episode = episodes[idx];
+      if(episode) openSeriesEpisode(series, episode, season);
+    });
+  });
+
+  const closeBtn = $("seriesCloseBtn");
+  if(closeBtn){
+    closeBtn.addEventListener("click", closeSeriesPanel);
+  }
+
+  const playDirect = $("seriesPlayDirect");
+  if(playDirect){
+    playDirect.addEventListener("click", () => openItem(series));
+  }
+}
+
 function render(){
   setActiveNav(state.type);
   buildCategorySelect();
   updateSourceFolderLabel();
+
+  if(state.type !== "series"){
+    state.selectedSeries = null;
+  }
 
   const availableQualities = new Set(state.items[state.type].map(item => item.quality || "Autres"));
   if(state.filters.quality && !availableQualities.has(state.filters.quality)){
@@ -492,6 +638,7 @@ function render(){
 
   renderAuxBlocks();
   bindCardEvents(grid);
+  renderSeriesPanel();
 }
 
 function findItemByKey(key){
