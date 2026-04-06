@@ -622,5 +622,18 @@ $("folderFilesInput").addEventListener("change", async e => {
   e.target.value = "";
 });
 
+const filtersToggle = $("filtersToggle");
+const filtersPanel = $("filtersPanel");
+if(filtersToggle && filtersPanel){
+  const updateToggleLabel = () => {
+    filtersToggle.textContent = filtersPanel.classList.contains("open") ? "Filtres ▴" : "Filtres ▾";
+  };
+  filtersToggle.addEventListener("click", () => {
+    filtersPanel.classList.toggle("open");
+    updateToggleLabel();
+  });
+  updateToggleLabel();
+}
+
 updateSourceFolderLabel();
 boot();
