@@ -14,7 +14,7 @@ const state = {
   type: "live",
   items: { live: [], vod: [], series: [] },
   sourceUsed: { live: "", vod: "", series: "" },
-  filters: { category: "", search: "", quality: "", mode: "all", sort: "title" },
+  filters: { category: "", search: "", quality: "", sort: "title" },
   bootStatus: "Chargement des flux live, films et series...",
   localFiles: {},
   sourceFolderName: ""
@@ -295,14 +295,6 @@ function setActiveNav(type){
   });
 }
 
-function setMode(mode){
-  state.filters.mode = mode;
-  document.querySelectorAll(".chip").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.mode === mode);
-  });
-  render();
-}
-
 function buildCategorySelect(){
   const select = $("categorySelect");
   const categories = [...new Set(state.items[state.type].map(x => x.category_name).filter(Boolean))]
@@ -316,15 +308,6 @@ function buildCategorySelect(){
 function currentCollection(){
   const search = state.filters.search.trim().toLowerCase();
   let arr = [...state.items[state.type]];
-
-  if(state.filters.mode === "favorites"){
-    const favMap = new Set(getFavorites().map(x => x.key));
-    arr = arr.filter(item => favMap.has(itemKey(item)));
-  }else if(state.filters.mode === "history"){
-    arr = getHistory().filter(x => x.item.type === state.type).map(x => x.item);
-  }else if(state.filters.mode === "continue"){
-    arr = getProgress().filter(x => x.item.type === state.type && Number(x.currentTime) > 0).map(x => x.item);
-  }
 
   if(state.filters.category){
     arr = arr.filter(x => x.category_name === state.filters.category);
@@ -423,15 +406,7 @@ function bindCardEvents(scope){
 }
 
 function renderAuxBlocks(){
-  const continueBlock = $("continueBlock");
-  const historyBlock = $("historyBlock");
-  const continueGrid = $("continueGrid");
-  const historyGrid = $("historyGrid");
-
-  continueBlock.hidden = true;
-  historyBlock.hidden = true;
-  continueGrid.innerHTML = "";
-  historyGrid.innerHTML = "";
+  return;
 }
 
 function render(){
@@ -450,7 +425,6 @@ function render(){
   $("catalogTitle").textContent = `Catalogue ${TYPE_LABELS[state.type]}`;
 
   const collection = currentCollection();
-  const compactMode = state.filters.mode === "favorites" || state.filters.mode === "history" || state.filters.mode === "continue";
   $("catalogCount").textContent = `${collection.length} elements`;
 
   const grid = $("grid");
@@ -464,7 +438,7 @@ function render(){
           <span class="quality-count">${group.items.length} flux</span>
         </div>
         <div class="quality-grid">
-          ${group.items.map(item => cardTemplate(item, compactMode)).join("")}
+          ${group.items.map(item => cardTemplate(item, false)).join("")}
         </div>
       </section>
     `).join("");
@@ -476,8 +450,6 @@ function render(){
 
   renderAuxBlocks();
   bindCardEvents(grid);
-  bindCardEvents($("continueGrid"));
-  bindCardEvents($("historyGrid"));
 }
 
 function findItemByKey(key){
@@ -562,14 +534,6 @@ $("resetFolderBtn").addEventListener("click", resetSourceFolder);
 $("folderFilesInput").addEventListener("change", async e => {
   await setLocalFolderFiles(e.target.files);
   e.target.value = "";
-});
-
-$("chipAll").dataset.mode = "all";
-$("chipFavorites").dataset.mode = "favorites";
-$("chipContinue").dataset.mode = "continue";
-$("chipHistory").dataset.mode = "history";
-document.querySelectorAll(".chip").forEach(chip => {
-  chip.addEventListener("click", () => setMode(chip.dataset.mode));
 });
 
 updateSourceFolderLabel();
