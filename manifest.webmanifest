@@ -1,0 +1,25 @@
+{
+  "name": "IPTV Premium V2",
+  "short_name": "IPTV V2",
+  "description": "Interface IPTV Premium avec flux live, films et series.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07101f",
+  "theme_color": "#0d3b8e",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

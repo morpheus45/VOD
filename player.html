@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Lecteur Premium</title>
+  <meta name="theme-color" content="#0d3b8e" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="player.css" />
+</head>
+<body>
+  <div class="player-shell">
+    <div class="player-top">
+      <button id="backBtn" class="icon-btn">← Retour</button>
+      <div class="player-title-wrap">
+        <div id="playerTitle" class="player-title">Lecture</div>
+        <div id="playerMeta" class="player-meta"></div>
+      </div>
+      <button id="favBtn" class="icon-btn">☆ Favori</button>
+    </div>
+
+    <div class="video-wrap">
+      <video id="video" playsinline controls autoplay preload="metadata"></video>
+      <div id="overlay" class="overlay">
+        <button id="playOverlayBtn" class="play-overlay">▶</button>
+      </div>
+    </div>
+
+    <div class="player-actions">
+      <button id="fullscreenBtn">Plein écran</button>
+      <button id="copyBtn">Copier le lien</button>
+      <button id="externalBtn">Ouvrir le lien direct</button>
+    </div>
+
+    <div class="player-panel">
+      <h2>Informations</h2>
+      <p id="plotText">Aucune description.</p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="player.js"></script>
+</body>
+</html>
