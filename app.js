@@ -508,6 +508,51 @@ function findItemByKey(key){
 
 function openItem(item){
   pushHistory(item);
+
+  // Direct playback for VOD/Series/Live
+  const isSeries = item.type === "series";
+  const isVod = item.type === "vod";
+  const isLive = item.type === "live";
+
+  // Build episode URL if series has episodes
+  function firstEpisodeUrl(){
+    if(!item.episodes || typeof item.episodes !== "object") return "";
+    const seasons = Object.keys(item.episodes).sort((a,b)=>Number(a)-Number(b));
+    for(const season of seasons){
+      const eps = Array.isArray(item.episodes[season]) ? item.episodes[season] : [];
+      if(eps.length){
+        const ep = eps[0];
+        const raw = item.stream_url || item.url || "";
+        try{
+          const parsed = new URL(raw);
+          const username = parsed.searchParams.get("username");
+          const password = parsed.searchParams.get("password");
+          const ext = ep.container_extension || "mp4";
+          if(username && password && ep.id){
+            return `${parsed.origin}/series/${username}/${password}/${ep.id}.${ext}`;
+          }
+        }catch{}
+      }
+    }
+    return "";
+  }
+
+  const seriesUrl = isSeries ? firstEpisodeUrl() : "";
+  const targetUrl = seriesUrl || item.stream_url || item.url || "";
+
+  if(targetUrl){
+    // If live over http on https page, open new tab to avoid mixed content block
+    const isHttpOnHttps = location.protocol === "https:" && targetUrl.startsWith("http://");
+    if(isLive && isHttpOnHttps){
+      window.open(targetUrl, "_blank");
+      return;
+    }
+    // Redirect directly to stream
+    location.href = targetUrl;
+    return;
+  }
+
+  // Fallback to player page if no direct URL
   sessionStorage.setItem("iptv_current_item", JSON.stringify(item));
   location.href = "player.html";
 }
