@@ -278,47 +278,46 @@ async function loadShardedCatalog(type){
 }
 
 async function loadType(type){
-  const candidates = [];
-
+  // 1) sharded catalog
   const sharded = await loadShardedCatalog(type);
-  if(sharded.length) candidates.push({ source: `${type}_catalog_index.json`, items: sharded });
+  if(sharded.length){
+    state.sourceUsed[type] = `${type}_catalog_index.json`;
+    return sharded;
+  }
 
+  // 2) full catalog json
   const catalogJson = await safeFetchJson(`${type}_catalog.json`);
-  const catalogItemsRaw = extractJsonItems(catalogJson);
-  if(catalogItemsRaw.length) candidates.push({ source: `${type}_catalog.json`, items: normalizeItems(catalogItemsRaw, type) });
-  else if(Array.isArray(catalogJson)) candidates.push({ source: `${type}_catalog.json`, items: normalizeItems(catalogJson, type) });
+  const catalogItems = extractJsonItems(catalogJson);
+  if(catalogItems.length){
+    state.sourceUsed[type] = `${type}_catalog.json`;
+    return normalizeItems(catalogItems, type);
+  }
+  if(Array.isArray(catalogJson)){
+    state.sourceUsed[type] = `${type}_catalog.json`;
+    return normalizeItems(catalogJson, type);
+  }
 
+  // 3) plain json
   const rawJson = await safeFetchJson(`${type}.json`);
   const extracted = extractJsonItems(rawJson);
-  if(extracted.length) candidates.push({ source: `${type}.json`, items: normalizeItems(extracted, type) });
-  else if(Array.isArray(rawJson)) candidates.push({ source: `${type}.json`, items: normalizeItems(rawJson, type) });
+  if(extracted.length){
+    state.sourceUsed[type] = `${type}.json`;
+    return normalizeItems(extracted, type);
+  }
+  if(Array.isArray(rawJson)){
+    state.sourceUsed[type] = `${type}.json`;
+    return normalizeItems(rawJson, type);
+  }
 
+  // 4) m3u
   const m3uText = await safeFetchText(`${type}.m3u`);
-  if(m3uText) candidates.push({ source: `${type}.m3u`, items: normalizeItems(parseM3U(m3uText, type), type) });
-
-  if(!candidates.length){
-    state.sourceUsed[type] = "aucune";
-    return [];
+  if(m3uText){
+    state.sourceUsed[type] = `${type}.m3u`;
+    return normalizeItems(parseM3U(m3uText, type), type);
   }
 
-  candidates.sort((a, b) => b.items.length - a.items.length);
-  let selected = candidates[0];
-
-  if(type === "series"){
-    const detailCandidate = candidates.find(candidate =>
-      candidate.items.some(item => Array.isArray(item.seasons) && item.seasons.length) ||
-      candidate.items.some(item => item.episodes && Object.keys(item.episodes).length)
-    );
-    if(detailCandidate && detailCandidate !== selected){
-      selected = {
-        source: `${selected.source} + details ${detailCandidate.source}`,
-        items: mergeSeriesDetails(selected.items, detailCandidate.items)
-      };
-    }
-  }
-
-  state.sourceUsed[type] = selected.source;
-  return selected.items;
+  state.sourceUsed[type] = "aucune";
+  return [];
 }
 
 function setActiveNav(type){
@@ -532,8 +531,6 @@ async function boot(){
     state.bootStatus = "Les trois flux ont ete charges automatiquement a l'ouverture.";
   }else if(loadedCount > 0){
     state.bootStatus = "Une partie des flux a ete chargee. Verifiez les fichiers live.json, vod.json, series.json ou leurs .m3u a la racine.";
-  }else if(location.protocol === "file:"){
-    state.bootStatus = "Ouverture locale detectee. Le navigateur peut bloquer l'acces automatique aux fichiers via file://. Sur GitHub ou un hebergement web, les 3 flux se chargeront a l'ouverture.";
   }else{
     state.bootStatus = "Aucun flux charge. Placez live.json ou live.m3u, vod.json ou vod.m3u, et series.json, series_catalog.json ou series.m3u a la racine.";
   }
