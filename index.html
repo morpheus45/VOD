@@ -50,6 +50,15 @@
         <button class="chip" id="chipContinue">Reprendre</button>
         <button class="chip" id="chipHistory">Historique</button>
       </div>
+
+      <div class="source-bar">
+        <div class="source-bar__text" id="sourceFolderLabel">Source active : racine du projet</div>
+        <div class="source-bar__actions">
+          <button class="source-btn" id="pickFolderBtn" type="button">Choisir un dossier</button>
+          <button class="source-btn source-btn--secondary" id="resetFolderBtn" type="button">Revenir a la racine</button>
+        </div>
+        <input id="folderFilesInput" type="file" webkitdirectory directory multiple hidden />
+      </div>
     </section>
 
     <main class="content">

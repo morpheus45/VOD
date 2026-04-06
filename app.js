@@ -15,7 +15,9 @@ const state = {
   items: { live: [], vod: [], series: [] },
   sourceUsed: { live: "", vod: "", series: "" },
   filters: { category: "", search: "", quality: "", mode: "all", sort: "title" },
-  bootStatus: "Chargement des flux live, films et series..."
+  bootStatus: "Chargement des flux live, films et series...",
+  localFiles: {},
+  sourceFolderName: ""
 };
 
 function $(id){ return document.getElementById(id); }
@@ -137,13 +139,83 @@ function extractJsonItems(rawJson){
   return [];
 }
 
+function baseFileName(path){
+  return String(path || "").split("/").pop().toLowerCase();
+}
+
+async function readLocalConfiguredText(path){
+  const file = state.localFiles[baseFileName(path)];
+  if(!file) return "";
+  try{
+    return await file.text();
+  }catch{
+    return "";
+  }
+}
+
+function updateSourceFolderLabel(){
+  const label = $("sourceFolderLabel");
+  if(!label) return;
+  label.textContent = state.sourceFolderName
+    ? `Source active : ${state.sourceFolderName}`
+    : "Source active : racine du projet";
+}
+
+async function setLocalFolderFiles(fileList){
+  const files = Array.from(fileList || []);
+  const next = {};
+  for(const file of files){
+    next[file.name.toLowerCase()] = file;
+  }
+  state.localFiles = next;
+
+  if(files.length){
+    const firstPath = files[0].webkitRelativePath || "";
+    const folderName = firstPath ? firstPath.split("/")[0] : "dossier local";
+    state.sourceFolderName = folderName;
+    state.bootStatus = `Dossier local selectionne : ${folderName}.`;
+  }else{
+    state.sourceFolderName = "";
+  }
+
+  updateSourceFolderLabel();
+  await boot();
+}
+
+async function pickSourceFolder(){
+  if(window.showDirectoryPicker){
+    try{
+      const handle = await window.showDirectoryPicker();
+      const files = [];
+      for await (const entry of handle.values()){
+        if(entry.kind !== "file") continue;
+        const file = await entry.getFile();
+        files.push(file);
+      }
+      await setLocalFolderFiles(files);
+      return;
+    }catch{
+      return;
+    }
+  }
+
+  $("folderFilesInput").click();
+}
+
+async function resetSourceFolder(){
+  state.localFiles = {};
+  state.sourceFolderName = "";
+  updateSourceFolderLabel();
+  await boot();
+}
+
 async function safeFetchText(path){
   try{
     const response = await fetch(`${path}?v=${Date.now()}`, { cache: "no-store" });
     if(!response.ok) return "";
     return await response.text();
   }catch{
-    return "";
+    return await readLocalConfiguredText(path);
   }
 }
 
@@ -153,7 +225,13 @@ async function safeFetchJson(path){
     if(!response.ok) return null;
     return await response.json();
   }catch{
-    return null;
+    const text = await readLocalConfiguredText(path);
+    if(!text) return null;
+    try{
+      return JSON.parse(text);
+    }catch{
+      return null;
+    }
   }
 }
 
@@ -345,33 +423,21 @@ function bindCardEvents(scope){
 }
 
 function renderAuxBlocks(){
-  const progress = getProgress().filter(x => Number(x.currentTime) > 0).slice(0, 18);
-  const history = getHistory().slice(0, 18);
   const continueBlock = $("continueBlock");
   const historyBlock = $("historyBlock");
   const continueGrid = $("continueGrid");
   const historyGrid = $("historyGrid");
 
-  if(progress.length){
-    continueBlock.hidden = false;
-    continueGrid.innerHTML = progress.map(x => cardTemplate(x.item, true)).join("");
-  }else{
-    continueBlock.hidden = true;
-    continueGrid.innerHTML = "";
-  }
-
-  if(history.length){
-    historyBlock.hidden = false;
-    historyGrid.innerHTML = history.map(x => cardTemplate(x.item, true)).join("");
-  }else{
-    historyBlock.hidden = true;
-    historyGrid.innerHTML = "";
-  }
+  continueBlock.hidden = true;
+  historyBlock.hidden = true;
+  continueGrid.innerHTML = "";
+  historyGrid.innerHTML = "";
 }
 
 function render(){
   setActiveNav(state.type);
   buildCategorySelect();
+  updateSourceFolderLabel();
 
   const featured = state.items[state.type][0] || null;
   $("heroTitle").textContent = TYPE_LABELS[state.type];
@@ -491,6 +557,13 @@ $("sortSelect").addEventListener("change", e => {
   render();
 });
 
+$("pickFolderBtn").addEventListener("click", pickSourceFolder);
+$("resetFolderBtn").addEventListener("click", resetSourceFolder);
+$("folderFilesInput").addEventListener("change", async e => {
+  await setLocalFolderFiles(e.target.files);
+  e.target.value = "";
+});
+
 $("chipAll").dataset.mode = "all";
 $("chipFavorites").dataset.mode = "favorites";
 $("chipContinue").dataset.mode = "continue";
@@ -499,4 +572,5 @@ document.querySelectorAll(".chip").forEach(chip => {
   chip.addEventListener("click", () => setMode(chip.dataset.mode));
 });
 
+updateSourceFolderLabel();
 boot();

@@ -13,6 +13,7 @@ const video = $("video");
 let hls = null;
 let mpegtsPlayer = null;
 let progressTick = -1;
+let activePlaybackItem = null;
 
 function readStore(key, fallback){
   try{
@@ -54,15 +55,17 @@ function toggleFavorite(){
 }
 
 function saveProgress(){
-  if(!item || !video || !isFinite(video.currentTime)) return;
-  const progress = getProgress().filter(x => x.key !== itemKey(item));
-  progress.unshift({ key: itemKey(item), item, currentTime: video.currentTime, savedAt: Date.now() });
+  const current = activePlaybackItem || item;
+  if(!current || !video || !isFinite(video.currentTime)) return;
+  const progress = getProgress().filter(x => x.key !== itemKey(current));
+  progress.unshift({ key: itemKey(current), item: current, currentTime: video.currentTime, savedAt: Date.now() });
   setProgress(progress.slice(0, 300));
 }
 
 function restoreProgress(){
-  if(!item) return;
-  const hit = getProgress().find(x => x.key === itemKey(item));
+  const current = activePlaybackItem || item;
+  if(!current) return;
+  const hit = getProgress().find(x => x.key === itemKey(current));
   if(hit && Number(hit.currentTime) > 5){
     try{
       video.currentTime = Number(hit.currentTime);
@@ -71,14 +74,14 @@ function restoreProgress(){
 }
 
 async function copyLink(){
-  const url = item?.stream_url || item?.url || "";
+  const url = activePlaybackItem?.stream_url || activePlaybackItem?.url || item?.stream_url || item?.url || "";
   try{
     await navigator.clipboard.writeText(url);
   }catch{}
 }
 
 function openExternal(){
-  const url = item?.stream_url || item?.url || "";
+  const url = activePlaybackItem?.stream_url || activePlaybackItem?.url || item?.stream_url || item?.url || "";
   if(url) location.href = url;
 }
 
@@ -108,11 +111,61 @@ function setStatus(message){
   node.textContent = message || "";
 }
 
-function loadSource(url){
+function firstSeriesEpisode(){
+  if(!item || item.type !== "series" || !item.episodes || typeof item.episodes !== "object") return null;
+  const seasons = Object.keys(item.episodes).sort((a, b) => Number(a) - Number(b));
+  for(const season of seasons){
+    const episodes = Array.isArray(item.episodes[season]) ? item.episodes[season] : [];
+    if(episodes.length) return episodes[0];
+  }
+  return null;
+}
+
+function buildSeriesEpisodeUrl(episode){
+  const raw = item?.stream_url || item?.url || "";
+  if(!raw || !episode?.id) return "";
+
+  try{
+    const parsed = new URL(raw);
+    const username = parsed.searchParams.get("username");
+    const password = parsed.searchParams.get("password");
+    const extension = episode.container_extension || "mp4";
+    if(!username || !password) return "";
+    return `${parsed.origin}/series/${username}/${password}/${episode.id}.${extension}`;
+  }catch{
+    return "";
+  }
+}
+
+function resolvePlaybackItem(){
+  if(!item) return null;
+
+  if(item.type === "series"){
+    const episode = firstSeriesEpisode();
+    const episodeUrl = buildSeriesEpisodeUrl(episode);
+    if(episode && episodeUrl){
+      return {
+        type: "series",
+        title: episode.title || item.title || "Episode",
+        category_name: item.category_name || item.category || "",
+        plot: episode.info?.plot || item.plot || "",
+        stream_icon: episode.info?.movie_image || item.stream_icon || "",
+        stream_url: episodeUrl,
+        url: episodeUrl
+      };
+    }
+  }
+
+  return item;
+}
+
+function loadSource(playbackItem){
   clearPlayers();
   progressTick = -1;
   setStatus("");
+  activePlaybackItem = playbackItem;
 
+  const url = playbackItem?.stream_url || playbackItem?.url || "";
   if(!url){
     setStatus("Aucune URL de lecture disponible.");
     return;
@@ -139,7 +192,7 @@ function loadSource(url){
   if(isTransportStream && window.mpegts && window.mpegts.isSupported()){
     mpegtsPlayer = window.mpegts.createPlayer({
       type: "mpegts",
-      isLive: item?.type === "live",
+      isLive: playbackItem?.type === "live",
       url
     });
     mpegtsPlayer.attachMediaElement(video);
@@ -168,15 +221,21 @@ function initPlayer(){
     return;
   }
 
-  $("playerTitle").textContent = item.title || "Lecture";
+  const playbackItem = resolvePlaybackItem();
+
+  $("playerTitle").textContent = playbackItem?.title || item.title || "Lecture";
   $("playerMeta").textContent = [
     item.type === "vod" ? "Film" : item.type === "series" ? "Series" : "Live",
     item.category_name || item.category || ""
   ].filter(Boolean).join(" • ");
-  $("plotText").textContent = item.plot || "Aucune description.";
+  $("plotText").textContent = playbackItem?.plot || item.plot || "Aucune description.";
   updateFavoriteUI();
 
-  loadSource(item.stream_url || item.url || "");
+  if(item.type === "series" && playbackItem !== item){
+    setStatus("Lecture du premier episode disponible.");
+  }
+
+  loadSource(playbackItem);
 }
 
 $("backBtn").addEventListener("click", () => history.back());
@@ -202,6 +261,7 @@ video.addEventListener("pause", saveProgress);
 video.addEventListener("ended", saveProgress);
 video.addEventListener("play", () => {
   $("overlay").style.display = "none";
+  if($("playbackStatus")?.textContent === "Lecture du premier episode disponible.") return;
   setStatus("");
 });
 video.addEventListener("pause", () => {
