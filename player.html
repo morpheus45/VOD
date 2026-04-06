@@ -12,25 +12,26 @@
 <body>
   <div class="player-shell">
     <div class="player-top">
-      <button id="backBtn" class="icon-btn">← Retour</button>
+      <button id="backBtn" class="icon-btn" type="button">Retour</button>
       <div class="player-title-wrap">
         <div id="playerTitle" class="player-title">Lecture</div>
         <div id="playerMeta" class="player-meta"></div>
       </div>
-      <button id="favBtn" class="icon-btn">☆ Favori</button>
+      <button id="favBtn" class="icon-btn" type="button">Favori</button>
     </div>
 
     <div class="video-wrap">
       <video id="video" playsinline controls autoplay preload="metadata"></video>
       <div id="overlay" class="overlay">
-        <button id="playOverlayBtn" class="play-overlay">▶</button>
+        <button id="playOverlayBtn" class="play-overlay" type="button">Lire</button>
       </div>
+      <div id="playbackStatus" class="playback-status" hidden></div>
     </div>
 
     <div class="player-actions">
-      <button id="fullscreenBtn">Plein écran</button>
-      <button id="copyBtn">Copier le lien</button>
-      <button id="externalBtn">Ouvrir le lien direct</button>
+      <button id="fullscreenBtn" type="button">Plein ecran</button>
+      <button id="copyBtn" type="button">Copier le lien</button>
+      <button id="externalBtn" type="button">Ouvrir le lien direct</button>
     </div>
 
     <div class="player-panel">
@@ -40,6 +41,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest"></script>
   <script src="player.js"></script>
 </body>
 </html>

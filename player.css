@@ -10,6 +10,7 @@ html,body{margin:0;padding:0;background:radial-gradient(circle at top left, rgba
 video{display:block;width:100%;height:min(70vh,calc(100vh - 180px));background:#02060d;object-fit:contain}
 .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.16),rgba(0,0,0,.34))}
 .play-overlay{pointer-events:auto;border:none;background:linear-gradient(135deg,#1f66ff,#2aa7ff);backdrop-filter:blur(10px);color:#fff;width:96px;height:96px;border-radius:50%;font-size:22px;font-weight:700;cursor:pointer;box-shadow:0 20px 40px rgba(31,102,255,.28)}
+.playback-status{position:absolute;left:14px;right:14px;bottom:14px;padding:10px 12px;border-radius:12px;background:rgba(4,11,20,.84);border:1px solid rgba(255,255,255,.12);font-size:13px;color:#d8e6ff;backdrop-filter:blur(10px)}
 .player-actions{display:flex;gap:10px;flex-wrap:wrap;padding:14px;background:#06101f}
 .player-actions button{border:1px solid rgba(255,255,255,.12);background:#0d1a31;color:#fff;padding:12px 14px;border-radius:12px;cursor:pointer}
 .player-panel{padding:18px;background:#08111f;border-top:1px solid rgba(255,255,255,.08)}

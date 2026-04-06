@@ -291,11 +291,12 @@ function cardTemplate(item){
   const meta = item.category_name || "";
   const poster = escapeHtml(item.stream_icon || "");
   const typeLabel = item.type === "vod" ? "Film" : item.type === "series" ? "Series" : "Live";
+  const posterClass = item.type === "live" ? "poster poster--logo" : "poster";
 
   return `
     <article class="card" data-key="${escapeHtml(itemKey(item))}">
       <div class="poster-wrap">
-        <img class="poster" src="${poster}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.style.visibility='hidden'">
+        <img class="${posterClass}" src="${poster}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.style.visibility='hidden'">
         <div class="badges">
           <span class="badge">${escapeHtml(typeLabel)}</span>
           <span class="badge">${escapeHtml(item.quality || "Autres")}</span>
