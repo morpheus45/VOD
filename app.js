@@ -225,7 +225,8 @@ async function pickSourceFolder(){
     }
   }
 
-  $("folderFilesInput").click();
+  const input = $("folderFilesInput");
+  if(input) input.click();
 }
 
 async function resetSourceFolder(){
@@ -357,6 +358,7 @@ function setActiveNav(type){
 
 function buildCategorySelect(){
   const select = $("categorySelect");
+  if(!select) return;
   const categories = [...new Set(state.items[state.type].map(x => x.category_name).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
 
@@ -603,37 +605,51 @@ function render(){
   if($("sortSelect")) $("sortSelect").value = state.filters.sort;
 
   const featured = state.items[state.type][0] || null;
-  $("heroTitle").textContent = TYPE_LABELS[state.type];
-  $("heroSubtitle").textContent = featured
+  const hTitle = $("heroTitle");
+  if(hTitle) hTitle.textContent = TYPE_LABELS[state.type];
+  
+  const hSubtitle = $("heroSubtitle");
+  if(hSubtitle) hSubtitle.textContent = featured
     ? [featured.category_name || "", featured.plot || "", state.bootStatus].filter(Boolean).join(" • ").slice(0, 220)
     : state.bootStatus;
-  $("statType").textContent = TYPE_LABELS[state.type];
-  $("statCount").textContent = `${state.items[state.type].length} elements`;
-  $("statSource").textContent = `source : ${state.sourceUsed[state.type] || "aucune"}`;
-  $("catalogTitle").textContent = `Catalogue ${TYPE_LABELS[state.type]}`;
+    
+  const sType = $("statType");
+  if(sType) sType.textContent = TYPE_LABELS[state.type];
+  
+  const sCount = $("statCount");
+  if(sCount) sCount.textContent = `${state.items[state.type].length} elements`;
+  
+  const sSource = $("statSource");
+  if(sSource) sSource.textContent = `source : ${state.sourceUsed[state.type] || "aucune"}`;
+  
+  const cTitle = $("catalogTitle");
+  if(cTitle) cTitle.textContent = `Catalogue ${TYPE_LABELS[state.type]}`;
 
   const collection = currentCollection();
-  $("catalogCount").textContent = `${collection.length} elements`;
+  const cCount = $("catalogCount");
+  if(cCount) cCount.textContent = `${collection.length} elements`;
 
   const grid = $("grid");
   const empty = $("emptyState");
-  if(collection.length){
-    const qualityGroups = groupedByQuality(collection);
-    grid.innerHTML = qualityGroups.map(group => `
-      <section class="quality-block">
-        <div class="quality-head">
-          <h3 class="quality-title">${escapeHtml(group.label)}</h3>
-          <span class="quality-count">${group.items.length} flux</span>
-        </div>
-        <div class="quality-grid">
-          ${group.items.map(item => cardTemplate(item, false)).join("")}
-        </div>
-      </section>
-    `).join("");
-    empty.hidden = true;
-  }else{
-    grid.innerHTML = "";
-    empty.hidden = false;
+  if(grid){
+    if(collection.length){
+      const qualityGroups = groupedByQuality(collection);
+      grid.innerHTML = qualityGroups.map(group => `
+        <section class="quality-block">
+          <div class="quality-head">
+            <h3 class="quality-title">${escapeHtml(group.label)}</h3>
+            <span class="quality-count">${group.items.length} flux</span>
+          </div>
+          <div class="quality-grid">
+            ${group.items.map(item => cardTemplate(item, false)).join("")}
+          </div>
+        </section>
+      `).join("");
+      if(empty) empty.hidden = true;
+    }else{
+      grid.innerHTML = "";
+      if(empty) empty.hidden = false;
+    }
   }
 
   renderAuxBlocks();
@@ -654,23 +670,15 @@ function findItemByKey(key){
   return all.find(x => itemKey(x) === key);
 }
 
-/**
- * CORRECTION MAJEURE : Force tous les clics VOD/Live/Séries à passer par le lecteur intégré
- * au lieu de rediriger directement vers le média. Cela unifie la lecture, active la reprise,
- * et centralise la gestion des erreurs.
- */
 function openItem(item){
   pushHistory(item);
 
   const directUrl = item.stream_url || item.url || "";
   if(!directUrl){
-    // Pas d'URL : impossible de lire
     alert("Aucune URL de lecture disponible pour cet élément.");
     return;
   }
 
-  // CORRECTION : Tous les médias passent maintenant par le lecteur intégré
-  // Cela inclut VOD, Live, et Séries (même ceux avec URL directe)
   sessionStorage.setItem("iptv_current_item", JSON.stringify(item));
   location.href = "player.html";
 }
@@ -707,38 +715,59 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     state.filters.category = "";
     state.filters.search = "";
     state.filters.quality = "";
-    $("searchInput").value = "";
-    if($("qualitySelect")) $("qualitySelect").value = "";
+    const sInput = $("searchInput");
+    if(sInput) sInput.value = "";
+    const qSelect = $("qualitySelect");
+    if(qSelect) qSelect.value = "";
     render();
   });
 });
 
-$("categorySelect").addEventListener("change", e => {
-  state.filters.category = e.target.value;
-  render();
-});
+const catSelect = $("categorySelect");
+if(catSelect) {
+  catSelect.addEventListener("change", e => {
+    state.filters.category = e.target.value;
+    render();
+  });
+}
 
-$("searchInput").addEventListener("input", e => {
-  state.filters.search = e.target.value;
-  render();
-});
+const sInput = $("searchInput");
+if(sInput) {
+  sInput.addEventListener("input", e => {
+    state.filters.search = e.target.value;
+    render();
+  });
+}
 
-$("qualitySelect").addEventListener("change", e => {
-  state.filters.quality = e.target.value;
-  render();
-});
+const qSelect = $("qualitySelect");
+if(qSelect) {
+  qSelect.addEventListener("change", e => {
+    state.filters.quality = e.target.value;
+    render();
+  });
+}
 
-$("sortSelect").addEventListener("change", e => {
-  state.filters.sort = e.target.value;
-  render();
-});
+const sSelect = $("sortSelect");
+if(sSelect) {
+  sSelect.addEventListener("change", e => {
+    state.filters.sort = e.target.value;
+    render();
+  });
+}
 
-$("pickFolderBtn").addEventListener("click", pickSourceFolder);
-$("resetFolderBtn").addEventListener("click", resetSourceFolder);
-$("folderFilesInput").addEventListener("change", async e => {
-  await setLocalFolderFiles(e.target.files);
-  e.target.value = "";
-});
+const pickBtn = $("pickFolderBtn");
+if(pickBtn) pickBtn.addEventListener("click", pickSourceFolder);
+
+const resetBtn = $("resetFolderBtn");
+if(resetBtn) resetBtn.addEventListener("click", resetSourceFolder);
+
+const folderInput = $("folderFilesInput");
+if(folderInput) {
+  folderInput.addEventListener("change", async e => {
+    await setLocalFolderFiles(e.target.files);
+    e.target.value = "";
+  });
+}
 
 const filtersToggle = $("filtersToggle");
 const filtersPanel = $("filtersPanel");
