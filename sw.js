@@ -1,4 +1,4 @@
-const CACHE_NAME = "pipsiflix-shell-v19";
+const CACHE_NAME = "pipsiflix-shell-v20";
 const APP_SHELL = [
   "./",
   "./index.html",

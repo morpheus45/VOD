@@ -6,7 +6,6 @@ const STORAGE_KEYS = {
 };
 
 const TYPE_LABELS = {
-  live: "Live",
   vod: "Films",
   series: "Series"
 };
@@ -18,12 +17,12 @@ const PAGINATION_CONFIG = {
 
 const state = {
   type: "vod",
-  items: { live: [], vod: [], series: [] },
-  sourceUsed: { live: "", vod: "", series: "" },
+  items: { vod: [], series: [] },
+  sourceUsed: { vod: "", series: "" },
   filters: { category: "", search: "", quality: "", sort: "title" },
   bootStatus: "Chargement...",
   selectedSeries: null,
-  displayedItems: { live: 0, vod: 0, series: 0 },
+  displayedItems: { vod: 0, series: 0 },
   isLoadingMore: false,
   seriesEpisodesCache: {}
 };
@@ -148,226 +147,78 @@ function extractJsonItems(rawJson){
     rawJson.channels,
     rawJson.movies,
     rawJson.series,
-    rawJson.results,
-    rawJson.data
+    rawJson.vod
   ];
 
-  for(const value of candidates){
-    if(Array.isArray(value)) return value;
+  for(const c of candidates){
+    if(Array.isArray(c)) return c;
   }
 
   return [];
 }
 
-async function safeFetchText(path){
-  try{
-    const response = await fetch(path, { cache: "no-store" });
-    if(!response.ok) return "";
-    return await response.text();
-  }catch{
-    return "";
-  }
-}
-
 async function safeFetchJson(path){
   try{
-    const response = await fetch(path, { cache: "no-store" });
-    if(!response.ok) return null;
-    return await response.json();
+    const r = await fetch(path);
+    if(!r.ok) return null;
+    return await r.json();
   }catch{
     return null;
   }
 }
 
-/**
- * CORRECTION : Récupérer dynamiquement les épisodes d'une série via l'API Xtream Codes
- */
+async function safeFetchText(path){
+  try{
+    const r = await fetch(path);
+    if(!r.ok) return null;
+    return await r.text();
+  }catch{
+    return null;
+  }
+}
+
 async function fetchSeriesEpisodes(series){
   if(!series || !series.stream_url) return {};
   
-  // Vérifier le cache local d'abord
-  if(state.seriesEpisodesCache[series.id]){
-    return state.seriesEpisodesCache[series.id];
-  }
+  // Si c'est une URL directe, on ne peut pas charger dynamiquement
+  if(!series.stream_url.includes("action=get_series_info")) return {};
 
-  try{
-    const response = await fetch(series.stream_url, { cache: "no-store" });
-    if(!response.ok) return {};
-    
-    const data = await response.json();
-    let episodes = {};
-
-    // Xtream Codes retourne une structure avec 'seasons' contenant les épisodes
-    if(data.seasons && typeof data.seasons === "object"){
-      for(const seasonKey in data.seasons){
-        const seasonData = data.seasons[seasonKey];
-        if(Array.isArray(seasonData)){
-          episodes[seasonKey] = seasonData.map(ep => ({
-            id: ep.id || ep.episode_id,
-            title: ep.title || ep.name || `Episode ${ep.episode_num || ""}`,
-            episode_num: ep.episode_num || 0,
-            season: seasonKey,
-            url: ep.url || ep.stream_url || "",
-            stream_url: ep.url || ep.stream_url || "",
-            container_extension: ep.container_extension || "mkv",
-            info: ep.info || {}
-          }));
-        }
-      }
-    }
-
-    // Mettre en cache
-    state.seriesEpisodesCache[series.id] = episodes;
-    return episodes;
-  }catch(e){
-    console.warn("Erreur lors du chargement des épisodes:", e);
+  try {
+    const data = await safeFetchJson(series.stream_url);
+    if(data && data.episodes) return data.episodes;
+    return {};
+  } catch(e) {
+    console.error("Erreur fetchSeriesEpisodes:", e);
     return {};
   }
 }
 
-async function loadType(type){
-  let finalItems = [];
-
-  const rawJson = await safeFetchJson(`${type}.json`);
-  const extracted = extractJsonItems(rawJson);
-  if(extracted.length){
-    state.sourceUsed[type] = `${type}.json`;
-    finalItems = normalizeItems(extracted, type);
-  }
-
-  if(!finalItems.length){
-    const m3uText = await safeFetchText(`${type}.m3u`);
-    if(m3uText){
-      const parsedM3u = parseM3U(m3uText, type);
-      if(parsedM3u.length){
-        state.sourceUsed[type] = `${type}.m3u`;
-        finalItems = normalizeItems(parsedM3u, type);
-      }
-    }
-  }
-
-  if(finalItems.length) return finalItems;
-
-  state.sourceUsed[type] = "aucune";
-  return [];
-}
-
-function setActiveNav(type){
-  document.querySelectorAll(".nav-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.type === type);
-  });
-}
-
-function buildCategorySelect(){
-  const select = $("categorySelect");
-  if(!select) return;
-  
-  const categories = [...new Set(state.items[state.type].map(x => x.category_name).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b));
-
-  select.innerHTML = '<option value="">Toutes les sections</option>' +
-    categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
-  
-  if(state.filters.category && !categories.includes(state.filters.category)){
-    state.filters.category = "";
-  }
-  select.value = state.filters.category;
-}
-
 function currentCollection(){
-  const search = state.filters.search.trim().toLowerCase();
-  let arr = [...state.items[state.type]];
+  const base = state.items[state.type] || [];
+  let filtered = base;
 
   if(state.filters.category){
-    arr = arr.filter(x => x.category_name === state.filters.category);
+    filtered = filtered.filter(x => x.category_name === state.filters.category);
+  }
+
+  if(state.filters.search){
+    const q = state.filters.search.toLowerCase();
+    filtered = filtered.filter(x => x.title.toLowerCase().includes(q) || x.plot.toLowerCase().includes(q));
   }
 
   if(state.filters.quality){
-    arr = arr.filter(x => (x.quality || "Autres") === state.filters.quality);
+    filtered = filtered.filter(x => x.quality === state.filters.quality);
   }
 
-  if(search){
-    arr = arr.filter(x =>
-      (x.title || "").toLowerCase().includes(search) ||
-      (x.category_name || "").toLowerCase().includes(search)
-    );
+  if(state.filters.sort === "recent"){
+    // No real date, but keep original order
+  } else if(state.filters.sort === "category"){
+    filtered.sort((a,b) => a.category_name.localeCompare(b.category_name));
+  } else {
+    filtered.sort((a,b) => a.title.localeCompare(b.title));
   }
 
-  if(state.filters.sort === "category"){
-    arr.sort((a, b) => (a.category_name || "").localeCompare(b.category_name || "") || (a.title || "").localeCompare(b.title || ""));
-  }else if(state.filters.sort === "recent"){
-    const historyMap = new Map(getHistory().map(x => [x.key, x.watchedAt]));
-    arr.sort((a, b) => (historyMap.get(itemKey(b)) || 0) - (historyMap.get(itemKey(a)) || 0));
-  }else{
-    arr.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-  }
-
-  return arr;
-}
-
-function groupedByQuality(items){
-  const order = ["4K", "HD", "SD", "Autres"];
-  const groups = new Map(order.map(label => [label, []]));
-
-  for(const item of items){
-    const quality = item.quality || "Autres";
-    if(!groups.has(quality)) groups.set(quality, []);
-    groups.get(quality).push(item);
-  }
-
-  return order
-    .map(label => ({ label, items: groups.get(label) || [] }))
-    .filter(group => group.items.length);
-}
-
-function cardTemplate(item){
-  const fav = isFavorite(item);
-  const poster = escapeHtml(item.stream_icon || "");
-  const typeLabel = item.type === "vod" ? "Film" : item.type === "series" ? "Series" : "Live";
-  const posterClass = item.type === "live" ? "poster poster--logo" : "poster";
-
-  return `
-    <article class="card" data-key="${escapeHtml(itemKey(item))}">
-      <div class="poster-wrap">
-        <img class="${posterClass}" src="${poster}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.style.visibility='hidden'">
-        <div class="badges">
-          <span class="badge">${escapeHtml(typeLabel)}</span>
-          <span class="badge">${escapeHtml(item.quality || "Autres")}</span>
-        </div>
-        <button class="fav-btn" data-fav="${escapeHtml(itemKey(item))}" type="button">${fav ? "Retirer" : "Favori"}</button>
-      </div>
-      <div class="card-body">
-        <div class="card-title">${escapeHtml(item.title)}</div>
-        <div class="card-meta">${escapeHtml(item.category_name)}</div>
-      </div>
-    </article>
-  `;
-}
-
-function bindCardEvents(scope){
-  if(!scope) return;
-  scope.querySelectorAll(".card").forEach(el => {
-    el.addEventListener("click", e => {
-      if(e.target.closest(".fav-btn")) return;
-      const item = findItemByKey(el.dataset.key);
-      if(!item) return;
-      if(item.type === "series") openSeriesPanel(item);
-      else playNativeDirectly(item);
-    });
-  });
-
-  scope.querySelectorAll(".fav-btn").forEach(btn => {
-    btn.addEventListener("click", e => {
-      e.stopPropagation();
-      const item = findItemByKey(btn.dataset.fav);
-      if(item) toggleFavorite(item);
-    });
-  });
-}
-
-function openSeriesPanel(item){
-  state.selectedSeries = item;
-  renderSeriesPanel();
+  return filtered;
 }
 
 function closeSeriesPanel(){
@@ -400,10 +251,9 @@ async function renderSeriesPanel(){
     return;
   }
 
-  // CORRECTION : Charger les épisodes dynamiquement depuis l'API
   let seasonsMap = series.episodes && typeof series.episodes === "object" ? series.episodes : {};
   
-  if(!Object.keys(seasonsMap).length && series.stream_url){
+  if(!Object.keys(seasonsMap).length && series.stream_url && series.stream_url.includes("action=")){
     panel.innerHTML = `
       <div class="series-panel__header">
         <div class="series-panel__titleblock">
@@ -421,11 +271,8 @@ async function renderSeriesPanel(){
     panel.hidden = false;
     if($("seriesCloseBtn")) $("seriesCloseBtn").onclick = closeSeriesPanel;
     
-    // Charger les épisodes
     seasonsMap = await fetchSeriesEpisodes(series);
     series.episodes = seasonsMap;
-    
-    // Re-render après chargement
     renderSeriesPanel();
     return;
   }
@@ -480,10 +327,10 @@ async function renderSeriesPanel(){
       const idx = Number(btn.dataset.idx);
       const episode = (seasonsMap[season] || [])[idx];
       if(episode) openSeriesEpisode(series, episode, season);
+      else if(btn.id === "seriesPlayDirect") playNativeDirectly(series);
     });
   });
   if($("seriesCloseBtn")) $("seriesCloseBtn").onclick = closeSeriesPanel;
-  if($("seriesPlayDirect")) $("seriesPlayDirect").onclick = () => openItem(series);
 }
 
 function loadMoreItems(){
@@ -503,61 +350,86 @@ function renderGrid(){
   const grid = $("grid");
   const empty = $("emptyState");
   if(!grid) return;
-  
+
   const collection = currentCollection();
-  const displayCount = state.displayedItems[state.type];
-  const visibleItems = collection.slice(0, displayCount);
-  
-  if(visibleItems.length){
-    const qualityGroups = groupedByQuality(visibleItems);
-    grid.innerHTML = qualityGroups.map(group => `
-      <section class="quality-block">
-        <div class="quality-head">
-          <h3 class="quality-title">${escapeHtml(group.label)}</h3>
-          <span class="quality-count">${group.items.length} flux</span>
-        </div>
-        <div class="quality-grid">${group.items.map(item => cardTemplate(item)).join("")}</div>
-      </section>
-    `).join("");
-    if(empty) empty.hidden = true;
-    bindCardEvents(grid);
-    setupInfiniteScroll();
-  }else{
+  const limit = state.displayedItems[state.type];
+  const items = collection.slice(0, limit);
+
+  if(items.length === 0){
     grid.innerHTML = "";
-    if(empty) empty.hidden = false;
+    empty.hidden = false;
+    return;
   }
+
+  empty.hidden = true;
+  
+  if(limit === PAGINATION_CONFIG.itemsPerPage) grid.innerHTML = "";
+
+  const fragment = document.createDocumentFragment();
+  items.slice(grid.children.length).forEach(item => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.key = itemKey(item);
+    
+    const poster = escapeHtml(item.stream_icon || "");
+    const favClass = isFavorite(item) ? "is-favorite" : "";
+
+    card.innerHTML = `
+      <div class="card-media">
+        ${poster ? `<img src="${poster}" alt="${escapeHtml(item.title)}" loading="lazy">` : `<div class="poster-placeholder"></div>`}
+        <div class="card-badge">${escapeHtml(item.type === "series" ? "Series" : "Film")}</div>
+        ${item.quality ? `<div class="card-quality">${escapeHtml(item.quality)}</div>` : ""}
+        <button class="fav-btn ${favClass}" type="button">Favori</button>
+      </div>
+      <div class="card-info">
+        <div class="card-title">${escapeHtml(item.title)}</div>
+        <div class="card-meta">${escapeHtml(item.category_name)}</div>
+      </div>
+    `;
+
+    bindCardEvents(card, item);
+    fragment.appendChild(card);
+  });
+
+  grid.appendChild(fragment);
+  $("catalogCount").textContent = `${collection.length} elements (${grid.children.length} affiches)`;
 }
 
-let intersectionObserver = null;
-function setupInfiniteScroll(){
-  if(!intersectionObserver){
-    intersectionObserver = new IntersectionObserver((entries) => {
-      if(entries[0].isIntersecting) loadMoreItems();
-    }, { rootMargin: `${PAGINATION_CONFIG.preloadThreshold}px` });
+function bindCardEvents(card, item){
+  const favBtn = card.querySelector(".fav-btn");
+  if(favBtn){
+    favBtn.onclick = (e) => {
+      e.stopPropagation();
+      toggleFavorite(item);
+    };
   }
-  const sentinel = $("gridSentinel");
-  if(sentinel) intersectionObserver.observe(sentinel);
+
+  card.onclick = () => {
+    if(item.type === "series"){
+      state.selectedSeries = item;
+      renderSeriesPanel();
+    } else {
+      playNativeDirectly(item);
+    }
+  };
 }
 
 function render(){
-  setActiveNav(state.type);
-  buildCategorySelect();
-  if($("qualitySelect")) $("qualitySelect").value = state.filters.quality;
-  if($("sortSelect")) $("sortSelect").value = state.filters.sort;
-
   const collection = currentCollection();
-  if($("catalogCount")) $("catalogCount").textContent = `${collection.length} elements (${state.displayedItems[state.type]} affichés)`;
-  if($("statCount")) $("statCount").textContent = `${state.items[state.type].length} elements`;
-  if($("statSource")) $("statSource").textContent = `source : ${state.sourceUsed[state.type]}`;
+  
+  // Update Hero
+  $("heroTitle").textContent = TYPE_LABELS[state.type] || "PIPSIFLIX";
+  $("statType").textContent = TYPE_LABELS[state.type];
+  $("statCount").textContent = `${collection.length} elements`;
+  $("statSource").textContent = `source : ${state.sourceUsed[state.type] || "locale"}`;
 
-  state.displayedItems[state.type] = PAGINATION_CONFIG.itemsPerPage;
+  // Update Filters
+  const cats = [...new Set(state.items[state.type].map(x => x.category_name))].sort();
+  const catSelect = $("categorySelect");
+  const currentCat = state.filters.category;
+  catSelect.innerHTML = `<option value="">Toutes les sections</option>` + cats.map(c => `<option value="${escapeHtml(c)}" ${c === currentCat ? "selected" : ""}>${escapeHtml(c)}</option>`).join("");
+
   renderGrid();
-  renderSeriesPanel();
-}
-
-function findItemByKey(key){
-  const all = [...state.items.live, ...state.items.vod, ...state.items.series];
-  return all.find(x => itemKey(x) === key);
 }
 
 function playNativeDirectly(item){
@@ -575,63 +447,87 @@ function playNativeDirectly(item){
   }
 }
 
-function openItem(item){
-  pushHistory(item);
-  if(!(item.stream_url || item.url)){
-    alert("Aucune URL de lecture.");
-    return;
-  }
-  sessionStorage.setItem("iptv_current_item", JSON.stringify(item));
-  location.href = "player.html";
-}
-
 async function boot(){
-  state.bootStatus = "Chargement...";
-  const [live, vod, series] = await Promise.all([loadType("live"), loadType("vod"), loadType("series")]);
-  state.items.live = live;
-  state.items.vod = vod;
-  state.items.series = series;
-  state.bootStatus = "Pret.";
+  document.querySelectorAll(".nav-btn").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.type = btn.dataset.type;
+      state.filters.category = "";
+      state.displayedItems[state.type] = PAGINATION_CONFIG.itemsPerPage;
+      render();
+    };
+  });
+
+  $("categorySelect").onchange = (e) => {
+    state.filters.category = e.target.value;
+    state.displayedItems[state.type] = PAGINATION_CONFIG.itemsPerPage;
+    render();
+  };
+
+  $("searchInput").oninput = (e) => {
+    state.filters.search = e.target.value;
+    state.displayedItems[state.type] = PAGINATION_CONFIG.itemsPerPage;
+    render();
+  };
+
+  $("qualitySelect").onchange = (e) => {
+    state.filters.quality = e.target.value;
+    state.displayedItems[state.type] = PAGINATION_CONFIG.itemsPerPage;
+    render();
+  };
+
+  $("sortSelect").onchange = (e) => {
+    state.filters.sort = e.target.value;
+    state.displayedItems[state.type] = PAGINATION_CONFIG.itemsPerPage;
+    render();
+  };
+
+  // Intersection Observer pour le chargement infini
+  const observer = new IntersectionObserver((entries) => {
+    if(entries[0].isIntersecting) loadMoreItems();
+  }, { rootMargin: "200px" });
+  
+  const sentinel = $("gridSentinel");
+  if(sentinel) observer.observe(sentinel);
+
+  // Chargement des données
+  const vodData = await safeFetchJson("vod.json");
+  if(vodData){
+    state.items.vod = normalizeItems(extractJsonItems(vodData), "vod");
+    state.sourceUsed.vod = "vod.json";
+  } else {
+    const vodM3u = await safeFetchText("vod.m3u");
+    if(vodM3u){
+      state.items.vod = parseM3U(vodM3u, "vod");
+      state.sourceUsed.vod = "vod.m3u";
+    }
+  }
+
+  const seriesData = await safeFetchJson("series.json");
+  if(seriesData){
+    state.items.series = normalizeItems(extractJsonItems(seriesData), "series");
+    state.sourceUsed.series = "series.json";
+    
+    // Enrichir avec series_catalog si présent
+    const catalog = await safeFetchJson("series_catalog.json");
+    if(catalog){
+      const catItems = normalizeItems(extractJsonItems(catalog), "series");
+      catItems.forEach(c => {
+        const target = state.items.series.find(s => s.title === c.title);
+        if(target){
+          if(Object.keys(c.episodes || {}).length > Object.keys(target.episodes || {}).length){
+            target.episodes = c.episodes;
+          }
+          if(c.plot && !target.plot) target.plot = c.plot;
+        }
+      });
+    }
+  }
+
+  state.displayedItems.vod = PAGINATION_CONFIG.itemsPerPage;
+  state.displayedItems.series = PAGINATION_CONFIG.itemsPerPage;
   render();
 }
 
-document.querySelectorAll(".nav-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    state.type = btn.dataset.type;
-    state.filters.category = "";
-    state.filters.search = "";
-    if($("searchInput")) $("searchInput").value = "";
-    render();
-  });
-});
-
-if($("categorySelect")) $("categorySelect").onchange = e => { state.filters.category = e.target.value; render(); };
-if($("searchInput")) $("searchInput").oninput = e => { state.filters.search = e.target.value; render(); };
-if($("qualitySelect")) $("qualitySelect").onchange = e => { state.filters.quality = e.target.value; render(); };
-if($("sortSelect")) $("sortSelect").onchange = e => { state.filters.sort = e.target.value; render(); };
-
-// NOUVEAU : Navigation au clavier pour Google TV et Android
-let focusedCardIndex = 0;
-function focusCard(index){
-  const cards = document.querySelectorAll(".card");
-  if(cards.length === 0) return;
-  if(index < 0) index = 0;
-  if(index >= cards.length) index = cards.length - 1;
-  focusedCardIndex = index;
-  cards[index].focus();
-  cards[index].scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-document.addEventListener("keydown", e => {
-  const key = e.key.toLowerCase();
-  if(key === "arrowright") focusCard(focusedCardIndex + 1);
-  else if(key === "arrowleft") focusCard(focusedCardIndex - 1);
-  else if(key === "arrowdown") focusCard(focusedCardIndex + 4);
-  else if(key === "arrowup") focusCard(focusedCardIndex - 4);
-  else if(key === "enter") {
-    const focused = document.activeElement;
-    if(focused && focused.classList.contains("card")) focused.click();
-  }
-});
-
-boot();
+window.onload = boot;
