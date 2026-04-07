@@ -1,4 +1,4 @@
-const CACHE_NAME = "pipsiflix-shell-v15";
+const CACHE_NAME = "pipsiflix-shell-v16";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -14,7 +14,9 @@ const APP_SHELL = [
 
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
+    caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))).then(() =>
+      caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
+    )
   );
 });
 
