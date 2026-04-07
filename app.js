@@ -20,7 +20,7 @@ const state = {
   items: { live: [], vod: [], series: [] },
   sourceUsed: { live: "", vod: "", series: "" },
   filters: { category: "", search: "", quality: "", sort: "title" },
-  bootStatus: "Chargement des flux live, films et series...",
+  bootStatus: "Chargement des flux...",
   localFiles: {},
   sourceFolderName: "",
   selectedSeries: null,
@@ -52,30 +52,30 @@ function itemKey(item){
 }
 
 /**
- * CORRECTION : Nettoyer les titres des préfixes "FR -", "SRS |", et autres balises
+ * NETTOYAGE ROBUSTE DES TITRES ET CATÉGORIES
  */
 function cleanTitle(title){
-  if(!title) return "Sans titre";
+  if(!title) return "";
   
   let cleaned = String(title);
   
-  // Supprimer les préfixes courants
-  cleaned = cleaned.replace(/^(FR\s*[-|]|SRS\s*[-|]|EN\s*[-|])\s*/i, "");
+  // Supprimer les préfixes techniques IPTV courants
+  cleaned = cleaned.replace(/^(FR\s*[-|:]|SRS\s*[-|:]|EN\s*[-|:]|VOD\s*[-|:]|SERIE\s*[-|:])\s*/i, "");
   
-  // Supprimer les balises de groupe-title et autres métadonnées
+  // Supprimer les balises group-title et autres
   cleaned = cleaned.replace(/\s*group-title\s*=\s*"[^"]*"/gi, "");
   cleaned = cleaned.replace(/\s*tvg-logo\s*=\s*"[^"]*"/gi, "");
   
-  // Supprimer les extensions de fichier en fin
+  // Supprimer les extensions
   cleaned = cleaned.replace(/\.(mkv|mp4|ts|m3u8|avi|mov)$/i, "");
   
-  // Supprimer les numéros de fichier entre parenthèses
+  // Supprimer les numéros de fichier (1), (2)...
   cleaned = cleaned.replace(/\s*\(\d+\)\s*$/g, "");
   
-  // Nettoyer les espaces multiples
+  // Nettoyer les espaces
   cleaned = cleaned.replace(/\s+/g, " ").trim();
   
-  return cleaned || "Sans titre";
+  return cleaned;
 }
 
 function toggleFavorite(item){
@@ -128,11 +128,9 @@ function normalizeItems(arr, type){
   }));
 }
 
-/**
- * CORRECTION : Fusionner les épisodes en profondeur pour ne rien perdre
- */
 function mergeSeriesDetails(baseItems, detailItems){
-  if(!baseItems.length || !detailItems.length) return baseItems;
+  if(!baseItems.length) return detailItems;
+  if(!detailItems.length) return baseItems;
 
   const byId = new Map();
   const byTitle = new Map();
@@ -146,14 +144,12 @@ function mergeSeriesDetails(baseItems, detailItems){
     const match = byId.get(String(item.id)) || byTitle.get(String(item.title || "").toLowerCase());
     if(!match) return item;
     
-    // CORRECTION : Fusionner les épisodes en profondeur
     let mergedEpisodes = { ...item.episodes };
     if(match.episodes && typeof match.episodes === "object"){
       for(const season in match.episodes){
         if(!mergedEpisodes[season]){
           mergedEpisodes[season] = match.episodes[season];
         } else if(Array.isArray(mergedEpisodes[season]) && Array.isArray(match.episodes[season])){
-          // Fusionner les deux tableaux d'épisodes sans doublons
           const existing = new Set(mergedEpisodes[season].map(ep => ep.id));
           const newEps = match.episodes[season].filter(ep => !existing.has(ep.id));
           mergedEpisodes[season] = [...mergedEpisodes[season], ...newEps];
@@ -217,84 +213,13 @@ function extractJsonItems(rawJson){
   return [];
 }
 
-function baseFileName(path){
-  return String(path || "").split("/").pop().toLowerCase();
-}
-
-async function readLocalConfiguredText(path){
-  const file = state.localFiles[baseFileName(path)];
-  if(!file) return "";
-  try{
-    return await file.text();
-  }catch{
-    return "";
-  }
-}
-
-function updateSourceFolderLabel(){
-  const label = $("sourceFolderLabel");
-  if(!label) return;
-  label.textContent = state.sourceFolderName
-    ? `Source active : ${state.sourceFolderName}`
-    : "Source active : racine du projet";
-}
-
-async function setLocalFolderFiles(fileList){
-  const files = Array.from(fileList || []);
-  const next = {};
-  for(const file of files){
-    next[file.name.toLowerCase()] = file;
-  }
-  state.localFiles = next;
-
-  if(files.length){
-    const firstPath = files[0].webkitRelativePath || "";
-    const folderName = firstPath ? firstPath.split("/")[0] : "dossier local";
-    state.sourceFolderName = folderName;
-    state.bootStatus = `Dossier local selectionne : ${folderName}.`;
-  }else{
-    state.sourceFolderName = "";
-  }
-
-  updateSourceFolderLabel();
-  await boot();
-}
-
-async function pickSourceFolder(){
-  if(window.showDirectoryPicker){
-    try{
-      const handle = await window.showDirectoryPicker();
-      const files = [];
-      for await (const entry of handle.values()){
-        if(entry.kind !== "file") continue;
-        const file = await entry.getFile();
-        files.push(file);
-      }
-      await setLocalFolderFiles(files);
-      return;
-    }catch{
-      return;
-    }
-  }
-
-  const input = $("folderFilesInput");
-  if(input) input.click();
-}
-
-async function resetSourceFolder(){
-  state.localFiles = {};
-  state.sourceFolderName = "";
-  updateSourceFolderLabel();
-  await boot();
-}
-
 async function safeFetchText(path){
   try{
     const response = await fetch(path, { cache: "no-store" });
     if(!response.ok) return "";
     return await response.text();
   }catch{
-    return await readLocalConfiguredText(path);
+    return "";
   }
 }
 
@@ -304,97 +229,44 @@ async function safeFetchJson(path){
     if(!response.ok) return null;
     return await response.json();
   }catch{
-    const text = await readLocalConfiguredText(path);
-    if(!text) return null;
-    try{
-      return JSON.parse(text);
-    }catch{
-      return null;
-    }
+    return null;
   }
-}
-
-async function loadShardedCatalog(type){
-  const indexName = `${type}_catalog_index.json`;
-  const indexJson = await safeFetchJson(indexName);
-  const parts = indexJson && Array.isArray(indexJson.parts) ? indexJson.parts : [];
-  if(!parts.length) return [];
-
-  const merged = [];
-  for(const part of parts){
-    const json = await safeFetchJson(part);
-    const extracted = extractJsonItems(json);
-    if(extracted.length) merged.push(...extracted);
-    else if(Array.isArray(json)) merged.push(...json);
-  }
-
-  return merged;
 }
 
 async function loadType(type){
-  const preferM3u = type !== "series";
   let finalItems = [];
 
+  // CORRECTION : Priorité absolue aux fichiers .json complets
+  const rawJson = await safeFetchJson(`${type}.json`);
+  const extracted = extractJsonItems(rawJson);
+  if(extracted.length){
+    state.sourceUsed[type] = `${type}.json`;
+    finalItems = normalizeItems(extracted, type);
+  }
+
+  // Pour les séries, essayer de fusionner avec le catalogue si disponible
   if(type === "series"){
-    // CORRECTION : Charger TOUTES les sources et les fusionner complètement
     const catalogJson = await safeFetchJson("series_catalog.json");
     const catalogItems = extractJsonItems(catalogJson);
     if(catalogItems.length){
-      state.sourceUsed[type] = "series_catalog.json";
-      finalItems = normalizeItems(catalogItems, type);
-    } else {
-      const sharded = await loadShardedCatalog("series");
-      if(sharded.length){
-        state.sourceUsed[type] = "series_catalog_index.json";
-        finalItems = normalizeItems(sharded, type);
-      }
+      const normalizedCatalog = normalizeItems(catalogItems, type);
+      finalItems = mergeSeriesDetails(finalItems, normalizedCatalog);
     }
-    
-    // Fusionner avec series.json pour avoir les IDs Xtream et autres données
-    const baseJson = await safeFetchJson("series.json");
-    const baseItems = extractJsonItems(baseJson);
-    if(baseItems.length){
-      if(!finalItems.length){
-        state.sourceUsed[type] = "series.json";
-        finalItems = normalizeItems(baseItems, type);
-      } else {
-        finalItems = mergeSeriesDetails(finalItems, normalizeItems(baseItems, type));
-      }
-    }
-    
-    if(finalItems.length) return finalItems;
   }
 
-  if(preferM3u){
+  // Fallback M3U si toujours rien
+  if(!finalItems.length){
     const m3uText = await safeFetchText(`${type}.m3u`);
     if(m3uText){
       const parsedM3u = parseM3U(m3uText, type);
       if(parsedM3u.length){
         state.sourceUsed[type] = `${type}.m3u`;
-        return normalizeItems(parsedM3u, type);
+        finalItems = normalizeItems(parsedM3u, type);
       }
     }
   }
 
-  const rawJson = await safeFetchJson(`${type}.json`);
-  const extracted = extractJsonItems(rawJson);
-  if(extracted.length){
-    state.sourceUsed[type] = `${type}.json`;
-    return normalizeItems(extracted, type);
-  }
-
-  const catalogJson = await safeFetchJson(`${type}_catalog.json`);
-  const catalogItems = extractJsonItems(catalogJson);
-  if(catalogItems.length){
-    state.sourceUsed[type] = `${type}_catalog.json`;
-    return normalizeItems(catalogItems, type);
-  }
-
-  const sharded = await loadShardedCatalog(type);
-  if(sharded.length){
-    state.sourceUsed[type] = `${type}_catalog_index.json`;
-    return normalizeItems(sharded, type);
-  }
+  if(finalItems.length) return finalItems;
 
   state.sourceUsed[type] = "aucune";
   return [];
@@ -409,11 +281,14 @@ function setActiveNav(type){
 function buildCategorySelect(){
   const select = $("categorySelect");
   if(!select) return;
+  
+  // CORRECTION : S'assurer que les noms de catégories sont nettoyés dans le sélecteur
   const categories = [...new Set(state.items[state.type].map(x => x.category_name).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
 
   select.innerHTML = '<option value="">Toutes les sections</option>' +
     categories.map(category => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
+  
   if(state.filters.category && !categories.includes(state.filters.category)){
     state.filters.category = "";
   }
@@ -456,7 +331,7 @@ function groupedByQuality(items){
   const groups = new Map(order.map(label => [label, []]));
 
   for(const item of items){
-    const quality = item.quality || inferQuality(`${item.title || ""} ${item.category_name || ""}`);
+    const quality = item.quality || "Autres";
     if(!groups.has(quality)) groups.set(quality, []);
     groups.get(quality).push(item);
   }
@@ -466,34 +341,25 @@ function groupedByQuality(items){
     .filter(group => group.items.length);
 }
 
-function cardTemplate(item, compact=false){
+function cardTemplate(item){
   const fav = isFavorite(item);
-  const meta = item.category_name || "";
   const poster = escapeHtml(item.stream_icon || "");
   const typeLabel = item.type === "vod" ? "Film" : item.type === "series" ? "Series" : "Live";
   const posterClass = item.type === "live" ? "poster poster--logo" : "poster";
-  const cardClass = compact ? "card card--compact" : "card";
-  const wrapClass = compact ? "poster-wrap poster-wrap--compact" : "poster-wrap";
-  const badgesClass = compact ? "badges badges--compact" : "badges";
-  const badgeClass = compact ? "badge badge--compact" : "badge";
-  const favClass = compact ? "fav-btn fav-btn--compact" : "fav-btn";
-  const bodyClass = compact ? "card-body card-body--compact" : "card-body";
-  const titleClass = compact ? "card-title card-title--compact" : "card-title";
-  const metaClass = compact ? "card-meta card-meta--compact" : "card-meta";
 
   return `
-    <article class="${cardClass}" data-key="${escapeHtml(itemKey(item))}">
-      <div class="${wrapClass}">
+    <article class="card" data-key="${escapeHtml(itemKey(item))}">
+      <div class="poster-wrap">
         <img class="${posterClass}" src="${poster}" alt="${escapeHtml(item.title)}" loading="lazy" onerror="this.style.visibility='hidden'">
-        <div class="${badgesClass}">
-          <span class="${badgeClass}">${escapeHtml(typeLabel)}</span>
-          <span class="${badgeClass}">${escapeHtml(item.quality || "Autres")}</span>
+        <div class="badges">
+          <span class="badge">${escapeHtml(typeLabel)}</span>
+          <span class="badge">${escapeHtml(item.quality || "Autres")}</span>
         </div>
-        <button class="${favClass}" data-fav="${escapeHtml(itemKey(item))}" type="button">${fav ? "Retirer" : "Favori"}</button>
+        <button class="fav-btn" data-fav="${escapeHtml(itemKey(item))}" type="button">${fav ? "Retirer" : "Favori"}</button>
       </div>
-      <div class="${bodyClass}">
-        <div class="${titleClass}">${escapeHtml(item.title)}</div>
-        <div class="${metaClass}">${escapeHtml(meta)}</div>
+      <div class="card-body">
+        <div class="card-title">${escapeHtml(item.title)}</div>
+        <div class="card-meta">${escapeHtml(item.category_name)}</div>
       </div>
     </article>
   `;
@@ -501,17 +367,13 @@ function cardTemplate(item, compact=false){
 
 function bindCardEvents(scope){
   if(!scope) return;
-
   scope.querySelectorAll(".card").forEach(el => {
-    const item = findItemByKey(el.dataset.key);
-    if(!item) return;
     el.addEventListener("click", e => {
       if(e.target.closest(".fav-btn")) return;
-      if(item.type === "series"){
-        openSeriesPanel(item);
-      }else{
-        openItem(item);
-      }
+      const item = findItemByKey(el.dataset.key);
+      if(!item) return;
+      if(item.type === "series") openSeriesPanel(item);
+      else openItem(item);
     });
   });
 
@@ -565,9 +427,9 @@ function renderSeriesPanel(){
 
   const seasonsMap = series.episodes && typeof series.episodes === "object" ? series.episodes : {};
   const seasonKeys = Object.keys(seasonsMap).sort((a, b) => Number(a) - Number(b));
-  const poster = escapeHtml(series.stream_icon || series.image || "");
+  const poster = escapeHtml(series.stream_icon || "");
   const metaBits = [
-    series.category_name || series.category || "",
+    series.category_name || "",
     seasonKeys.length ? `${seasonKeys.length} saison${seasonKeys.length > 1 ? "s" : ""}` : ""
   ].filter(Boolean).join(" • ");
 
@@ -582,78 +444,60 @@ function renderSeriesPanel(){
     return `
       <div class="season-block">
         <div class="season-title">Saison ${escapeHtml(season)}</div>
-        <div class="episode-list">
-          ${epsHtml || "<div class='episode-empty'>Aucun episode detecte pour cette saison.</div>"}
-        </div>
+        <div class="episode-list">${epsHtml || "<div class='episode-empty'>Aucun episode.</div>"}</div>
       </div>
     `;
   }).join("");
 
-  const noEpisodes = !seasonKeys.length;
   const directUrl = series.stream_url || series.url || "";
 
   panel.innerHTML = `
     <div class="series-panel__header">
       <div class="series-panel__titleblock">
         <div class="series-kicker">Series</div>
-        <h3>${escapeHtml(series.title || "Sans titre")}</h3>
+        <h3>${escapeHtml(series.title)}</h3>
         <div class="series-meta">${escapeHtml(metaBits)}</div>
       </div>
       <button id="seriesCloseBtn" class="series-close" type="button">Fermer</button>
     </div>
     <div class="series-panel__body">
       <div class="series-hero">
-        ${poster ? `<img class="series-cover" src="${poster}" alt="${escapeHtml(series.title || "")}" loading="lazy">` : ""}
+        ${poster ? `<img class="series-cover" src="${poster}" alt="${escapeHtml(series.title)}" loading="lazy">` : ""}
         <p class="series-plot">${escapeHtml(series.plot || "Aucun synopsis disponible.")}</p>
       </div>
-      ${seasonsHtml || "<div class='episode-empty'>Aucune saison trouvee dans cette serie.</div>"}
-      ${noEpisodes && directUrl ? `<button id="seriesPlayDirect" class="episode-btn" type="button"><span class="episode-code">Lire</span><span class="episode-title">Lire le flux direct</span></button>` : ""}
+      ${seasonsHtml || (directUrl ? `<button id="seriesPlayDirect" class="episode-btn" type="button"><span class="episode-code">Lire</span><span class="episode-title">Lire le flux direct</span></button>` : "<div class='episode-empty'>Aucune saison trouvee.</div>")}
     </div>
   `;
 
   panel.hidden = false;
-
   panel.querySelectorAll(".episode-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const season = btn.dataset.season;
       const idx = Number(btn.dataset.idx);
-      const episodes = Array.isArray(seasonsMap[season]) ? seasonsMap[season] : [];
-      const episode = episodes[idx];
+      const episode = (seasonsMap[season] || [])[idx];
       if(episode) openSeriesEpisode(series, episode, season);
     });
   });
-
-  const closeBtn = $("seriesCloseBtn");
-  if(closeBtn){
-    closeBtn.addEventListener("click", closeSeriesPanel);
-  }
-
-  const playDirect = $("seriesPlayDirect");
-  if(playDirect){
-    playDirect.addEventListener("click", () => openItem(series));
-  }
+  if($("seriesCloseBtn")) $("seriesCloseBtn").onclick = closeSeriesPanel;
+  if($("seriesPlayDirect")) $("seriesPlayDirect").onclick = () => openItem(series);
 }
 
 function loadMoreItems(){
   if(state.isLoadingMore) return;
-  
   state.isLoadingMore = true;
   const collection = currentCollection();
   const currentCount = state.displayedItems[state.type];
   const nextCount = Math.min(currentCount + PAGINATION_CONFIG.itemsPerPage, collection.length);
-  
   if(nextCount > currentCount){
     state.displayedItems[state.type] = nextCount;
     renderGrid();
   }
-  
   state.isLoadingMore = false;
 }
 
 function renderGrid(){
   const grid = $("grid");
   const empty = $("emptyState");
-  
   if(!grid) return;
   
   const collection = currentCollection();
@@ -668,18 +512,12 @@ function renderGrid(){
           <h3 class="quality-title">${escapeHtml(group.label)}</h3>
           <span class="quality-count">${group.items.length} flux</span>
         </div>
-        <div class="quality-grid">
-          ${group.items.map(item => cardTemplate(item, false)).join("")}
-        </div>
+        <div class="quality-grid">${group.items.map(item => cardTemplate(item)).join("")}</div>
       </section>
     `).join("");
-    
     if(empty) empty.hidden = true;
     bindCardEvents(grid);
-    
-    if(displayCount < collection.length){
-      setupInfiniteScroll();
-    }
+    setupInfiniteScroll();
   }else{
     grid.innerHTML = "";
     if(empty) empty.hidden = false;
@@ -687,64 +525,26 @@ function renderGrid(){
 }
 
 let intersectionObserver = null;
-
 function setupInfiniteScroll(){
   if(!intersectionObserver){
     intersectionObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if(entry.isIntersecting){
-          loadMoreItems();
-        }
-      });
+      if(entries[0].isIntersecting) loadMoreItems();
     }, { rootMargin: `${PAGINATION_CONFIG.preloadThreshold}px` });
   }
-  
   const sentinel = $("gridSentinel");
-  if(sentinel){
-    intersectionObserver.observe(sentinel);
-  }
+  if(sentinel) intersectionObserver.observe(sentinel);
 }
 
 function render(){
   setActiveNav(state.type);
   buildCategorySelect();
-  updateSourceFolderLabel();
-
-  if(state.type !== "series"){
-    state.selectedSeries = null;
-  }
-
-  const availableQualities = new Set(state.items[state.type].map(item => item.quality || "Autres"));
-  if(state.filters.quality && !availableQualities.has(state.filters.quality)){
-    state.filters.quality = "";
-  }
   if($("qualitySelect")) $("qualitySelect").value = state.filters.quality;
   if($("sortSelect")) $("sortSelect").value = state.filters.sort;
 
-  const featured = state.items[state.type][0] || null;
-  const hTitle = $("heroTitle");
-  if(hTitle) hTitle.textContent = TYPE_LABELS[state.type];
-  
-  const hSubtitle = $("heroSubtitle");
-  if(hSubtitle) hSubtitle.textContent = featured
-    ? [featured.category_name || "", featured.plot || "", state.bootStatus].filter(Boolean).join(" • ").slice(0, 220)
-    : state.bootStatus;
-    
-  const sType = $("statType");
-  if(sType) sType.textContent = TYPE_LABELS[state.type];
-  
-  const sCount = $("statCount");
-  if(sCount) sCount.textContent = `${state.items[state.type].length} elements`;
-  
-  const sSource = $("statSource");
-  if(sSource) sSource.textContent = `source : ${state.sourceUsed[state.type] || "aucune"}`;
-  
-  const cTitle = $("catalogTitle");
-  if(cTitle) cTitle.textContent = `Catalogue ${TYPE_LABELS[state.type]}`;
-
   const collection = currentCollection();
-  const cCount = $("catalogCount");
-  if(cCount) cCount.textContent = `${collection.length} elements (${state.displayedItems[state.type]} affichés)`;
+  if($("catalogCount")) $("catalogCount").textContent = `${collection.length} elements (${state.displayedItems[state.type]} affichés)`;
+  if($("statCount")) $("statCount").textContent = `${state.items[state.type].length} elements`;
+  if($("statSource")) $("statSource").textContent = `source : ${state.sourceUsed[state.type]}`;
 
   state.displayedItems[state.type] = PAGINATION_CONFIG.itemsPerPage;
   renderGrid();
@@ -752,54 +552,27 @@ function render(){
 }
 
 function findItemByKey(key){
-  const all = [
-    ...state.items.live,
-    ...state.items.vod,
-    ...state.items.series,
-    ...getHistory().map(x => x.item),
-    ...getProgress().map(x => x.item),
-    ...getFavorites().map(x => x.item)
-  ];
-
+  const all = [...state.items.live, ...state.items.vod, ...state.items.series];
   return all.find(x => itemKey(x) === key);
 }
 
 function openItem(item){
   pushHistory(item);
-
-  const directUrl = item.stream_url || item.url || "";
-  if(!directUrl){
-    alert("Aucune URL de lecture disponible pour cet élément.");
+  if(!(item.stream_url || item.url)){
+    alert("Aucune URL de lecture.");
     return;
   }
-
   sessionStorage.setItem("iptv_current_item", JSON.stringify(item));
   location.href = "player.html";
 }
 
 async function boot(){
-  state.bootStatus = "Chargement des flux live, films et series...";
-  render();
-
-  const [liveItems, vodItems, seriesItems] = await Promise.all([
-    loadType("live"),
-    loadType("vod"),
-    loadType("series")
-  ]);
-
-  state.items.live = liveItems;
-  state.items.vod = vodItems;
-  state.items.series = seriesItems;
-
-  const loadedCount = ["live", "vod", "series"].filter(type => state.items[type].length > 0).length;
-  if(loadedCount === 3){
-    state.bootStatus = "Les trois flux ont ete charges automatiquement a l'ouverture.";
-  }else if(loadedCount > 0){
-    state.bootStatus = "Une partie des flux a ete chargee. Verifiez les fichiers live.json, vod.json, series.json ou leurs .m3u a la racine.";
-  }else{
-    state.bootStatus = "Aucun flux charge. Placez live.json ou live.m3u, vod.json ou vod.m3u, et series.json, series_catalog.json ou series.m3u a la racine.";
-  }
-
+  state.bootStatus = "Chargement...";
+  const [live, vod, series] = await Promise.all([loadType("live"), loadType("vod"), loadType("series")]);
+  state.items.live = live;
+  state.items.vod = vod;
+  state.items.series = series;
+  state.bootStatus = "Pret.";
   render();
 }
 
@@ -808,83 +581,14 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     state.type = btn.dataset.type;
     state.filters.category = "";
     state.filters.search = "";
-    state.filters.quality = "";
-    const sInput = $("searchInput");
-    if(sInput) sInput.value = "";
-    const qSelect = $("qualitySelect");
-    if(qSelect) qSelect.value = "";
+    if($("searchInput")) $("searchInput").value = "";
     render();
   });
 });
 
-const catSelect = $("categorySelect");
-if(catSelect) {
-  catSelect.addEventListener("change", e => {
-    state.filters.category = e.target.value;
-    render();
-  });
-}
+if($("categorySelect")) $("categorySelect").onchange = e => { state.filters.category = e.target.value; render(); };
+if($("searchInput")) $("searchInput").oninput = e => { state.filters.search = e.target.value; render(); };
+if($("qualitySelect")) $("qualitySelect").onchange = e => { state.filters.quality = e.target.value; render(); };
+if($("sortSelect")) $("sortSelect").onchange = e => { state.filters.sort = e.target.value; render(); };
 
-const sInput = $("searchInput");
-if(sInput) {
-  sInput.addEventListener("input", e => {
-    state.filters.search = e.target.value;
-    render();
-  });
-}
-
-const qSelect = $("qualitySelect");
-if(qSelect) {
-  qSelect.addEventListener("change", e => {
-    state.filters.quality = e.target.value;
-    render();
-  });
-}
-
-const sSelect = $("sortSelect");
-if(sSelect) {
-  sSelect.addEventListener("change", e => {
-    state.filters.sort = e.target.value;
-    render();
-  });
-}
-
-const pickBtn = $("pickFolderBtn");
-if(pickBtn) pickBtn.addEventListener("click", pickSourceFolder);
-
-const resetBtn = $("resetFolderBtn");
-if(resetBtn) resetBtn.addEventListener("click", resetSourceFolder);
-
-const folderInput = $("folderFilesInput");
-if(folderInput) {
-  folderInput.addEventListener("change", async e => {
-    await setLocalFolderFiles(e.target.files);
-    e.target.value = "";
-  });
-}
-
-const filtersToggle = $("filtersToggle");
-const filtersPanel = $("filtersPanel");
-if(filtersToggle && filtersPanel){
-  const updateToggleLabel = () => {
-    filtersToggle.textContent = filtersPanel.classList.contains("open") ? "Filtres ▴" : "Filtres ▾";
-  };
-  const isMobile = () => window.innerWidth <= 700;
-  if(!isMobile()) filtersPanel.classList.add("open");
-  filtersToggle.addEventListener("click", () => {
-    filtersPanel.classList.toggle("open");
-    updateToggleLabel();
-  });
-  window.addEventListener("resize", () => {
-    if(!isMobile()){
-      filtersPanel.classList.add("open");
-    }else{
-      filtersPanel.classList.remove("open");
-    }
-    updateToggleLabel();
-  });
-  updateToggleLabel();
-}
-
-updateSourceFolderLabel();
 boot();
