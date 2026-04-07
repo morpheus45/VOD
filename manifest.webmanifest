@@ -1,82 +1,37 @@
 {
   "name": "PIPSIFLIX - Lecteur IPTV",
   "short_name": "PIPSIFLIX",
-  "description": "PIPSIFLIX : interface IPTV rapide et fluide pour flux live, films et séries. Optimisé pour Android et Google TV.",
-  "start_url": "./",
+  "description": "Lecteur IPTV pour flux live, films et séries",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#060b16",
   "theme_color": "#0f172a",
-  "orientation": "landscape",
-  "prefer_related_applications": false,
-  "categories": ["entertainment", "video"],
-  "screenshots": [
-    {
-      "src": "icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "form_factor": "narrow"
-    },
-    {
-      "src": "icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "wide"
-    }
-  ],
+  "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "icons/icon-192.png",
+      "src": "./icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "icons/icon-512.png",
+      "src": "./icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Films",
-      "short_name": "Films",
-      "description": "Accéder directement aux films",
-      "url": "./?type=vod",
-      "icons": [
-        {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
+      "purpose": "any"
     },
     {
-      "name": "Séries",
-      "short_name": "Séries",
-      "description": "Accéder directement aux séries",
-      "url": "./?type=series",
-      "icons": [
-        {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
-      "name": "Live",
-      "short_name": "Live",
-      "description": "Accéder directement aux chaînes live",
-      "url": "./?type=live",
-      "icons": [
-        {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
