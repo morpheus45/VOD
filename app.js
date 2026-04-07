@@ -351,7 +351,8 @@ function bindCardEvents(scope){
       if(e.target.closest(".fav-btn")) return;
       const item = findItemByKey(el.dataset.key);
       if(!item) return;
-      openItem(item);
+      if(item.type === "series") openSeriesPanel(item);
+      else playNativeDirectly(item);
     });
   });
 
@@ -561,6 +562,24 @@ function render(){
 function findItemByKey(key){
   const all = [...state.items.live, ...state.items.vod, ...state.items.series];
   return all.find(x => itemKey(x) === key);
+}
+
+function playNativeDirectly(item){
+  if(!(item.stream_url || item.url)){
+    alert("Aucune URL de lecture.");
+    return;
+  }
+  pushHistory(item);
+  const url = item.stream_url || item.url;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  
+  if(isAndroid){
+    const intentUrl = "intent://" + encodeURIComponent(url) + "#Intent;action=android.intent.action.VIEW;type=video/*;end";
+    window.location.href = intentUrl;
+  } else {
+    const vlcUrl = encodeURI("vlc://" + url);
+    window.location.href = vlcUrl;
+  }
 }
 
 function openItem(item){
