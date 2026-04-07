@@ -570,9 +570,13 @@ function playNativeDirectly(item){
     return;
   }
   pushHistory(item);
-  let url = item.stream_url || item.url;
-  url = url.replace(/^(https?:\/\/)/, "");
-  window.location.href = "vlc://" + url;
+  const url = item.stream_url || item.url;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  if(isAndroid){
+    window.location.href = url;
+  } else {
+    window.location.href = "vlc://" + url.replace(/^(https?:\/\/)/, "");
+  }
 }
 
 function openItem(item){
