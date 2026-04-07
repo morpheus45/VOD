@@ -17,7 +17,7 @@ const PAGINATION_CONFIG = {
 };
 
 const state = {
-  type: "live",
+  type: "vod",
   items: { live: [], vod: [], series: [] },
   sourceUsed: { live: "", vod: "", series: "" },
   filters: { category: "", search: "", quality: "", sort: "title" },
@@ -377,9 +377,7 @@ function closeSeriesPanel(){
 
 function openSeriesEpisode(series, episode, seasonLabel){
   if(!series || !episode) return;
-  const { episodes, ...rest } = series;
-  const slim = { ...rest, seasons: series.seasons || [], episodes: {} };
-  const payloadEpisode = {
+  const episodeItem = {
     id: episode.id,
     title: episode.title,
     episode_num: episode.episode_num,
@@ -389,9 +387,7 @@ function openSeriesEpisode(series, episode, seasonLabel){
     container_extension: episode.container_extension,
     info: episode.info || {}
   };
-  slim.selected_episode = payloadEpisode;
-  sessionStorage.setItem("iptv_current_item", JSON.stringify(slim));
-  location.href = "player.html";
+  playNativeDirectly(episodeItem);
 }
 
 async function renderSeriesPanel(){
