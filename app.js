@@ -654,20 +654,23 @@ function findItemByKey(key){
   return all.find(x => itemKey(x) === key);
 }
 
+/**
+ * CORRECTION MAJEURE : Force tous les clics VOD/Live/Séries à passer par le lecteur intégré
+ * au lieu de rediriger directement vers le média. Cela unifie la lecture, active la reprise,
+ * et centralise la gestion des erreurs.
+ */
 function openItem(item){
   pushHistory(item);
 
   const directUrl = item.stream_url || item.url || "";
-  const httpMismatch = location.protocol === "https:" && directUrl.startsWith("http://");
-  if(directUrl){
-    if(httpMismatch){
-      window.open(directUrl, "_blank");
-      return;
-    }
-    location.href = directUrl;
+  if(!directUrl){
+    // Pas d'URL : impossible de lire
+    alert("Aucune URL de lecture disponible pour cet élément.");
     return;
   }
 
+  // CORRECTION : Tous les médias passent maintenant par le lecteur intégré
+  // Cela inclut VOD, Live, et Séries (même ceux avec URL directe)
   sessionStorage.setItem("iptv_current_item", JSON.stringify(item));
   location.href = "player.html";
 }

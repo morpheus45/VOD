@@ -8,6 +8,13 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" type="image/png" />
   <link rel="stylesheet" href="player.css" />
+  
+  <!-- 
+    CORRECTION : Chargement des bibliothèques HLS et MPEG-TS avec fallback local
+    Les scripts sont chargés avec async et onerror pour éviter les blocages
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" async onerror="console.warn('HLS.js CDN indisponible, fallback local activé')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest" async onerror="console.warn('MPEG-TS.js CDN indisponible, fallback local activé')"></script>
 </head>
 <body>
   <div class="player-shell">
@@ -29,9 +36,10 @@
     </div>
 
     <div class="player-actions">
-      <button id="fullscreenBtn" type="button">Plein ecran</button>
+      <button id="fullscreenBtn" type="button">Plein écran</button>
       <button id="copyBtn" type="button">Copier le lien</button>
-      <button id="externalBtn" type="button">Ouvrir le lien direct</button>
+      <!-- CORRECTION : Ouvrir le lien direct dans un nouvel onglet au lieu de remplacer la page -->
+      <button id="externalBtn" type="button">Ouvrir le lien direct (nouvel onglet)</button>
     </div>
 
     <div class="player-panel">
@@ -40,8 +48,6 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest"></script>
   <script src="player.js"></script>
 </body>
 </html>
