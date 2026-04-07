@@ -351,8 +351,7 @@ function bindCardEvents(scope){
       if(e.target.closest(".fav-btn")) return;
       const item = findItemByKey(el.dataset.key);
       if(!item) return;
-      if(item.type === "series") openSeriesPanel(item);
-      else openItem(item);
+      openItem(item);
     });
   });
 
