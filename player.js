@@ -199,6 +199,13 @@ if($("copyBtn")) $("copyBtn").onclick = () => {
   const url = playItem.stream_url || playItem.url;
   if(url){ navigator.clipboard.writeText(url).then(() => alert("Lien copié !")); }
 };
+if($("vlcBtn")) $("vlcBtn").onclick = () => {
+  const playItem = resolvePlaybackItem();
+  const url = playItem.stream_url || playItem.url;
+  if(!url) return;
+  const vlcUrl = encodeURI("vlc://" + url);
+  window.location.href = vlcUrl;
+};
 
 initPlayer();
 window.addEventListener("load", initPlayer);
