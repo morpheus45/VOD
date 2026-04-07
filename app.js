@@ -10,10 +10,9 @@ const TYPE_LABELS = {
   series: "Series"
 };
 
-// OPTIMISATION : Configuration du chargement progressif
 const PAGINATION_CONFIG = {
-  itemsPerPage: 50,  // Nombre d'éléments à charger à la fois
-  preloadThreshold: 200  // Pixels avant la fin pour déclencher le chargement suivant
+  itemsPerPage: 50,
+  preloadThreshold: 200
 };
 
 const state = {
@@ -25,7 +24,6 @@ const state = {
   localFiles: {},
   sourceFolderName: "",
   selectedSeries: null,
-  // OPTIMISATION : Pagination
   displayedItems: { live: 0, vod: 0, series: 0 },
   isLoadingMore: false
 };
@@ -117,12 +115,17 @@ function mergeSeriesDetails(baseItems, detailItems){
   return baseItems.map(item => {
     const match = byId.get(String(item.id)) || byTitle.get(String(item.title || "").toLowerCase());
     if(!match) return item;
+    
+    // CORRECTION : Ne pas écraser les épisodes réels par des placeholders vides
+    const hasRealEpisodes = match.episodes && Object.keys(match.episodes).length > 0;
+    const currentHasEpisodes = item.episodes && Object.keys(item.episodes).length > 0;
+
     return {
       ...item,
       stream_icon: match.stream_icon || item.stream_icon,
       plot: match.plot || item.plot,
-      seasons: Array.isArray(match.seasons) && match.seasons.length ? match.seasons : item.seasons,
-      episodes: match.episodes && Object.keys(match.episodes).length ? match.episodes : item.episodes
+      seasons: (Array.isArray(match.seasons) && match.seasons.length) ? match.seasons : item.seasons,
+      episodes: hasRealEpisodes ? match.episodes : item.episodes
     };
   });
 }
@@ -284,19 +287,41 @@ async function loadShardedCatalog(type){
     else if(Array.isArray(json)) merged.push(...json);
   }
 
-  if(merged.length) state.sourceUsed[type] = indexName;
-  return normalizeItems(merged, type);
+  return merged;
 }
 
 async function loadType(type){
   const preferM3u = type !== "series";
+  let finalItems = [];
 
+  // CORRECTION : Pour les séries, on veut charger les données les plus complètes (catalog) en priorité
   if(type === "series"){
-    const shardedSeries = await loadShardedCatalog(type);
-    if(shardedSeries.length){
-      state.sourceUsed[type] = `${type}_catalog_index.json`;
-      return shardedSeries;
+    const catalogJson = await safeFetchJson("series_catalog.json");
+    const catalogItems = extractJsonItems(catalogJson);
+    if(catalogItems.length){
+      state.sourceUsed[type] = "series_catalog.json";
+      finalItems = normalizeItems(catalogItems, type);
+    } else {
+      const sharded = await loadShardedCatalog("series");
+      if(sharded.length){
+        state.sourceUsed[type] = "series_catalog_index.json";
+        finalItems = normalizeItems(sharded, type);
+      }
     }
+    
+    // Fusionner avec series.json pour avoir les IDs Xtream si manquants
+    const baseJson = await safeFetchJson("series.json");
+    const baseItems = extractJsonItems(baseJson);
+    if(baseItems.length){
+      if(!finalItems.length){
+        state.sourceUsed[type] = "series.json";
+        finalItems = normalizeItems(baseItems, type);
+      } else {
+        finalItems = mergeSeriesDetails(finalItems, normalizeItems(baseItems, type));
+      }
+    }
+    
+    if(finalItems.length) return finalItems;
   }
 
   if(preferM3u){
@@ -316,10 +341,6 @@ async function loadType(type){
     state.sourceUsed[type] = `${type}.json`;
     return normalizeItems(extracted, type);
   }
-  if(Array.isArray(rawJson)){
-    state.sourceUsed[type] = `${type}.json`;
-    return normalizeItems(rawJson, type);
-  }
 
   const catalogJson = await safeFetchJson(`${type}_catalog.json`);
   const catalogItems = extractJsonItems(catalogJson);
@@ -327,26 +348,11 @@ async function loadType(type){
     state.sourceUsed[type] = `${type}_catalog.json`;
     return normalizeItems(catalogItems, type);
   }
-  if(Array.isArray(catalogJson)){
-    state.sourceUsed[type] = `${type}_catalog.json`;
-    return normalizeItems(catalogJson, type);
-  }
 
   const sharded = await loadShardedCatalog(type);
   if(sharded.length){
     state.sourceUsed[type] = `${type}_catalog_index.json`;
-    return sharded;
-  }
-
-  if(!preferM3u){
-    const m3uText = await safeFetchText(`${type}.m3u`);
-    if(m3uText){
-      const parsedM3u = parseM3U(m3uText, type);
-      if(parsedM3u.length){
-        state.sourceUsed[type] = `${type}.m3u`;
-        return normalizeItems(parsedM3u, type);
-      }
-    }
+    return normalizeItems(sharded, type);
   }
 
   state.sourceUsed[type] = "aucune";
@@ -477,10 +483,6 @@ function bindCardEvents(scope){
   });
 }
 
-function renderAuxBlocks(){
-  return;
-}
-
 function openSeriesPanel(item){
   state.selectedSeries = item;
   renderSeriesPanel();
@@ -591,9 +593,6 @@ function renderSeriesPanel(){
   }
 }
 
-/**
- * OPTIMISATION : Charger et afficher les éléments par lots (pagination progressive)
- */
 function loadMoreItems(){
   if(state.isLoadingMore) return;
   
@@ -637,7 +636,6 @@ function renderGrid(){
     if(empty) empty.hidden = true;
     bindCardEvents(grid);
     
-    // Ajouter un observateur pour le chargement infini
     if(displayCount < collection.length){
       setupInfiniteScroll();
     }
@@ -647,9 +645,6 @@ function renderGrid(){
   }
 }
 
-/**
- * OPTIMISATION : Intersection Observer pour détecter quand l'utilisateur approche de la fin
- */
 let intersectionObserver = null;
 
 function setupInfiniteScroll(){
@@ -710,7 +705,6 @@ function render(){
   const cCount = $("catalogCount");
   if(cCount) cCount.textContent = `${collection.length} elements (${state.displayedItems[state.type]} affichés)`;
 
-  // OPTIMISATION : Réinitialiser la pagination quand les filtres changent
   state.displayedItems[state.type] = PAGINATION_CONFIG.itemsPerPage;
   renderGrid();
   renderSeriesPanel();

@@ -1,113 +1,46 @@
+const item = JSON.parse(sessionStorage.getItem("iptv_current_item") || "null");
+
 function $(id){ return document.getElementById(id); }
 
-const item = (() => {
-  try{
-    const raw = sessionStorage.getItem("iptv_current_item");
-    return raw ? JSON.parse(raw) : null;
-  }catch{
-    return null;
-  }
-})();
+function escapeHtml(str){
+  return String(str ?? "").replace(/[&<>"']/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[s]));
+}
 
-const video = $("video");
-let hls = null;
-let mpegtsPlayer = null;
-let progressTick = -1;
-let activePlaybackItem = null;
-
-function readStore(key, fallback){
-  try{
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  }catch{
-    return fallback;
+function getExtension(url){
+  if(!url) return "mp4";
+  try {
+    const path = new URL(url).pathname;
+    const ext = path.split(".").pop().toLowerCase();
+    return ["mp4", "mkv", "ts", "m3u8"].includes(ext) ? ext : "mp4";
+  } catch(e) {
+    const parts = url.split("?")[0].split(".");
+    const ext = parts.length > 1 ? parts.pop().toLowerCase() : "mp4";
+    return ["mp4", "mkv", "ts", "m3u8"].includes(ext) ? ext : "mp4";
   }
 }
 
-function writeStore(key, value){
-  localStorage.setItem(key, JSON.stringify(value));
+function isHls(url){
+  return getExtension(url) === "m3u8" || url.includes(".m3u8") || url.includes("type=m3u8");
 }
 
-function itemKey(entry){
-  return [entry.type || "", entry.title || "", entry.url || entry.stream_url || ""].join("||");
+function isMpegTs(url){
+  return getExtension(url) === "ts" || url.includes(".ts") || url.includes("type=ts");
 }
 
-function getFavorites(){ return readStore("iptv_v2_favorites", []); }
-function setFavorites(value){ writeStore("iptv_v2_favorites", value); }
-function getProgress(){ return readStore("iptv_v2_progress", []); }
-function setProgress(value){ writeStore("iptv_v2_progress", value); }
+let hlsInstance = null;
+let mpegtsInstance = null;
 
-function updateFavoriteUI(){
-  if(!item) return;
-  const exists = getFavorites().some(x => x.key === itemKey(item));
-  $("favBtn").textContent = exists ? "Retirer favori" : "Ajouter favori";
-}
-
-function toggleFavorite(){
-  if(!item) return;
-  const favs = getFavorites();
-  const key = itemKey(item);
-  const idx = favs.findIndex(x => x.key === key);
-  if(idx >= 0) favs.splice(idx, 1);
-  else favs.unshift({ key, item, savedAt: Date.now() });
-  setFavorites(favs.slice(0, 500));
-  updateFavoriteUI();
-}
-
-function saveProgress(){
-  const current = activePlaybackItem || item;
-  if(!current || !video || !isFinite(video.currentTime)) return;
-  const progress = getProgress().filter(x => x.key !== itemKey(current));
-  progress.unshift({ key: itemKey(current), item: current, currentTime: video.currentTime, savedAt: Date.now() });
-  setProgress(progress.slice(0, 300));
-}
-
-function restoreProgress(){
-  const current = activePlaybackItem || item;
-  if(!current) return;
-  const hit = getProgress().find(x => x.key === itemKey(current));
-  if(hit && Number(hit.currentTime) > 5){
-    try{
-      video.currentTime = Number(hit.currentTime);
-    }catch{}
+function destroyPlayers(){
+  if(hlsInstance){
+    hlsInstance.destroy();
+    hlsInstance = null;
   }
-}
-
-async function copyLink(){
-  const url = activePlaybackItem?.stream_url || activePlaybackItem?.url || item?.stream_url || item?.url || "";
-  try{
-    await navigator.clipboard.writeText(url);
-    setStatus("Lien copié dans le presse-papiers.");
-    setTimeout(() => setStatus(""), 2000);
-  }catch{
-    setStatus("Impossible de copier le lien.");
+  if(mpegtsInstance){
+    mpegtsInstance.destroy();
+    mpegtsInstance = null;
   }
-}
-
-/**
- * CORRECTION : Ouvrir les liens externes dans un nouvel onglet au lieu de remplacer la page courante
- * Cela préserve l'application et permet à l'utilisateur de revenir au catalogue.
- */
-function openExternal(){
-  const url = activePlaybackItem?.stream_url || activePlaybackItem?.url || item?.stream_url || item?.url || "";
-  if(url) window.open(url, "_blank");
-}
-
-async function enterFullscreen(){
-  try{
-    if(video.requestFullscreen) await video.requestFullscreen();
-  }catch{}
-}
-
-function clearPlayers(){
-  if(hls){
-    hls.destroy();
-    hls = null;
-  }
-  if(mpegtsPlayer){
-    mpegtsPlayer.destroy();
-    mpegtsPlayer = null;
-  }
+  const video = $("mainVideo");
+  video.pause();
   video.removeAttribute("src");
   video.load();
 }
@@ -130,16 +63,24 @@ function firstSeriesEpisode(){
 }
 
 function buildSeriesEpisodeUrl(episode){
-  if(episode?.url || episode?.stream_url) return episode.url || episode.stream_url;
+  if(!episode) return "";
+  
+  // CORRECTION : Priorité absolue à l'URL directe si elle existe
+  if(episode.url && !episode.url.includes("get_series_info")) return episode.url;
+  if(episode.stream_url && !episode.stream_url.includes("get_series_info")) return episode.stream_url;
+  
   const raw = item?.stream_url || item?.url || "";
-  if(!raw || !episode?.id) return "";
+  if(!raw || !episode.id) return "";
 
   try{
     const parsed = new URL(raw);
     const username = parsed.searchParams.get("username");
     const password = parsed.searchParams.get("password");
-    const extension = episode.container_extension || "mp4";
+    const extension = episode.container_extension || "mkv";
+    
     if(!username || !password) return "";
+    
+    // CORRECTION : S'assurer que l'URL pointe vers /series/ et non /player_api.php
     return `${parsed.origin}/series/${username}/${password}/${episode.id}.${extension}`;
   }catch{
     return "";
@@ -157,7 +98,7 @@ function resolvePlaybackItem(){
 
   const manualEpisode = selectedEpisode();
   if(manualEpisode){
-    const manualUrl = manualEpisode.url || manualEpisode.stream_url || buildSeriesEpisodeUrl(manualEpisode);
+    const manualUrl = buildSeriesEpisodeUrl(manualEpisode);
     return {
       type: "series",
       title: manualEpisode.title || item.title || "Episode",
@@ -188,167 +129,96 @@ function resolvePlaybackItem(){
   return item;
 }
 
-/**
- * CORRECTION MAJEURE : Amélioration de la détection des formats et de la gestion des erreurs
- * - Détection plus robuste des formats HLS et MPEG-TS
- * - Fallback automatique après erreur HLS
- * - Meilleure gestion des formats non supportés
- */
-function loadSource(playbackItem){
-  clearPlayers();
-  progressTick = -1;
-  setStatus("");
-  activePlaybackItem = playbackItem;
-
-  const url = playbackItem?.stream_url || playbackItem?.url || "";
-  if(!url){
-    setStatus("Aucune URL de lecture disponible.");
-    return;
-  }
-
-  // Détection améliorée des formats
-  const isHls = /\.m3u8(\?|$)/i.test(url) || /hls|m3u8/i.test(url);
-  const isTransportStream = /\.ts(\?|$)/i.test(url) || /mpegts|transport/i.test(url);
-  const isMpeg2Ts = /\.ts(\?|$)/i.test(url);
-  
-  // Détection des formats non supportés nativement
-  const unsupportedFormats = /\.(mkv|avi|flv|wmv|webm)(\?|$)/i;
-  const isUnsupported = unsupportedFormats.test(url);
-
-  // Tentative HLS si détecté
-  if(isHls && window.Hls && window.Hls.isSupported()){
-    hls = new Hls({ 
-      enableWorker: true, 
-      lowLatencyMode: true,
-      maxBufferLength: 30,
-      maxMaxBufferLength: 600
-    });
-    
-    hls.loadSource(url);
-    hls.attachMedia(video);
-    
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      restoreProgress();
-      video.play().catch(() => {});
-      setTimeout(enterFullscreen, 250);
-    });
-    
-    hls.on(Hls.Events.ERROR, (event, data) => {
-      // Fallback automatique en cas d'erreur HLS
-      if(data.fatal){
-        console.warn("Erreur HLS fatale, tentative de lecture native...", data);
-        clearPlayers();
-        // Fallback : essayer la lecture native
-        video.src = url;
-        video.addEventListener("loadedmetadata", () => {
-          restoreProgress();
-          video.play().catch(() => {});
-        }, { once: true });
-      }
-    });
-    return;
-  }
-
-  // Tentative MPEG-TS si détecté
-  if(isTransportStream && window.mpegts && window.mpegts.isSupported()){
-    try{
-      mpegtsPlayer = window.mpegts.createPlayer({
-        type: "mpegts",
-        isLive: playbackItem?.type === "live",
-        url
-      });
-      mpegtsPlayer.attachMediaElement(video);
-      mpegtsPlayer.load();
-      video.play().catch(() => {});
-      setTimeout(enterFullscreen, 250);
-      return;
-    }catch(e){
-      console.warn("Erreur MPEG-TS, fallback à lecture native...", e);
-      clearPlayers();
-    }
-  }
-
-  // Avertissement pour formats non supportés
-  if(isUnsupported){
-    setStatus("Format non supporté nativement par le navigateur. Essayez le lien direct ou un lecteur externe.");
-  }
-
-  // Lecture native HTML5 (fallback par défaut)
-  video.src = url;
-  video.addEventListener("loadedmetadata", () => {
-    restoreProgress();
-    video.play().catch(() => {});
-    setTimeout(enterFullscreen, 250);
-  }, { once: true });
-
-  if(isTransportStream && !window.mpegts){
-    setStatus("Flux live détecté. Chargement du moteur MPEG-TS...");
-  }
-}
-
 function initPlayer(){
   if(!item){
-    $("playerTitle").textContent = "Aucune video";
-    $("plotText").textContent = "Aucune description.";
+    setStatus("Aucun média sélectionné.");
     return;
   }
 
-  const playbackItem = resolvePlaybackItem();
-
-  $("playerTitle").textContent = playbackItem?.title || item.title || "Lecture";
-  $("playerMeta").textContent = [
-    item.type === "vod" ? "Film" : item.type === "series" ? "Series" : "Live",
-    item.category_name || item.category || ""
-  ].filter(Boolean).join(" • ");
-  $("plotText").textContent = playbackItem?.plot || item.plot || "Aucune description.";
-  updateFavoriteUI();
-
-  if(item.type === "series" && playbackItem !== item){
-    setStatus("Lecture du premier episode disponible.");
+  const playItem = resolvePlaybackItem();
+  const url = playItem.stream_url || playItem.url;
+  
+  if(!url){
+    setStatus("URL de lecture introuvable.");
+    return;
   }
 
-  loadSource(playbackItem);
+  $("playerTitle").textContent = playItem.title || "Lecture";
+  $("playerMeta").textContent = playItem.category_name || "";
+  $("playerPlot").textContent = playItem.plot || "";
+  $("externalLink").href = url;
+
+  const video = $("mainVideo");
+  destroyPlayers();
+  setStatus("Chargement du flux...");
+
+  if(isHls(url)){
+    if(Hls.isSupported()){
+      hlsInstance = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 60
+      });
+      hlsInstance.loadSource(url);
+      hlsInstance.attachMedia(video);
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        setStatus("");
+        video.play().catch(() => setStatus("Cliquez sur Play pour démarrer"));
+      });
+      hlsInstance.on(Hls.Events.ERROR, (event, data) => {
+        if(data.fatal){
+          switch(data.type){
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              setStatus("Erreur réseau HLS. Tentative de lecture native...");
+              video.src = url;
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              hlsInstance.recoverMediaError();
+              break;
+            default:
+              destroyPlayers();
+              setStatus("Erreur fatale HLS.");
+              break;
+          }
+        }
+      });
+    }else if(video.canPlayType("application/vnd.apple.mpegurl")){
+      video.src = url;
+      video.addEventListener("loadedmetadata", () => {
+        setStatus("");
+        video.play();
+      });
+    }else{
+      setStatus("HLS non supporté par votre navigateur.");
+    }
+  }else if(isMpegTs(url)){
+    if(mpegts.getFeatureList().mseLivePlayback){
+      mpegtsInstance = mpegts.createPlayer({ type: "mse", url: url, isLive: item.type === "live" });
+      mpegtsInstance.attachMediaElement(video);
+      mpegtsInstance.load();
+      mpegtsInstance.play().then(() => setStatus("")).catch(() => setStatus("Erreur de lecture MPEG-TS."));
+    }else{
+      setStatus("MPEG-TS non supporté (MSE manquant).");
+      video.src = url;
+    }
+  }else{
+    // MP4, MKV, etc.
+    video.src = url;
+    video.play()
+      .then(() => setStatus(""))
+      .catch(e => {
+        console.error("Native play error:", e);
+        setStatus("Format vidéo non supporté nativement. Essayez le lien direct.");
+      });
+  }
 }
 
-$("backBtn").addEventListener("click", () => history.back());
-$("copyBtn").addEventListener("click", copyLink);
-$("externalBtn").addEventListener("click", openExternal);
-$("fullscreenBtn").addEventListener("click", enterFullscreen);
-$("favBtn").addEventListener("click", toggleFavorite);
-$("playOverlayBtn").addEventListener("click", async () => {
-  await video.play().catch(() => {});
-  enterFullscreen();
-  $("overlay").style.display = "none";
+$("backBtn").addEventListener("click", () => {
+  history.back();
 });
 
-video.addEventListener("loadedmetadata", restoreProgress);
-video.addEventListener("timeupdate", () => {
-  const currentSecond = Math.floor(video.currentTime || 0);
-  if(currentSecond > 0 && currentSecond % 10 === 0 && currentSecond !== progressTick){
-    progressTick = currentSecond;
-    saveProgress();
-  }
-});
-video.addEventListener("pause", saveProgress);
-video.addEventListener("ended", saveProgress);
-video.addEventListener("play", () => {
-  $("overlay").style.display = "none";
-  if($("playbackStatus")?.textContent === "Lecture du premier episode disponible.") return;
-  setStatus("");
-});
-video.addEventListener("pause", () => {
-  $("overlay").style.display = "flex";
-});
-video.addEventListener("error", (e) => {
-  const errorCode = video.error?.code;
-  let errorMsg = "Lecture impossible dans ce navigateur pour ce flux.";
-  
-  if(errorCode === 1) errorMsg = "Lecture annulée.";
-  else if(errorCode === 2) errorMsg = "Erreur réseau lors du chargement.";
-  else if(errorCode === 3) errorMsg = "Décodage échoué. Format non supporté ou fichier corrompu.";
-  else if(errorCode === 4) errorMsg = "Format vidéo non supporté.";
-  
-  setStatus(errorMsg + " Essayez le lien direct.");
+$("externalLink").addEventListener("click", (e) => {
+  // Le lien s'ouvre déjà dans un nouvel onglet via target="_blank" dans le HTML
 });
 
-initPlayer();
+window.addEventListener("load", initPlayer);
