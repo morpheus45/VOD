@@ -32,17 +32,19 @@ let mpegtsInstance = null;
 
 function destroyPlayers(){
   if(hlsInstance){
-    hlsInstance.destroy();
+    try { hlsInstance.destroy(); } catch(e) {}
     hlsInstance = null;
   }
   if(mpegtsInstance){
-    mpegtsInstance.destroy();
+    try { mpegtsInstance.destroy(); } catch(e) {}
     mpegtsInstance = null;
   }
   const video = $("mainVideo");
-  video.pause();
-  video.removeAttribute("src");
-  video.load();
+  if(video){
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  }
 }
 
 function setStatus(message){
@@ -62,12 +64,15 @@ function firstSeriesEpisode(){
   return null;
 }
 
+/**
+ * CORRECTION : Construire l'URL de lecture avec meilleure gestion des formats
+ */
 function buildSeriesEpisodeUrl(episode){
   if(!episode) return "";
   
-  // CORRECTION : Priorité absolue à l'URL directe si elle existe
-  if(episode.url && !episode.url.includes("get_series_info")) return episode.url;
-  if(episode.stream_url && !episode.stream_url.includes("get_series_info")) return episode.stream_url;
+  // CORRECTION : Priorité absolue à l'URL directe si elle existe et n'est pas une API
+  if(episode.url && !episode.url.includes("get_series_info") && !episode.url.includes("player_api")) return episode.url;
+  if(episode.stream_url && !episode.stream_url.includes("get_series_info") && !episode.stream_url.includes("player_api")) return episode.stream_url;
   
   const raw = item?.stream_url || item?.url || "";
   if(!raw || !episode.id) return "";
@@ -82,7 +87,8 @@ function buildSeriesEpisodeUrl(episode){
     
     // CORRECTION : S'assurer que l'URL pointe vers /series/ et non /player_api.php
     return `${parsed.origin}/series/${username}/${password}/${episode.id}.${extension}`;
-  }catch{
+  }catch(e){
+    console.error("URL build error:", e);
     return "";
   }
 }
@@ -143,17 +149,24 @@ function initPlayer(){
     return;
   }
 
-  $("playerTitle").textContent = playItem.title || "Lecture";
-  $("playerMeta").textContent = playItem.category_name || "";
-  $("playerPlot").textContent = playItem.plot || "";
-  $("externalLink").href = url;
+  const titleEl = $("playerTitle");
+  const metaEl = $("playerMeta");
+  const plotEl = $("playerPlot");
+  const linkEl = $("externalLink");
+  
+  if(titleEl) titleEl.textContent = playItem.title || "Lecture";
+  if(metaEl) metaEl.textContent = playItem.category_name || "";
+  if(plotEl) plotEl.textContent = playItem.plot || "";
+  if(linkEl) linkEl.href = url;
 
   const video = $("mainVideo");
+  if(!video) return;
+  
   destroyPlayers();
   setStatus("Chargement du flux...");
 
   if(isHls(url)){
-    if(Hls.isSupported()){
+    if(typeof Hls !== "undefined" && Hls.isSupported()){
       hlsInstance = new Hls({
         enableWorker: true,
         lowLatencyMode: true,
@@ -163,7 +176,10 @@ function initPlayer(){
       hlsInstance.attachMedia(video);
       hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
         setStatus("");
-        video.play().catch(() => setStatus("Cliquez sur Play pour démarrer"));
+        video.play().catch(e => {
+          console.error("Play error:", e);
+          setStatus("Cliquez sur Play pour démarrer");
+        });
       });
       hlsInstance.on(Hls.Events.ERROR, (event, data) => {
         if(data.fatal){
@@ -171,13 +187,14 @@ function initPlayer(){
             case Hls.ErrorTypes.NETWORK_ERROR:
               setStatus("Erreur réseau HLS. Tentative de lecture native...");
               video.src = url;
+              video.play().catch(() => {});
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
               hlsInstance.recoverMediaError();
               break;
             default:
               destroyPlayers();
-              setStatus("Erreur fatale HLS.");
+              setStatus("Erreur fatale HLS. Essayez le lien direct.");
               break;
           }
         }
@@ -186,23 +203,29 @@ function initPlayer(){
       video.src = url;
       video.addEventListener("loadedmetadata", () => {
         setStatus("");
-        video.play();
-      });
+        video.play().catch(() => {});
+      }, { once: true });
     }else{
       setStatus("HLS non supporté par votre navigateur.");
     }
   }else if(isMpegTs(url)){
-    if(mpegts.getFeatureList().mseLivePlayback){
+    if(typeof mpegts !== "undefined" && mpegts.getFeatureList().mseLivePlayback){
       mpegtsInstance = mpegts.createPlayer({ type: "mse", url: url, isLive: item.type === "live" });
       mpegtsInstance.attachMediaElement(video);
       mpegtsInstance.load();
-      mpegtsInstance.play().then(() => setStatus("")).catch(() => setStatus("Erreur de lecture MPEG-TS."));
+      mpegtsInstance.play()
+        .then(() => setStatus(""))
+        .catch(e => {
+          console.error("MPEG-TS error:", e);
+          setStatus("Erreur de lecture MPEG-TS. Essayez le lien direct.");
+        });
     }else{
-      setStatus("MPEG-TS non supporté (MSE manquant).");
+      setStatus("MPEG-TS non supporté (MSE manquant). Tentative native...");
       video.src = url;
+      video.play().catch(() => setStatus("Erreur de lecture."));
     }
-  }else{
-    // MP4, MKV, etc.
+  }else {
+    // MP4, MKV, etc. - lecture native
     video.src = url;
     video.play()
       .then(() => setStatus(""))
@@ -213,12 +236,18 @@ function initPlayer(){
   }
 }
 
-$("backBtn").addEventListener("click", () => {
-  history.back();
-});
+const backBtn = $("backBtn");
+if(backBtn){
+  backBtn.addEventListener("click", () => {
+    history.back();
+  });
+}
 
-$("externalLink").addEventListener("click", (e) => {
-  // Le lien s'ouvre déjà dans un nouvel onglet via target="_blank" dans le HTML
-});
+const externalLink = $("externalLink");
+if(externalLink){
+  externalLink.addEventListener("click", (e) => {
+    // Le lien s'ouvre déjà dans un nouvel onglet via target="_blank" dans le HTML
+  });
+}
 
 window.addEventListener("load", initPlayer);

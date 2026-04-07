@@ -51,6 +51,33 @@ function itemKey(item){
   return [item.type || state.type, item.title || "", item.url || item.stream_url || ""].join("||");
 }
 
+/**
+ * CORRECTION : Nettoyer les titres des préfixes "FR -", "SRS |", et autres balises
+ */
+function cleanTitle(title){
+  if(!title) return "Sans titre";
+  
+  let cleaned = String(title);
+  
+  // Supprimer les préfixes courants
+  cleaned = cleaned.replace(/^(FR\s*[-|]|SRS\s*[-|]|EN\s*[-|])\s*/i, "");
+  
+  // Supprimer les balises de groupe-title et autres métadonnées
+  cleaned = cleaned.replace(/\s*group-title\s*=\s*"[^"]*"/gi, "");
+  cleaned = cleaned.replace(/\s*tvg-logo\s*=\s*"[^"]*"/gi, "");
+  
+  // Supprimer les extensions de fichier en fin
+  cleaned = cleaned.replace(/\.(mkv|mp4|ts|m3u8|avi|mov)$/i, "");
+  
+  // Supprimer les numéros de fichier entre parenthèses
+  cleaned = cleaned.replace(/\s*\(\d+\)\s*$/g, "");
+  
+  // Nettoyer les espaces multiples
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  
+  return cleaned || "Sans titre";
+}
+
 function toggleFavorite(item){
   const favs = getFavorites();
   const key = itemKey(item);
@@ -87,9 +114,9 @@ function inferQuality(source){
 function normalizeItems(arr, type){
   return (Array.isArray(arr) ? arr : []).map((x, idx) => ({
     id: x.id || x.stream_id || x.series_id || idx,
-    title: x.title || x.name || "Sans titre",
+    title: cleanTitle(x.title || x.name || "Sans titre"),
     category_id: x.category_id || "",
-    category_name: x.category_name || x.category || "Autre",
+    category_name: cleanTitle(x.category_name || x.category || "Autre"),
     stream_icon: x.stream_icon || x.image || x.cover || x.poster || "",
     stream_url: x.stream_url || x.url || "",
     url: x.url || x.stream_url || "",
@@ -101,6 +128,9 @@ function normalizeItems(arr, type){
   }));
 }
 
+/**
+ * CORRECTION : Fusionner les épisodes en profondeur pour ne rien perdre
+ */
 function mergeSeriesDetails(baseItems, detailItems){
   if(!baseItems.length || !detailItems.length) return baseItems;
 
@@ -116,16 +146,27 @@ function mergeSeriesDetails(baseItems, detailItems){
     const match = byId.get(String(item.id)) || byTitle.get(String(item.title || "").toLowerCase());
     if(!match) return item;
     
-    // CORRECTION : Ne pas écraser les épisodes réels par des placeholders vides
-    const hasRealEpisodes = match.episodes && Object.keys(match.episodes).length > 0;
-    const currentHasEpisodes = item.episodes && Object.keys(item.episodes).length > 0;
+    // CORRECTION : Fusionner les épisodes en profondeur
+    let mergedEpisodes = { ...item.episodes };
+    if(match.episodes && typeof match.episodes === "object"){
+      for(const season in match.episodes){
+        if(!mergedEpisodes[season]){
+          mergedEpisodes[season] = match.episodes[season];
+        } else if(Array.isArray(mergedEpisodes[season]) && Array.isArray(match.episodes[season])){
+          // Fusionner les deux tableaux d'épisodes sans doublons
+          const existing = new Set(mergedEpisodes[season].map(ep => ep.id));
+          const newEps = match.episodes[season].filter(ep => !existing.has(ep.id));
+          mergedEpisodes[season] = [...mergedEpisodes[season], ...newEps];
+        }
+      }
+    }
 
     return {
       ...item,
       stream_icon: match.stream_icon || item.stream_icon,
       plot: match.plot || item.plot,
       seasons: (Array.isArray(match.seasons) && match.seasons.length) ? match.seasons : item.seasons,
-      episodes: hasRealEpisodes ? match.episodes : item.episodes
+      episodes: mergedEpisodes
     };
   });
 }
@@ -143,7 +184,7 @@ function parseM3U(text, type){
       const group = (line.match(/group-title="([^"]+)"/i) || [,"Autre"])[1];
       const logo = (line.match(/tvg-logo="([^"]+)"/i) || [,""])[1];
       const title = line.includes(",") ? line.split(",").slice(1).join(",").trim() : "Sans titre";
-      current = { title, category_name: group, stream_icon: logo, stream_url: "", url: "", type, quality: inferQuality(`${title} ${group}`) };
+      current = { title: cleanTitle(title), category_name: cleanTitle(group), stream_icon: logo, stream_url: "", url: "", type, quality: inferQuality(`${title} ${group}`) };
     }else if(!line.startsWith("#") && current){
       current.stream_url = line;
       current.url = line;
@@ -294,8 +335,8 @@ async function loadType(type){
   const preferM3u = type !== "series";
   let finalItems = [];
 
-  // CORRECTION : Pour les séries, on veut charger les données les plus complètes (catalog) en priorité
   if(type === "series"){
+    // CORRECTION : Charger TOUTES les sources et les fusionner complètement
     const catalogJson = await safeFetchJson("series_catalog.json");
     const catalogItems = extractJsonItems(catalogJson);
     if(catalogItems.length){
@@ -309,7 +350,7 @@ async function loadType(type){
       }
     }
     
-    // Fusionner avec series.json pour avoir les IDs Xtream si manquants
+    // Fusionner avec series.json pour avoir les IDs Xtream et autres données
     const baseJson = await safeFetchJson("series.json");
     const baseItems = extractJsonItems(baseJson);
     if(baseItems.length){
