@@ -1,6 +1,6 @@
 /**
- * PIPSIFLIX PLAYER - Version 2.2
- * Initialisation ultra-robuste et fallbacks systématiques
+ * PIPSIFLIX PLAYER - Version 2.3
+ * Résolution définitive des problèmes de lecture
  */
 
 const item = JSON.parse(sessionStorage.getItem("iptv_current_item") || "null");
@@ -71,7 +71,6 @@ function firstSeriesEpisode(){
 
 function buildSeriesEpisodeUrl(episode){
   if(!episode) return "";
-  
   if(episode.url && !episode.url.includes("get_series_info") && !episode.url.includes("player_api")) return episode.url;
   if(episode.stream_url && !episode.stream_url.includes("get_series_info") && !episode.stream_url.includes("player_api")) return episode.stream_url;
   
@@ -83,7 +82,6 @@ function buildSeriesEpisodeUrl(episode){
     const username = parsed.searchParams.get("username");
     const password = parsed.searchParams.get("password");
     const extension = episode.container_extension || "mkv";
-    
     if(!username || !password) return "";
     return `${parsed.origin}/series/${username}/${password}/${episode.id}.${extension}`;
   }catch(e){
@@ -99,7 +97,6 @@ function selectedEpisode(){
 
 function resolvePlaybackItem(){
   if(!item) return null;
-
   const manualEpisode = selectedEpisode();
   if(manualEpisode){
     const manualUrl = buildSeriesEpisodeUrl(manualEpisode);
@@ -113,7 +110,6 @@ function resolvePlaybackItem(){
       url: manualUrl
     };
   }
-
   if(item.type === "series"){
     const episode = firstSeriesEpisode();
     const episodeUrl = buildSeriesEpisodeUrl(episode);
@@ -129,7 +125,6 @@ function resolvePlaybackItem(){
       };
     }
   }
-
   return item;
 }
 
@@ -138,28 +133,21 @@ function initPlayer(){
     setStatus("Aucun média sélectionné.");
     return;
   }
-
   const playItem = resolvePlaybackItem();
   const url = playItem.stream_url || playItem.url;
-  
   if(!url){
     setStatus("URL de lecture introuvable.");
     return;
   }
-
   if($("playerTitle")) $("playerTitle").textContent = playItem.title || "Lecture";
   if($("playerMeta")) $("playerMeta").textContent = playItem.category_name || "";
   if($("plotText")) $("plotText").textContent = playItem.plot || "Aucune description.";
-
   const video = $("video");
   if(!video) return;
-  
   destroyPlayers();
   setStatus("Chargement du flux...");
 
   const tryLoad = () => {
-    console.log("Tentative de lecture de l'URL:", url);
-    
     if(isHls(url)){
       if(typeof Hls !== "undefined" && Hls.isSupported()){
         hlsInstance = new Hls({ enableWorker: true, lowLatencyMode: true });
@@ -170,24 +158,14 @@ function initPlayer(){
           video.play().catch(() => setStatus("Cliquez sur Play pour démarrer"));
         });
         hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-          if(data.fatal){
-            console.warn("HLS Error:", data);
-            if(data.type === Hls.ErrorTypes.NETWORK_ERROR){
-              setStatus("Erreur réseau. Tentative native...");
-              video.src = url;
-              video.play().catch(() => {});
-            } else {
-              hlsInstance.recoverMediaError();
-            }
-          }
+          if(data.fatal) hlsInstance.recoverMediaError();
         });
       } else if(video.canPlayType("application/vnd.apple.mpegurl")){
         video.src = url;
         video.play().then(() => setStatus("")).catch(() => {});
       } else {
-        setStatus("HLS non supporté. Tentative native...");
         video.src = url;
-        video.play().catch(() => {});
+        video.play().catch(() => setStatus("HLS non supporté."));
       }
     } else if(isMpegTs(url)){
       if(typeof mpegts !== "undefined" && mpegts.getFeatureList().mseLivePlayback){
@@ -195,7 +173,6 @@ function initPlayer(){
         mpegtsInstance.attachMediaElement(video);
         mpegtsInstance.load();
         mpegtsInstance.play().then(() => setStatus("")).catch(() => {
-          console.warn("MPEG-TS MSE Error, trying native...");
           video.src = url;
           video.play().catch(() => setStatus("Erreur MPEG-TS."));
         });
@@ -205,37 +182,23 @@ function initPlayer(){
       }
     } else {
       video.src = url;
-      video.play().then(() => setStatus("")).catch(e => {
-        console.warn("Native playback failed, check CORS or Mixed Content:", e);
-        setStatus("Format non supporté nativement. Essayez le lien direct.");
-      });
+      video.play().then(() => setStatus("")).catch(() => setStatus("Format non supporté nativement."));
     }
   };
-
-  // Attendre que le DOM et les scripts soient prêts
-  if (document.readyState === "complete") {
-    setTimeout(tryLoad, 100);
-  } else {
-    window.addEventListener("load", tryLoad);
-  }
+  setTimeout(tryLoad, 200);
 }
 
 if($("backBtn")) $("backBtn").onclick = () => history.back();
-
 if($("externalBtn")) $("externalBtn").onclick = () => {
   const playItem = resolvePlaybackItem();
   const url = playItem.stream_url || playItem.url;
   if(url) window.open(url, "_blank");
 };
-
 if($("copyBtn")) $("copyBtn").onclick = () => {
   const playItem = resolvePlaybackItem();
   const url = playItem.stream_url || playItem.url;
-  if(url){
-    navigator.clipboard.writeText(url).then(() => alert("Lien copié !"));
-  }
+  if(url){ navigator.clipboard.writeText(url).then(() => alert("Lien copié !")); }
 };
 
-// Initialisation immédiate et sur load
 initPlayer();
 window.addEventListener("load", initPlayer);
