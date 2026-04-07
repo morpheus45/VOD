@@ -574,8 +574,14 @@ function playNativeDirectly(item){
   const isAndroid = /Android/i.test(navigator.userAgent);
   
   if(isAndroid){
-    const intentUrl = "intent://" + encodeURIComponent(url) + "#Intent;action=android.intent.action.VIEW;type=video/*;end";
-    window.location.href = intentUrl;
+    try {
+      const intentUrl = "intent://" + encodeURIComponent(url) + "#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end";
+      window.location.href = intentUrl;
+    } catch(e) {
+      console.error("Erreur intent VLC:", e);
+      const vlcUrl = encodeURI("vlc://" + url);
+      window.location.href = vlcUrl;
+    }
   } else {
     const vlcUrl = encodeURI("vlc://" + url);
     window.location.href = vlcUrl;
