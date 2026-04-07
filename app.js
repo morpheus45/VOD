@@ -103,7 +103,7 @@ function normalizeItems(arr, type){
     category_id: x.category_id || "",
     category_name: cleanTitle(x.category_name || x.category || "Autre"),
     stream_icon: x.stream_icon || x.image || x.cover || x.poster || "",
-    stream_url: x.stream_url || x.url || "",
+    stream_url: x.url || x.stream_url || "",
     url: x.url || x.stream_url || "",
     plot: x.plot || x.description || x.overview || "",
     type,
