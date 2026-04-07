@@ -1,4 +1,4 @@
-const CACHE_NAME = "pipsiflix-shell-v2"; // Mise à jour de v1 vers v2 pour forcer le rafraîchissement
+const CACHE_NAME = "pipsiflix-shell-v3"; // Version v3 pour forcer le rafraîchissement
 const APP_SHELL = [
   "./",
   "./index.html",

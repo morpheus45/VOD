@@ -1,6 +1,6 @@
 /**
- * PIPSIFLIX PLAYER - Version 2.1
- * Correction des IDs HTML et gestion robuste du chargement
+ * PIPSIFLIX PLAYER - Version 2.2
+ * Initialisation ultra-robuste et fallbacks systématiques
  */
 
 const item = JSON.parse(sessionStorage.getItem("iptv_current_item") || "null");
@@ -44,7 +44,7 @@ function destroyPlayers(){
     try { mpegtsInstance.destroy(); } catch(e) {}
     mpegtsInstance = null;
   }
-  const video = $("video"); // Correction ID: "video" au lieu de "mainVideo"
+  const video = $("video");
   if(video){
     video.pause();
     video.removeAttribute("src");
@@ -147,19 +147,19 @@ function initPlayer(){
     return;
   }
 
-  // Correction IDs: "plotText" au lieu de "playerPlot"
   if($("playerTitle")) $("playerTitle").textContent = playItem.title || "Lecture";
   if($("playerMeta")) $("playerMeta").textContent = playItem.category_name || "";
   if($("plotText")) $("plotText").textContent = playItem.plot || "Aucune description.";
 
-  const video = $("video"); // Correction ID: "video"
+  const video = $("video");
   if(!video) return;
   
   destroyPlayers();
   setStatus("Chargement du flux...");
 
-  // Attendre que les bibliothèques soient chargées si async
   const tryLoad = () => {
+    console.log("Tentative de lecture de l'URL:", url);
+    
     if(isHls(url)){
       if(typeof Hls !== "undefined" && Hls.isSupported()){
         hlsInstance = new Hls({ enableWorker: true, lowLatencyMode: true });
@@ -171,6 +171,7 @@ function initPlayer(){
         });
         hlsInstance.on(Hls.Events.ERROR, (event, data) => {
           if(data.fatal){
+            console.warn("HLS Error:", data);
             if(data.type === Hls.ErrorTypes.NETWORK_ERROR){
               setStatus("Erreur réseau. Tentative native...");
               video.src = url;
@@ -184,26 +185,39 @@ function initPlayer(){
         video.src = url;
         video.play().then(() => setStatus("")).catch(() => {});
       } else {
-        setStatus("HLS non supporté.");
+        setStatus("HLS non supporté. Tentative native...");
+        video.src = url;
+        video.play().catch(() => {});
       }
     } else if(isMpegTs(url)){
       if(typeof mpegts !== "undefined" && mpegts.getFeatureList().mseLivePlayback){
         mpegtsInstance = mpegts.createPlayer({ type: "mse", url: url, isLive: item.type === "live" });
         mpegtsInstance.attachMediaElement(video);
         mpegtsInstance.load();
-        mpegtsInstance.play().then(() => setStatus("")).catch(() => setStatus("Erreur MPEG-TS."));
+        mpegtsInstance.play().then(() => setStatus("")).catch(() => {
+          console.warn("MPEG-TS MSE Error, trying native...");
+          video.src = url;
+          video.play().catch(() => setStatus("Erreur MPEG-TS."));
+        });
       } else {
         video.src = url;
         video.play().then(() => setStatus("")).catch(() => setStatus("Format non supporté."));
       }
     } else {
       video.src = url;
-      video.play().then(() => setStatus("")).catch(() => setStatus("Format non supporté nativement."));
+      video.play().then(() => setStatus("")).catch(e => {
+        console.warn("Native playback failed, check CORS or Mixed Content:", e);
+        setStatus("Format non supporté nativement. Essayez le lien direct.");
+      });
     }
   };
 
-  // Petit délai pour laisser le temps aux scripts async de s'initialiser
-  setTimeout(tryLoad, 500);
+  // Attendre que le DOM et les scripts soient prêts
+  if (document.readyState === "complete") {
+    setTimeout(tryLoad, 100);
+  } else {
+    window.addEventListener("load", tryLoad);
+  }
 }
 
 if($("backBtn")) $("backBtn").onclick = () => history.back();
@@ -222,4 +236,6 @@ if($("copyBtn")) $("copyBtn").onclick = () => {
   }
 };
 
+// Initialisation immédiate et sur load
+initPlayer();
 window.addEventListener("load", initPlayer);
