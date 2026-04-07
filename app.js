@@ -571,17 +571,7 @@ function playNativeDirectly(item){
   }
   pushHistory(item);
   const url = item.stream_url || item.url;
-  const isAndroid = /Android/i.test(navigator.userAgent);
-  
-  if(isAndroid){
-    try {
-      window.location.href = url;
-    } catch(e) {
-      console.error("Erreur ouverture URL:", e);
-    }
-  } else {
-    window.location.href = "vlc://" + url;
-  }
+  window.location.href = "vlc://" + url;
 }
 
 function openItem(item){
