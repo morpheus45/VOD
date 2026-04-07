@@ -570,7 +570,8 @@ function playNativeDirectly(item){
     return;
   }
   pushHistory(item);
-  const url = item.stream_url || item.url;
+  let url = item.stream_url || item.url;
+  url = url.replace(/^(https?:\/\/)/, "");
   window.location.href = "vlc://" + url;
 }
 
