@@ -1,7 +1,8 @@
 const STORAGE_KEYS = {
   favorites: "iptv_v2_favorites",
   history: "iptv_v2_history",
-  progress: "iptv_v2_progress"
+  progress: "iptv_v2_progress",
+  seriesCache: "iptv_series_episodes_cache"
 };
 
 const TYPE_LABELS = {
@@ -20,12 +21,11 @@ const state = {
   items: { live: [], vod: [], series: [] },
   sourceUsed: { live: "", vod: "", series: "" },
   filters: { category: "", search: "", quality: "", sort: "title" },
-  bootStatus: "Chargement des flux...",
-  localFiles: {},
-  sourceFolderName: "",
+  bootStatus: "Chargement...",
   selectedSeries: null,
   displayedItems: { live: 0, vod: 0, series: 0 },
-  isLoadingMore: false
+  isLoadingMore: false,
+  seriesEpisodesCache: {}
 };
 
 function $(id){ return document.getElementById(id); }
@@ -51,30 +51,15 @@ function itemKey(item){
   return [item.type || state.type, item.title || "", item.url || item.stream_url || ""].join("||");
 }
 
-/**
- * NETTOYAGE ROBUSTE DES TITRES ET CATÉGORIES
- */
 function cleanTitle(title){
   if(!title) return "";
-  
   let cleaned = String(title);
-  
-  // Supprimer les préfixes techniques IPTV courants
   cleaned = cleaned.replace(/^(FR\s*[-|:]|SRS\s*[-|:]|EN\s*[-|:]|VOD\s*[-|:]|SERIE\s*[-|:])\s*/i, "");
-  
-  // Supprimer les balises group-title et autres
   cleaned = cleaned.replace(/\s*group-title\s*=\s*"[^"]*"/gi, "");
   cleaned = cleaned.replace(/\s*tvg-logo\s*=\s*"[^"]*"/gi, "");
-  
-  // Supprimer les extensions
   cleaned = cleaned.replace(/\.(mkv|mp4|ts|m3u8|avi|mov)$/i, "");
-  
-  // Supprimer les numéros de fichier (1), (2)...
   cleaned = cleaned.replace(/\s*\(\d+\)\s*$/g, "");
-  
-  // Nettoyer les espaces
   cleaned = cleaned.replace(/\s+/g, " ").trim();
-  
   return cleaned;
 }
 
@@ -126,45 +111,6 @@ function normalizeItems(arr, type){
     seasons: Array.isArray(x.seasons) ? x.seasons : [],
     episodes: x.episodes && typeof x.episodes === "object" ? x.episodes : {}
   }));
-}
-
-function mergeSeriesDetails(baseItems, detailItems){
-  if(!baseItems.length) return detailItems;
-  if(!detailItems.length) return baseItems;
-
-  const byId = new Map();
-  const byTitle = new Map();
-
-  for(const item of detailItems){
-    if(item.id !== undefined && item.id !== null) byId.set(String(item.id), item);
-    if(item.title) byTitle.set(String(item.title).toLowerCase(), item);
-  }
-
-  return baseItems.map(item => {
-    const match = byId.get(String(item.id)) || byTitle.get(String(item.title || "").toLowerCase());
-    if(!match) return item;
-    
-    let mergedEpisodes = { ...item.episodes };
-    if(match.episodes && typeof match.episodes === "object"){
-      for(const season in match.episodes){
-        if(!mergedEpisodes[season]){
-          mergedEpisodes[season] = match.episodes[season];
-        } else if(Array.isArray(mergedEpisodes[season]) && Array.isArray(match.episodes[season])){
-          const existing = new Set(mergedEpisodes[season].map(ep => ep.id));
-          const newEps = match.episodes[season].filter(ep => !existing.has(ep.id));
-          mergedEpisodes[season] = [...mergedEpisodes[season], ...newEps];
-        }
-      }
-    }
-
-    return {
-      ...item,
-      stream_icon: match.stream_icon || item.stream_icon,
-      plot: match.plot || item.plot,
-      seasons: (Array.isArray(match.seasons) && match.seasons.length) ? match.seasons : item.seasons,
-      episodes: mergedEpisodes
-    };
-  });
 }
 
 function parseM3U(text, type){
@@ -233,10 +179,55 @@ async function safeFetchJson(path){
   }
 }
 
+/**
+ * CORRECTION : Récupérer dynamiquement les épisodes d'une série via l'API Xtream Codes
+ */
+async function fetchSeriesEpisodes(series){
+  if(!series || !series.stream_url) return {};
+  
+  // Vérifier le cache local d'abord
+  if(state.seriesEpisodesCache[series.id]){
+    return state.seriesEpisodesCache[series.id];
+  }
+
+  try{
+    const response = await fetch(series.stream_url, { cache: "no-store" });
+    if(!response.ok) return {};
+    
+    const data = await response.json();
+    let episodes = {};
+
+    // Xtream Codes retourne une structure avec 'seasons' contenant les épisodes
+    if(data.seasons && typeof data.seasons === "object"){
+      for(const seasonKey in data.seasons){
+        const seasonData = data.seasons[seasonKey];
+        if(Array.isArray(seasonData)){
+          episodes[seasonKey] = seasonData.map(ep => ({
+            id: ep.id || ep.episode_id,
+            title: ep.title || ep.name || `Episode ${ep.episode_num || ""}`,
+            episode_num: ep.episode_num || 0,
+            season: seasonKey,
+            url: ep.url || ep.stream_url || "",
+            stream_url: ep.url || ep.stream_url || "",
+            container_extension: ep.container_extension || "mkv",
+            info: ep.info || {}
+          }));
+        }
+      }
+    }
+
+    // Mettre en cache
+    state.seriesEpisodesCache[series.id] = episodes;
+    return episodes;
+  }catch(e){
+    console.warn("Erreur lors du chargement des épisodes:", e);
+    return {};
+  }
+}
+
 async function loadType(type){
   let finalItems = [];
 
-  // CORRECTION : Priorité absolue aux fichiers .json complets
   const rawJson = await safeFetchJson(`${type}.json`);
   const extracted = extractJsonItems(rawJson);
   if(extracted.length){
@@ -244,17 +235,6 @@ async function loadType(type){
     finalItems = normalizeItems(extracted, type);
   }
 
-  // Pour les séries, essayer de fusionner avec le catalogue si disponible
-  if(type === "series"){
-    const catalogJson = await safeFetchJson("series_catalog.json");
-    const catalogItems = extractJsonItems(catalogJson);
-    if(catalogItems.length){
-      const normalizedCatalog = normalizeItems(catalogItems, type);
-      finalItems = mergeSeriesDetails(finalItems, normalizedCatalog);
-    }
-  }
-
-  // Fallback M3U si toujours rien
   if(!finalItems.length){
     const m3uText = await safeFetchText(`${type}.m3u`);
     if(m3uText){
@@ -282,7 +262,6 @@ function buildCategorySelect(){
   const select = $("categorySelect");
   if(!select) return;
   
-  // CORRECTION : S'assurer que les noms de catégories sont nettoyés dans le sélecteur
   const categories = [...new Set(state.items[state.type].map(x => x.category_name).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b));
 
@@ -415,7 +394,7 @@ function openSeriesEpisode(series, episode, seasonLabel){
   location.href = "player.html";
 }
 
-function renderSeriesPanel(){
+async function renderSeriesPanel(){
   const panel = $("seriesPanel");
   if(!panel) return;
 
@@ -425,7 +404,36 @@ function renderSeriesPanel(){
     return;
   }
 
-  const seasonsMap = series.episodes && typeof series.episodes === "object" ? series.episodes : {};
+  // CORRECTION : Charger les épisodes dynamiquement depuis l'API
+  let seasonsMap = series.episodes && typeof series.episodes === "object" ? series.episodes : {};
+  
+  if(!Object.keys(seasonsMap).length && series.stream_url){
+    panel.innerHTML = `
+      <div class="series-panel__header">
+        <div class="series-panel__titleblock">
+          <div class="series-kicker">Series</div>
+          <h3>${escapeHtml(series.title)}</h3>
+        </div>
+        <button id="seriesCloseBtn" class="series-close" type="button">Fermer</button>
+      </div>
+      <div class="series-panel__body">
+        <div class="series-hero">
+          <p class="series-plot">Chargement des saisons...</p>
+        </div>
+      </div>
+    `;
+    panel.hidden = false;
+    if($("seriesCloseBtn")) $("seriesCloseBtn").onclick = closeSeriesPanel;
+    
+    // Charger les épisodes
+    seasonsMap = await fetchSeriesEpisodes(series);
+    series.episodes = seasonsMap;
+    
+    // Re-render après chargement
+    renderSeriesPanel();
+    return;
+  }
+
   const seasonKeys = Object.keys(seasonsMap).sort((a, b) => Number(a) - Number(b));
   const poster = escapeHtml(series.stream_icon || "");
   const metaBits = [
