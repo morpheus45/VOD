@@ -199,6 +199,19 @@ if($("copyBtn")) $("copyBtn").onclick = () => {
   const url = playItem.stream_url || playItem.url;
   if(url){ navigator.clipboard.writeText(url).then(() => alert("Lien copié !")); }
 };
+if($("nativePlayBtn")) $("nativePlayBtn").onclick = () => {
+  const playItem = resolvePlaybackItem();
+  const url = playItem.stream_url || playItem.url;
+  if(!url) return;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  if(isAndroid){
+    const intentUrl = "intent://" + encodeURIComponent(url) + "#Intent;action=android.intent.action.VIEW;type=video/*;end";
+    window.location.href = intentUrl;
+  } else {
+    const vlcUrl = encodeURI("vlc://" + url);
+    window.location.href = vlcUrl;
+  }
+};
 if($("vlcBtn")) $("vlcBtn").onclick = () => {
   const playItem = resolvePlaybackItem();
   const url = playItem.stream_url || playItem.url;
