@@ -10,6 +10,12 @@ const TYPE_LABELS = {
   series: "Series"
 };
 
+// OPTIMISATION : Configuration du chargement progressif
+const PAGINATION_CONFIG = {
+  itemsPerPage: 50,  // Nombre d'éléments à charger à la fois
+  preloadThreshold: 200  // Pixels avant la fin pour déclencher le chargement suivant
+};
+
 const state = {
   type: "live",
   items: { live: [], vod: [], series: [] },
@@ -18,7 +24,10 @@ const state = {
   bootStatus: "Chargement des flux live, films et series...",
   localFiles: {},
   sourceFolderName: "",
-  selectedSeries: null
+  selectedSeries: null,
+  // OPTIMISATION : Pagination
+  displayedItems: { live: 0, vod: 0, series: 0 },
+  isLoadingMore: false
 };
 
 function $(id){ return document.getElementById(id); }
@@ -87,7 +96,6 @@ function normalizeItems(arr, type){
     stream_url: x.stream_url || x.url || "",
     url: x.url || x.stream_url || "",
     plot: x.plot || x.description || x.overview || "",
-    // force assignation pour éviter mélange VOD/SERIES entre onglets
     type,
     quality: inferQuality([x.title, x.name, x.category_name, x.category, x.plot, x.description].join(" ")),
     seasons: Array.isArray(x.seasons) ? x.seasons : [],
@@ -292,7 +300,6 @@ async function loadType(type){
   }
 
   if(preferM3u){
-    // Priorité M3U pour lecture directe
     const m3uText = await safeFetchText(`${type}.m3u`);
     if(m3uText){
       const parsedM3u = parseM3U(m3uText, type);
@@ -303,7 +310,6 @@ async function loadType(type){
     }
   }
 
-  // JSON simple
   const rawJson = await safeFetchJson(`${type}.json`);
   const extracted = extractJsonItems(rawJson);
   if(extracted.length){
@@ -315,7 +321,6 @@ async function loadType(type){
     return normalizeItems(rawJson, type);
   }
 
-  // catalog json
   const catalogJson = await safeFetchJson(`${type}_catalog.json`);
   const catalogItems = extractJsonItems(catalogJson);
   if(catalogItems.length){
@@ -327,14 +332,12 @@ async function loadType(type){
     return normalizeItems(catalogJson, type);
   }
 
-  // sharded catalog
   const sharded = await loadShardedCatalog(type);
   if(sharded.length){
     state.sourceUsed[type] = `${type}_catalog_index.json`;
     return sharded;
   }
 
-  // Pour les séries, on ne tente le M3U qu'en dernier recours pour conserver les saisons/épisodes.
   if(!preferM3u){
     const m3uText = await safeFetchText(`${type}.m3u`);
     if(m3uText){
@@ -588,6 +591,84 @@ function renderSeriesPanel(){
   }
 }
 
+/**
+ * OPTIMISATION : Charger et afficher les éléments par lots (pagination progressive)
+ */
+function loadMoreItems(){
+  if(state.isLoadingMore) return;
+  
+  state.isLoadingMore = true;
+  const collection = currentCollection();
+  const currentCount = state.displayedItems[state.type];
+  const nextCount = Math.min(currentCount + PAGINATION_CONFIG.itemsPerPage, collection.length);
+  
+  if(nextCount > currentCount){
+    state.displayedItems[state.type] = nextCount;
+    renderGrid();
+  }
+  
+  state.isLoadingMore = false;
+}
+
+function renderGrid(){
+  const grid = $("grid");
+  const empty = $("emptyState");
+  
+  if(!grid) return;
+  
+  const collection = currentCollection();
+  const displayCount = state.displayedItems[state.type];
+  const visibleItems = collection.slice(0, displayCount);
+  
+  if(visibleItems.length){
+    const qualityGroups = groupedByQuality(visibleItems);
+    grid.innerHTML = qualityGroups.map(group => `
+      <section class="quality-block">
+        <div class="quality-head">
+          <h3 class="quality-title">${escapeHtml(group.label)}</h3>
+          <span class="quality-count">${group.items.length} flux</span>
+        </div>
+        <div class="quality-grid">
+          ${group.items.map(item => cardTemplate(item, false)).join("")}
+        </div>
+      </section>
+    `).join("");
+    
+    if(empty) empty.hidden = true;
+    bindCardEvents(grid);
+    
+    // Ajouter un observateur pour le chargement infini
+    if(displayCount < collection.length){
+      setupInfiniteScroll();
+    }
+  }else{
+    grid.innerHTML = "";
+    if(empty) empty.hidden = false;
+  }
+}
+
+/**
+ * OPTIMISATION : Intersection Observer pour détecter quand l'utilisateur approche de la fin
+ */
+let intersectionObserver = null;
+
+function setupInfiniteScroll(){
+  if(!intersectionObserver){
+    intersectionObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if(entry.isIntersecting){
+          loadMoreItems();
+        }
+      });
+    }, { rootMargin: `${PAGINATION_CONFIG.preloadThreshold}px` });
+  }
+  
+  const sentinel = $("gridSentinel");
+  if(sentinel){
+    intersectionObserver.observe(sentinel);
+  }
+}
+
 function render(){
   setActiveNav(state.type);
   buildCategorySelect();
@@ -627,33 +708,11 @@ function render(){
 
   const collection = currentCollection();
   const cCount = $("catalogCount");
-  if(cCount) cCount.textContent = `${collection.length} elements`;
+  if(cCount) cCount.textContent = `${collection.length} elements (${state.displayedItems[state.type]} affichés)`;
 
-  const grid = $("grid");
-  const empty = $("emptyState");
-  if(grid){
-    if(collection.length){
-      const qualityGroups = groupedByQuality(collection);
-      grid.innerHTML = qualityGroups.map(group => `
-        <section class="quality-block">
-          <div class="quality-head">
-            <h3 class="quality-title">${escapeHtml(group.label)}</h3>
-            <span class="quality-count">${group.items.length} flux</span>
-          </div>
-          <div class="quality-grid">
-            ${group.items.map(item => cardTemplate(item, false)).join("")}
-          </div>
-        </section>
-      `).join("");
-      if(empty) empty.hidden = true;
-    }else{
-      grid.innerHTML = "";
-      if(empty) empty.hidden = false;
-    }
-  }
-
-  renderAuxBlocks();
-  bindCardEvents(grid);
+  // OPTIMISATION : Réinitialiser la pagination quand les filtres changent
+  state.displayedItems[state.type] = PAGINATION_CONFIG.itemsPerPage;
+  renderGrid();
   renderSeriesPanel();
 }
 
