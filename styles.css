@@ -117,3 +117,51 @@ button,select,input{font:inherit}
   .card-meta{font-size:11px}
   .nav-btn{padding:12px;border-radius:14px}
 }
+
+
+/* OPTIMISATION : Google TV et Android TV (grand écran) */
+@media (min-width:1920px) and (orientation:landscape){
+  .app-shell{max-width:100%;padding:0 40px 60px}
+  .quality-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:24px}
+  .card{border-radius:24px}
+  .card-title{font-size:18px;min-height:48px}
+  .card-meta{font-size:14px;margin-top:10px}
+  .nav-btn{padding:16px;font-size:16px;border-radius:18px}
+  .badge{font-size:12px;padding:6px 10px}
+  .fav-btn{font-size:12px;padding:8px 10px}
+  .series-panel{width:min(600px,95vw)}
+  .episode-btn{padding:14px;font-size:16px}
+  .episode-code{font-size:14px}
+  .episode-title{font-size:16px}
+}
+
+/* OPTIMISATION : Focus visible pour navigation au clavier (Google TV) */
+.card:focus{
+  outline:3px solid var(--accent);
+  outline-offset:2px;
+  transform:scale(1.05);
+}
+
+.nav-btn:focus,
+.episode-btn:focus,
+button:focus{
+  outline:3px solid var(--accent);
+  outline-offset:2px;
+}
+
+/* OPTIMISATION : Meilleure lisibilité des boutons sur TV */
+button{
+  min-height:44px;
+  font-size:14px;
+  touch-action:manipulation;
+}
+
+/* OPTIMISATION : Désactiver le zoom sur double-tap pour TV */
+@media (hover:none){
+  button,
+  .card,
+  .nav-btn{
+    -webkit-user-select:none;
+    user-select:none;
+  }
+}

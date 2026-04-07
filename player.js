@@ -207,5 +207,23 @@ if($("vlcBtn")) $("vlcBtn").onclick = () => {
   window.location.href = vlcUrl;
 };
 
+// NOUVEAU : Navigation au clavier pour Google TV
+document.addEventListener("keydown", e => {
+  const key = e.key.toLowerCase();
+  if(key === "escape" || key === "backspace") history.back();
+  else if(key === "enter") {
+    const video = $("video");
+    if(video) video.paused ? video.play() : video.pause();
+  }
+  else if(key === "f") {
+    const fullscreenBtn = $("fullscreenBtn");
+    if(fullscreenBtn) fullscreenBtn.click();
+  }
+  else if(key === "v") {
+    const vlcBtn = $("vlcBtn");
+    if(vlcBtn) vlcBtn.click();
+  }
+});
+
 initPlayer();
 window.addEventListener("load", initPlayer);

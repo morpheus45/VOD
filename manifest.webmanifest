@@ -1,13 +1,29 @@
 {
-  "name": "PIPSIFLIX",
+  "name": "PIPSIFLIX - Lecteur IPTV",
   "short_name": "PIPSIFLIX",
-  "description": "PIPSIFLIX : interface IPTV rapide pour flux live, films et series.",
+  "description": "PIPSIFLIX : interface IPTV rapide et fluide pour flux live, films et séries. Optimisé pour Android et Google TV.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#060b16",
   "theme_color": "#0f172a",
   "orientation": "landscape",
+  "prefer_related_applications": false,
+  "categories": ["entertainment", "video"],
+  "screenshots": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide"
+    }
+  ],
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -20,6 +36,47 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Films",
+      "short_name": "Films",
+      "description": "Accéder directement aux films",
+      "url": "./?type=vod",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Séries",
+      "short_name": "Séries",
+      "description": "Accéder directement aux séries",
+      "url": "./?type=series",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Live",
+      "short_name": "Live",
+      "description": "Accéder directement aux chaînes live",
+      "url": "./?type=live",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

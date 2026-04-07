@@ -599,4 +599,28 @@ if($("searchInput")) $("searchInput").oninput = e => { state.filters.search = e.
 if($("qualitySelect")) $("qualitySelect").onchange = e => { state.filters.quality = e.target.value; render(); };
 if($("sortSelect")) $("sortSelect").onchange = e => { state.filters.sort = e.target.value; render(); };
 
+// NOUVEAU : Navigation au clavier pour Google TV et Android
+let focusedCardIndex = 0;
+function focusCard(index){
+  const cards = document.querySelectorAll(".card");
+  if(cards.length === 0) return;
+  if(index < 0) index = 0;
+  if(index >= cards.length) index = cards.length - 1;
+  focusedCardIndex = index;
+  cards[index].focus();
+  cards[index].scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+document.addEventListener("keydown", e => {
+  const key = e.key.toLowerCase();
+  if(key === "arrowright") focusCard(focusedCardIndex + 1);
+  else if(key === "arrowleft") focusCard(focusedCardIndex - 1);
+  else if(key === "arrowdown") focusCard(focusedCardIndex + 4);
+  else if(key === "arrowup") focusCard(focusedCardIndex - 4);
+  else if(key === "enter") {
+    const focused = document.activeElement;
+    if(focused && focused.classList.contains("card")) focused.click();
+  }
+});
+
 boot();
