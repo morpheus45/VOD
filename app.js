@@ -575,11 +575,9 @@ function playNativeDirectly(item){
   
   if(isAndroid){
     try {
-      const intentUrl = "intent://" + url + "#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end";
-      window.location.href = intentUrl;
+      window.location.href = url;
     } catch(e) {
-      console.error("Erreur intent VLC:", e);
-      window.location.href = "vlc://" + url;
+      console.error("Erreur ouverture URL:", e);
     }
   } else {
     window.location.href = "vlc://" + url;
