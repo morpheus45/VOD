@@ -443,7 +443,11 @@ function playNativeDirectly(item){
   if(isAndroid){
     window.location.href = url;
   } else {
-    window.location.href = "vlc://" + url.replace(/^(https?:\/\/)/, "");
+    // VLC protocol with audio parameters to ensure sound is activated
+    const cleanUrl = url.replace(/^(https?:\/\/)/, "");
+    // Add VLC options to force audio track activation
+    const vlcUrl = "vlc://" + cleanUrl + "#--audio-track=1 --audio-language=fr,en,und";
+    window.location.href = vlcUrl;
   }
 }
 

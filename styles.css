@@ -53,7 +53,7 @@ button,select,input{font:inherit}
 .quality-count{font-size:13px;color:var(--muted);padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--line)}
 
 /* OPTIMISATION : Grille avec auto-fill et lazy loading */
-.quality-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,220px));justify-content:start;gap:14px;contain:layout style}
+.quality-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,160px));justify-content:start;gap:12px;contain:layout style}
 
 /* OPTIMISATION : Cartes avec transitions fluides */
 .card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:var(--shadow);cursor:pointer;transition:transform .18s ease, box-shadow .18s ease;contain:layout style paint}
@@ -109,7 +109,7 @@ button,select,input{font:inherit}
   .sticky-controls{top:68px}
   .hero{display:none}
   .quality-title{font-size:20px}
-  .quality-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .quality-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
   .poster--logo{padding:10px}
   .badge{font-size:9px;padding:3px 6px}
   .fav-btn{font-size:10px;padding:5px 7px}
@@ -122,7 +122,7 @@ button,select,input{font:inherit}
 /* OPTIMISATION : Google TV et Android TV (grand écran) */
 @media (min-width:1920px) and (orientation:landscape){
   .app-shell{max-width:100%;padding:0 40px 60px}
-  .quality-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:24px}
+  .quality-grid{grid-template-columns:repeat(auto-fill,minmax(200px,240px));gap:20px}
   .card{border-radius:24px}
   .card-title{font-size:18px;min-height:48px}
   .card-meta{font-size:14px;margin-top:10px}
