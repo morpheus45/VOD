@@ -46,7 +46,7 @@ button,select,input{font:inherit}
 .section-title-row h2{margin:0;font-size:34px}
 
 /* OPTIMISATION : Grille performante avec conteneur de contenu */
-.grid{display:grid;gap:18px;will-change:contents}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,160px));justify-content:start;gap:12px;will-change:contents}
 .quality-block{display:grid;gap:14px;contain:layout style paint}
 .quality-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .quality-title{margin:0;font-size:24px;color:#eef4ff;letter-spacing:.02em}
