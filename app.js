@@ -71,6 +71,14 @@ function saveProg(key, pct){
 function itemKey(item){
   return `${item.type || S.type}||${item.id || ""}||${item.title || ""}`;
 }
+
+// Upgrade HTTP → HTTPS si la page est servie en HTTPS (évite mixed content sur Android)
+function secureUrl(url){
+  if(!url) return url;
+  if(location.protocol === "https:" && /^http:\/\//i.test(url))
+    return url.replace(/^http:\/\//i, "https://");
+  return url;
+}
 function isFav(item){ return getFavs().some(x => x.key === itemKey(item)); }
 
 function toggleFav(item){
@@ -243,13 +251,13 @@ function parseXtreamCreds(apiUrl){
 function buildEpUrl(apiUrl, ep){
   // URL directe dans l'épisode (source la plus fiable)
   if(ep.url && !ep.url.includes("player_api") && !ep.url.includes("get_series_info")){
-    return ep.url;
+    return secureUrl(ep.url);
   }
   // Reconstruction Xtream
   const x = parseXtreamCreds(apiUrl);
   if(x && x.username && x.password && ep.id && !String(ep.id).includes("-")){
     const ext = ep.container_extension || "mkv";
-    return `${x.base}/series/${x.username}/${x.password}/${ep.id}.${ext}`;
+    return secureUrl(`${x.base}/series/${x.username}/${x.password}/${ep.id}.${ext}`);
   }
   return "";
 }
@@ -258,8 +266,11 @@ async function loadEpisodes(series){
   const cacheKey = `s_${series.id}_${series.title}`;
   if(S.epCache[cacheKey]) return S.epCache[cacheKey];
 
-  const apiUrl = series.stream_url || series.url || "";
-  if(!apiUrl) return { seasonsMap: {}, seasonsMeta: [] };
+  const rawApiUrl = series.stream_url || series.url || "";
+  if(!rawApiUrl) return { seasonsMap: {}, seasonsMeta: [] };
+
+  // Upgrade HTTP→HTTPS si page HTTPS (évite mixed content Android Chrome)
+  const apiUrl = secureUrl(rawApiUrl);
 
   // Timeout 8s + gestion CORS/réseau
   let data = null;

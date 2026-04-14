@@ -161,14 +161,18 @@ function triggerAndroidIntent(url){
 // ─── Lecture native / externe ─────────────────────────────────────────────────
 
 function openNative(){
+  // Toujours utiliser l'URL HTTP originale pour le lecteur natif
+  // (le lecteur système Android n'a pas de restriction mixed content)
   const url = resolveUrl();
   if(!url) return;
+  // Forcer HTTP pour l'Intent (le serveur goldenlink.live est HTTP uniquement)
+  const httpUrl = url.replace(/^https:\/\//i, "http://");
   if(isAndroid || isTV){
-    triggerAndroidIntent(url);
+    triggerAndroidIntent(httpUrl);
   } else if(isIOS){
     window.open(url, "_blank", "noopener");
   } else {
-    window.location.href = "vlc://" + url;
+    window.location.href = "vlc://" + httpUrl;
   }
 }
 
@@ -186,10 +190,20 @@ function toggleFullscreen(){
 }
 
 // ─── Gestion d'erreur vidéo ────────────────────────────────────────────────────
+// rawUrl = URL HTTP originale (sans upgrade HTTPS), utilisée pour l'Intent Android
 
-function handleVideoError(url){
+function handleVideoError(url, rawUrl){
   const video = $("video");
   const err   = video?.error;
+
+  // Sur Android/TV : fallback automatique vers le lecteur vidéo système
+  // (pas de restriction mixed content dans les apps natives)
+  if(isAndroid || isTV){
+    setStatus("Ouverture dans le lecteur vidéo natif…");
+    triggerAndroidIntent(rawUrl || url);
+    return;
+  }
+
   let msg = "Erreur de lecture.";
   if(err){
     switch(err.code){
@@ -198,8 +212,8 @@ function handleVideoError(url){
       case 3: msg = "Erreur de décodage vidéo."; break;
       case 4:
         msg = isBrowserUnfriendly(url)
-          ? `Format ${getExtension(url).toUpperCase()} non supporté par ce navigateur. Utilisez le bouton ▶ Lecture native.`
-          : "Format non supporté.";
+          ? `Format ${getExtension(url).toUpperCase()} non supporté. Utilisez ▶ Lecture native.`
+          : "Format non supporté. Utilisez ▶ Lecture native.";
         break;
     }
   }
@@ -310,19 +324,20 @@ function initPlayer(){
   setStatus("Chargement du flux…");
 
   // Événements vidéo → overlay + statut
+  // onerror reçoit les deux URLs : url (HTTPS tenté) et rawUrl (HTTP original pour Intent)
   video.onplaying = () => { hideOverlay(); setStatus(""); };
   video.onpause   = () => { if(!video.ended) showOverlay(); };
   video.onended   = () => showOverlay();
-  video.onerror   = () => handleVideoError(url);
+  video.onerror   = () => handleVideoError(url, rawUrl);
 
   // Reprise de progression
   const epK       = currentEpKey();
   const storedPct = epK ? (getProgress()[epK]?.pct || 0) : 0;
 
-  // MKV / AVI sur Android/TV : ouvrir directement dans le lecteur système
-  if(isBrowserUnfriendly(url) && (isAndroid || isTV)){
+  // MKV / AVI sur Android/TV : ouvrir directement dans le lecteur système (HTTP natif ok)
+  if(isBrowserUnfriendly(rawUrl) && (isAndroid || isTV)){
     setStatus("Ouverture dans le lecteur vidéo système…");
-    setTimeout(() => triggerAndroidIntent(url), 400);
+    setTimeout(() => triggerAndroidIntent(rawUrl), 400);
     return;
   }
 
