@@ -1,292 +1,208 @@
-/**
- * PIPSIFLIX PLAYER — v3.0
- * HLS / MPEG-TS / MP4 — Navigation prev/next épisode — Android TV
- */
+/* PIPSIFLIX — player.js */
 
-const item = JSON.parse(sessionStorage.getItem("iptv_current_item") || "null");
+'use strict';
 
-function $(id){ return document.getElementById(id); }
+const item = JSON.parse(sessionStorage.getItem('psf_item') || 'null');
 
-function escapeHtml(s){
-  return String(s ?? "").replace(/[&<>"']/g,
-    c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = id => document.getElementById(id);
+
+function setStatus(msg) {
+  const n = $('status');
+  if (!n) return;
+  n.hidden   = !msg;
+  n.textContent = msg || '';
 }
 
-// ─── Progress tracking ─────────────────────────────────────────────────────────
+// ── Progression ───────────────────────────────────────────
 
-function getProgress(){ try{ return JSON.parse(localStorage.getItem("iptv_v3_progress") || "{}"); } catch{ return {}; } }
-function saveProgress(key, pct){
-  const p = getProgress();
-  p[key] = { pct, ts: Date.now() };
-  localStorage.setItem("iptv_v3_progress", JSON.stringify(p));
+function getProg() { try { return JSON.parse(localStorage.getItem('psf_prog') || '{}'); } catch { return {}; } }
+function saveProg(key, pct) {
+  const p = getProg(); p[key] = { pct, ts: Date.now() };
+  localStorage.setItem('psf_prog', JSON.stringify(p));
 }
 
-function currentEpKey(){
-  if(!item || item.type !== "series") return null;
-  if(item.selected_episode && item.season && item.selected_episode.episode_num){
-    return `${item.title}||S${item.season}E${item.selected_episode.episode_num}`;
-  }
-  return null;
-}
+// ── URL helpers ───────────────────────────────────────────
 
-// ─── URL helpers ───────────────────────────────────────────────────────────────
-
-function getExtension(url){
-  if(!url) return "mp4";
-  try{
-    const path = new URL(url).pathname;
-    const ext  = path.split(".").pop().toLowerCase();
-    return ["mp4","mkv","ts","m3u8"].includes(ext) ? ext : "mp4";
-  } catch{
-    const ext = url.split("?")[0].split(".").pop().toLowerCase();
-    return ["mp4","mkv","ts","m3u8"].includes(ext) ? ext : "mp4";
-  }
-}
-function isHls(url){ return url.includes(".m3u8") || url.includes("type=m3u8") || getExtension(url) === "m3u8"; }
-function isMpegTs(url){ return getExtension(url) === "ts" || url.includes(".ts?") || url.includes("type=ts"); }
-
-// ─── Player instances ──────────────────────────────────────────────────────────
-
-let hlsInst = null, mpegtsInst = null;
-
-function destroyPlayers(){
-  if(hlsInst)   { try{ hlsInst.destroy(); }    catch(e){} hlsInst    = null; }
-  if(mpegtsInst){ try{ mpegtsInst.destroy(); }  catch(e){} mpegtsInst = null; }
-  const v = $("video");
-  if(v){ v.pause(); v.removeAttribute("src"); v.load(); }
-}
-
-function setStatus(msg){
-  const n = $("playbackStatus");
-  if(!n) return;
-  n.hidden = !msg;
-  n.textContent = msg || "";
-}
-
-// ─── Resolve playback URL ──────────────────────────────────────────────────────
-
-function resolveUrl(){
-  if(!item) return null;
-  // Épisode sélectionné dans la session
-  if(item.selected_episode){
-    const ep = item.selected_episode;
-    return ep.url || ep.stream_url || null;
-  }
+function resolveUrl() {
+  if (!item) return null;
+  if (item.selected_episode) return item.selected_episode.url || item.selected_episode.stream_url || null;
   return item.stream_url || item.url || null;
 }
 
-// ─── Init player ──────────────────────────────────────────────────────────────
+function ext(url) {
+  if (!url) return 'mp4';
+  try { const e = new URL(url).pathname.split('.').pop().toLowerCase(); return ['mp4','mkv','ts','m3u8'].includes(e) ? e : 'mp4'; }
+  catch { const e = url.split('?')[0].split('.').pop().toLowerCase(); return ['mp4','mkv','ts','m3u8'].includes(e) ? e : 'mp4'; }
+}
+const isHls    = url => url.includes('.m3u8') || url.includes('type=m3u8') || ext(url) === 'm3u8';
+const isMpegTs = url => ext(url) === 'ts' || url.includes('.ts?') || url.includes('type=ts');
 
-function initPlayer(){
-  if(!item){ setStatus("Aucun média sélectionné."); return; }
+// ── Player instances ──────────────────────────────────────
+
+let hls = null, mpegts = null;
+
+function destroy() {
+  if (hls)    { try { hls.destroy(); }    catch {} hls    = null; }
+  if (mpegts) { try { mpegts.destroy(); } catch {} mpegts = null; }
+  const v = $('video');
+  if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+}
+
+// ── Init ──────────────────────────────────────────────────
+
+function init() {
+  if (!item) { setStatus('Aucun média sélectionné.'); return; }
 
   const url = resolveUrl();
-  if(!url){ setStatus("URL de lecture introuvable."); return; }
+  if (!url) { setStatus('URL de lecture introuvable.'); return; }
 
-  // UI infos
-  const label = item.episode_label
-    ? `${item.title} — ${item.episode_label}`
-    : item.title || "Lecture";
-  const sub = item.episode_title || item.category_name || "";
+  // Infos
+  const label = item.episode_label ? `${item.title} — ${item.episode_label}` : item.title || 'Lecture';
+  const sub   = item.episode_title || item.category_name || '';
+  if ($('playerTitle')) $('playerTitle').textContent = label;
+  if ($('playerSub'))   $('playerSub').textContent   = sub;
+  if ($('plotText'))    $('plotText').textContent     = item.plot || 'Aucune description.';
 
-  if($("playerTitle")) $("playerTitle").textContent = label;
-  if($("playerSub"))   $("playerSub").textContent   = sub;
-  if($("plotText"))    $("plotText").textContent     = item.plot || "Aucune description.";
+  updateNav();
+  const video = $('video');
+  if (!video) return;
 
-  // Nav prev/next
-  updateNavButtons();
+  destroy();
+  setStatus('Chargement…');
 
-  const video = $("video");
-  if(!video) return;
-
-  destroyPlayers();
-  setStatus("Chargement du flux…");
-
-  // Reprise de progression
-  const epK = currentEpKey();
-  const storedPct = epK ? (getProgress()[epK]?.pct || 0) : 0;
+  const progKey = item.progress_key || null;
+  const stored  = progKey ? (getProg()[progKey]?.pct || 0) : 0;
 
   setTimeout(() => {
-    if(isHls(url)){
-      if(typeof Hls !== "undefined" && Hls.isSupported()){
-        hlsInst = new Hls({ enableWorker:true, lowLatencyMode:true });
-        hlsInst.loadSource(url);
-        hlsInst.attachMedia(video);
-        hlsInst.on(Hls.Events.MANIFEST_PARSED, () => {
-          setStatus("");
-          if(storedPct > 2 && video.duration){
-            video.currentTime = video.duration * storedPct / 100;
-          }
-          video.play().catch(() => setStatus("Cliquez ▶ pour démarrer"));
+    if (isHls(url)) {
+      if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+        hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          setStatus('');
+          if (stored > 2 && video.duration) video.currentTime = video.duration * stored / 100;
+          video.play().catch(() => setStatus('Cliquez ▶ pour démarrer'));
         });
-        hlsInst.on(Hls.Events.ERROR, (_, d) => {
-          if(d.fatal) hlsInst.recoverMediaError();
-        });
-      } else if(video.canPlayType("application/vnd.apple.mpegurl")){
+        hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) hls.recoverMediaError(); });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = url;
-        video.play().then(() => setStatus("")).catch(() => {});
-      } else {
-        setStatus("HLS non supporté sur cet appareil.");
-      }
+        video.play().then(() => setStatus('')).catch(() => {});
+      } else { setStatus('HLS non supporté.'); }
 
-    } else if(isMpegTs(url)){
-      if(typeof mpegts !== "undefined" && mpegts.getFeatureList().mseLivePlayback){
-        mpegtsInst = mpegts.createPlayer({ type:"mse", url, isLive: item.type === "live" });
-        mpegtsInst.attachMediaElement(video);
-        mpegtsInst.load();
-        mpegtsInst.play().then(() => setStatus("")).catch(() => {
-          video.src = url;
-          video.play().catch(() => setStatus("Erreur MPEG-TS."));
+    } else if (isMpegTs(url)) {
+      if (typeof window.mpegts !== 'undefined' && window.mpegts.getFeatureList().mseLivePlayback) {
+        mpegts = window.mpegts.createPlayer({ type: 'mse', url, isLive: item.type === 'live' });
+        mpegts.attachMediaElement(video);
+        mpegts.load();
+        mpegts.play().then(() => setStatus('')).catch(() => {
+          video.src = url; video.play().catch(() => setStatus('Erreur MPEG-TS.'));
         });
-      } else {
-        video.src = url;
-        video.play().then(() => setStatus("")).catch(() => setStatus("Format non supporté."));
-      }
+      } else { video.src = url; video.play().then(() => setStatus('')).catch(() => setStatus('Format non supporté.')); }
 
     } else {
       video.src = url;
       video.play().then(() => {
-        setStatus("");
-        if(storedPct > 2 && video.duration)
-          video.currentTime = video.duration * storedPct / 100;
-      }).catch(() => setStatus("Format non supporté nativement."));
+        setStatus('');
+        if (stored > 2 && video.duration) video.currentTime = video.duration * stored / 100;
+      }).catch(() => setStatus('Format non supporté nativement.'));
     }
   }, 200);
 
-  // Sauvegarde de progression toutes les 5s
-  if(epK){
+  // Suivi progression
+  if (progKey) {
     const tracker = setInterval(() => {
-      if(!video || video.ended || video.paused) return;
+      if (!video || video.ended || video.paused) return;
       const pct = video.duration ? (video.currentTime / video.duration) * 100 : 0;
-      if(pct > 1) saveProgress(epK, pct);
+      if (pct > 1) saveProg(progKey, pct);
     }, 5000);
-    video.addEventListener("ended", () => {
+    video.addEventListener('ended', () => {
       clearInterval(tracker);
-      saveProgress(epK, 100);
-      // Auto-play épisode suivant après 3s
-      setTimeout(() => goNext(), 3000);
+      saveProg(progKey, 100);
+      setTimeout(goNext, 3000); // auto-play suivant
     });
   }
 }
 
-// ─── Navigation prev / next épisode ───────────────────────────────────────────
+// ── Navigation prev/next ──────────────────────────────────
 
-function getEpList(){ return Array.isArray(item?.all_episodes) ? item.all_episodes : []; }
-function getCurIdx() { return typeof item?.current_ep_index === "number" ? item.current_ep_index : -1; }
+function getAll() { return Array.isArray(item?.all_episodes) ? item.all_episodes : []; }
+function getCur()  { return typeof item?.cur_idx === 'number' ? item.cur_idx : -1; }
 
-function updateNavButtons(){
-  const list  = getEpList();
-  const idx   = getCurIdx();
-  const prevBtn = $("prevEpBtn");
-  const nextBtn = $("nextEpBtn");
-  if(prevBtn) prevBtn.disabled = (idx <= 0 || list.length === 0);
-  if(nextBtn) nextBtn.disabled = (idx < 0 || idx >= list.length - 1);
+function updateNav() {
+  const all = getAll(); const idx = getCur();
+  const prev = $('prevBtn'); const next = $('nextBtn');
+  if (prev) prev.disabled = idx <= 0 || !all.length;
+  if (next) next.disabled = idx < 0 || idx >= all.length - 1;
 }
 
-function goEpisode(newIdx){
-  const list = getEpList();
-  if(newIdx < 0 || newIdx >= list.length) return;
-
-  const ep = list[newIdx];
-  if(!ep || !ep.url) return;
-
+function goEp(newIdx) {
+  const all = getAll();
+  if (newIdx < 0 || newIdx >= all.length) return;
+  const ep = all[newIdx];
+  if (!ep?.url) return;
   const updated = {
     ...item,
-    episode_label:    `S${String(ep.season).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`,
+    episode_label:    `S${String(ep.sk).padStart(2,'0')}E${String(ep.episode_num).padStart(2,'0')}`,
     episode_title:    ep.title,
     stream_url:       ep.url,
     url:              ep.url,
-    selected_episode: { ...ep, stream_url: ep.url },
-    current_ep_index: newIdx
+    selected_episode: { url: ep.url, stream_url: ep.url },
+    progress_key:     ep.progress_key,
+    cur_idx:          newIdx
   };
-
-  sessionStorage.setItem("iptv_current_item", JSON.stringify(updated));
+  sessionStorage.setItem('psf_item', JSON.stringify(updated));
   location.reload();
 }
 
-function goPrev(){ goEpisode(getCurIdx() - 1); }
-function goNext(){ goEpisode(getCurIdx() + 1); }
+function goNext() { goEp(getCur() + 1); }
+function goPrev() { goEp(getCur() - 1); }
 
-// ─── Lecture native / externe ──────────────────────────────────────────────────
+// ── Actions ───────────────────────────────────────────────
 
-function openNative(){
-  const url = resolveUrl();
-  if(!url) return;
-
+function openNative() {
+  const url = resolveUrl(); if (!url) return;
   const isAndroid = /Android/i.test(navigator.userAgent);
   const isTV      = /TV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||
-                    (navigator.userAgent.includes("Android") && !navigator.userAgent.includes("Mobile"));
-
-  if(isAndroid || isTV){
-    // Intent Android — ouvre dans le lecteur vidéo système
-    const intent = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(item.title || "")};end`;
-    window.location.href = intent;
+                    (navigator.userAgent.includes('Android') && !navigator.userAgent.includes('Mobile'));
+  if (isAndroid || isTV) {
+    location.href = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(item.title||'')};end`;
   } else {
-    window.location.href = "vlc://" + url;
+    location.href = 'vlc://' + url;
   }
 }
 
-// ─── Plein écran ───────────────────────────────────────────────────────────────
+// ── Bindings ──────────────────────────────────────────────
 
-function toggleFullscreen(){
-  const video = $("video");
-  if(!video) return;
-  if(document.fullscreenElement){
-    document.exitFullscreen?.();
-  } else {
-    (video.requestFullscreen || video.webkitRequestFullscreen)?.call(video);
-  }
-}
-
-// ─── Bindings UI ───────────────────────────────────────────────────────────────
-
-if($("backBtn"))       $("backBtn").onclick      = () => history.back();
-if($("prevEpBtn"))     $("prevEpBtn").onclick     = goPrev;
-if($("nextEpBtn"))     $("nextEpBtn").onclick     = goNext;
-if($("fullscreenBtn")) $("fullscreenBtn").onclick = toggleFullscreen;
-if($("nativeBtn"))     $("nativeBtn").onclick     = openNative;
-if($("copyBtn"))       $("copyBtn").onclick       = () => {
-  const url = resolveUrl();
-  if(url) navigator.clipboard.writeText(url).then(() => alert("Lien copié !"));
+if ($('backBtn'))   $('backBtn').onclick   = () => history.back();
+if ($('prevBtn'))   $('prevBtn').onclick   = goPrev;
+if ($('nextBtn'))   $('nextBtn').onclick   = goNext;
+if ($('nativeBtn')) $('nativeBtn').onclick = openNative;
+if ($('fsBtn'))     $('fsBtn').onclick     = () => {
+  const v = $('video');
+  document.fullscreenElement ? document.exitFullscreen?.() : (v.requestFullscreen || v.webkitRequestFullscreen)?.call(v);
 };
-if($("externalBtn"))   $("externalBtn").onclick   = () => {
+if ($('copyBtn'))   $('copyBtn').onclick   = () => {
   const url = resolveUrl();
-  if(url) window.open(url, "_blank");
+  if (url) navigator.clipboard.writeText(url).then(() => alert('Lien copié !'));
 };
-if($("vlcBtn"))        $("vlcBtn").onclick        = () => {
-  const url = resolveUrl();
-  if(url) window.location.href = "vlc://" + url;
+if ($('vlcBtn'))    $('vlcBtn').onclick    = () => {
+  const url = resolveUrl(); if (url) location.href = 'vlc://' + url;
 };
-if($("playOverlayBtn")) $("playOverlayBtn").onclick = () => $("video")?.play();
 
-// ─── Clavier / télécommande ────────────────────────────────────────────────────
+// ── Clavier / Télécommande ────────────────────────────────
 
-document.addEventListener("keydown", e => {
-  const k = e.key;
-  const video = $("video");
-
-  if(k === "Escape" || k === "GoBack" || k === "BrowserBack" || k === "Back"){
-    history.back();
-  } else if(k === "Enter" || k === " " || k === "MediaPlayPause"){
-    e.preventDefault();
-    if(video) video.paused ? video.play() : video.pause();
-  } else if(k === "ArrowRight" || k === "FastForward"){
-    if(video){ e.preventDefault(); video.currentTime += 10; }
-  } else if(k === "ArrowLeft" || k === "Rewind"){
-    if(video){ e.preventDefault(); video.currentTime -= 10; }
-  } else if(k === "ArrowUp"){
-    if(video){ e.preventDefault(); video.volume = Math.min(1, video.volume + .1); }
-  } else if(k === "ArrowDown"){
-    if(video){ e.preventDefault(); video.volume = Math.max(0, video.volume - .1); }
-  } else if(k === "f" || k === "F"){
-    toggleFullscreen();
-  } else if(k === "n" || k === "N" || k === "ChannelUp"){
-    goNext();
-  } else if(k === "p" || k === "P" || k === "ChannelDown"){
-    goPrev();
-  }
+document.addEventListener('keydown', e => {
+  const k = e.key; const v = $('video');
+  if (['Escape','GoBack','Back','BrowserBack'].includes(k)) { history.back(); return; }
+  if (['Enter',' ','MediaPlayPause'].includes(k)) { e.preventDefault(); v?.paused ? v.play() : v?.pause(); }
+  else if (['ArrowRight','FastForward'].includes(k)) { if(v){e.preventDefault();v.currentTime+=10;} }
+  else if (['ArrowLeft','Rewind'].includes(k))       { if(v){e.preventDefault();v.currentTime-=10;} }
+  else if (k==='ArrowUp')   { if(v){e.preventDefault();v.volume=Math.min(1,v.volume+.1);} }
+  else if (k==='ArrowDown') { if(v){e.preventDefault();v.volume=Math.max(0,v.volume-.1);} }
+  else if (k==='f'||k==='F') { $('fsBtn')?.click(); }
+  else if (k==='n'||k==='N'||k==='ChannelUp')   goNext();
+  else if (k==='p'||k==='P'||k==='ChannelDown') goPrev();
 });
 
-// ─── Init ──────────────────────────────────────────────────────────────────────
-
-initPlayer();
+init();
