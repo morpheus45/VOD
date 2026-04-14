@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="Lecteur IPTV pour flux live, films et séries" />
+  <meta name="description" content="Lecteur IPTV pour films et séries" />
   <meta name="theme-color" content="#0f172a" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -11,7 +11,6 @@
   <meta name="apple-mobile-web-app-title" content="PIPSIFLIX" />
   <meta name="application-name" content="PIPSIFLIX" />
   <meta name="msapplication-TileColor" content="#0f172a" />
-  <meta name="msapplication-config" content="browserconfig.xml" />
   <title>PIPSIFLIX</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/icon-192.png" type="image/png" />
@@ -21,43 +20,45 @@
 </head>
 <body>
   <div class="app-shell">
+
     <header class="topbar">
       <div class="brand">PIPSIFLIX</div>
       <div class="nav-row">
-        <button class="nav-btn active" data-type="vod">Films</button>
-        <button class="nav-btn" data-type="series">Series</button>
+        <button class="nav-btn active" data-type="vod">🎬 Films</button>
+        <button class="nav-btn"        data-type="series">📺 Séries</button>
       </div>
     </header>
 
     <section class="sticky-controls">
       <div class="controls-grid controls-grid--four">
         <select id="categorySelect">
-          <option value="">Toutes les sections</option>
+          <option value="">Toutes les catégories</option>
         </select>
-        <input id="searchInput" type="text" placeholder="Rechercher..." />
+        <input  id="searchInput"   type="text" placeholder="Rechercher un titre…" autocomplete="off" />
         <select id="qualitySelect">
-          <option value="">Toutes les qualites</option>
+          <option value="">Toutes les qualités</option>
           <option value="4K">4K</option>
           <option value="HD">HD</option>
           <option value="SD">SD</option>
           <option value="Autres">Autres</option>
         </select>
         <select id="sortSelect">
-          <option value="title">Titre</option>
-          <option value="category">Section</option>
-          <option value="recent">Recents</option>
+          <option value="title">Titre A→Z</option>
+          <option value="category">Catégorie</option>
+          <option value="recent">Récents</option>
         </select>
       </div>
     </section>
 
     <main class="content">
+
       <section class="hero" id="hero">
         <div class="hero-text">
           <h1 id="heroTitle">PIPSIFLIX</h1>
-          <p id="heroSubtitle">Chargement intelligent des flux JSON / M3U, sans buffers.</p>
+          <p id="heroSubtitle">Chargement intelligent des flux JSON / M3U.</p>
           <div class="hero-stats">
-            <span id="statType">Live</span>
-            <span id="statCount">0 elements</span>
+            <span id="statType">VOD</span>
+            <span id="statCount">0 éléments</span>
             <span id="statSource">source inconnue</span>
           </div>
         </div>
@@ -66,27 +67,26 @@
       <section class="section-block">
         <div class="section-title-row">
           <h2 id="catalogTitle">Catalogue</h2>
-          <span id="catalogCount">0 elements</span>
+          <span id="catalogCount">0 éléments</span>
         </div>
         <div id="grid" class="grid"></div>
-        <!-- Sentinelle pour le chargement infini -->
-        <div id="gridSentinel" style="height: 1px; margin-top: 2rem;"></div>
-        <div id="emptyState" class="empty-state" hidden>Aucun element trouve.</div>
+        <div id="gridSentinel" style="height:1px;margin-top:2rem;"></div>
+        <div id="emptyState" class="empty-state" hidden>Aucun élément trouvé.</div>
       </section>
+
     </main>
   </div>
 
+  <!-- Panneau séries — rendu dynamiquement par app.js -->
   <div id="seriesPanel" class="series-panel" hidden></div>
 
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=30"></script>
   <script>
-    if ("serviceWorker" in navigator) {
+    if("serviceWorker" in navigator){
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js", { scope: "./" }).then(reg => {
-          console.log("Service Worker enregistré:", reg);
-        }).catch(err => {
-          console.error("Erreur Service Worker:", err);
-        });
+        navigator.serviceWorker.register("./sw.js", { scope:"./" })
+          .then(r => console.log("SW:", r.scope))
+          .catch(e => console.warn("SW err:", e));
       });
     }
   </script>
