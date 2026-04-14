@@ -265,7 +265,7 @@ async function loadEpisodes(series){
   let data = null;
   try {
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 8000);
+    const tid = setTimeout(() => controller.abort(), 5000);
     const r = await fetch(apiUrl, { signal: controller.signal });
     clearTimeout(tid);
     data = r.ok ? await r.json() : null;
@@ -345,7 +345,7 @@ function openPanel(series){
   panel.innerHTML = buildPanelLoading(series);
   bindClose();
 
-  loadEpisodes(series).then(({ seasonsMap, seasonsMeta }) => {
+  loadEpisodes(series).then(({ seasonsMap, seasonsMeta, directOnly }) => {
     S.panel.seasonsMap  = seasonsMap;
     S.panel.seasonsMeta = seasonsMeta;
     S.panel.directOnly  = directOnly || false;
@@ -764,6 +764,7 @@ async function boot(){
       S.type = btn.dataset.type;
       S.cat = ""; S.search = "";
       $("searchInput").value = "";
+      closePanel();
       render();
     });
   });
