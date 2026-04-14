@@ -1,71 +1,94 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-  <meta name="theme-color" content="#08111f"/>
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="PIPSIFLIX"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Lecteur IPTV pour films et séries" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PIPSIFLIX" />
+  <meta name="application-name" content="PIPSIFLIX" />
+  <meta name="msapplication-TileColor" content="#0f172a" />
   <title>PIPSIFLIX</title>
-  <link rel="manifest" href="manifest.webmanifest"/>
-  <link rel="icon" href="icons/icon-192.png" type="image/png"/>
-  <link rel="apple-touch-icon" href="icons/icon-192.png"/>
-  <link rel="stylesheet" href="styles.css"/>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon-192.png" type="image/png" />
+  <link rel="shortcut icon" href="./icons/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-
-  <div class="app">
+  <div class="app-shell">
 
     <header class="topbar">
       <div class="brand">PIPSIFLIX</div>
-      <nav class="tabs">
-        <button class="tab tab--active" data-type="vod">🎬 Films</button>
-        <button class="tab" data-type="series">📺 Séries</button>
-      </nav>
+      <div class="nav-row">
+        <button class="nav-btn active" data-type="vod">🎬 Films</button>
+        <button class="nav-btn"        data-type="series">📺 Séries</button>
+      </div>
     </header>
 
-    <div class="filters">
-      <select id="catSelect"><option value="">Toutes catégories</option></select>
-      <input id="searchInput" type="search" placeholder="Rechercher…" autocomplete="off"/>
-      <select id="qualSelect">
-        <option value="">Toutes qualités</option>
-        <option value="4K">4K</option>
-        <option value="HD">HD</option>
-        <option value="SD">SD</option>
-      </select>
-      <select id="sortSelect">
-        <option value="az">A → Z</option>
-        <option value="cat">Catégorie</option>
-      </select>
-    </div>
+    <section class="sticky-controls">
+      <div class="controls-grid controls-grid--four">
+        <select id="categorySelect">
+          <option value="">Toutes les catégories</option>
+        </select>
+        <input  id="searchInput"   type="text" placeholder="Rechercher un titre…" autocomplete="off" />
+        <select id="qualitySelect">
+          <option value="">Toutes les qualités</option>
+          <option value="4K">4K</option>
+          <option value="HD">HD</option>
+          <option value="SD">SD</option>
+          <option value="Autres">Autres</option>
+        </select>
+        <select id="sortSelect">
+          <option value="title">Titre A→Z</option>
+          <option value="category">Catégorie</option>
+          <option value="recent">Récents</option>
+        </select>
+      </div>
+    </section>
 
-    <main class="main">
-      <div id="stats" class="stats"></div>
-      <div id="grid" class="grid"></div>
-      <div id="sentinel" class="sentinel"></div>
-      <div id="empty" class="empty" hidden>Aucun résultat.</div>
+    <main class="content">
+
+      <section class="hero" id="hero">
+        <div class="hero-text">
+          <h1 id="heroTitle">PIPSIFLIX</h1>
+          <p id="heroSubtitle">Chargement intelligent des flux JSON / M3U.</p>
+          <div class="hero-stats">
+            <span id="statType">VOD</span>
+            <span id="statCount">0 éléments</span>
+            <span id="statSource">source inconnue</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-block">
+        <div class="section-title-row">
+          <h2 id="catalogTitle">Catalogue</h2>
+          <span id="catalogCount">0 éléments</span>
+        </div>
+        <div id="grid" class="grid"></div>
+        <div id="gridSentinel" style="height:1px;margin-top:2rem;"></div>
+        <div id="emptyState" class="empty-state" hidden>Aucun élément trouvé.</div>
+      </section>
+
     </main>
-
   </div>
 
-  <!-- Panneau séries — FERMÉ par défaut via [hidden] -->
-  <div id="panel" class="panel" hidden>
-    <div class="panel-inner">
-      <div class="panel-head" id="panelHead"></div>
-      <div class="panel-body" id="panelBody"></div>
-    </div>
-  </div>
+  <!-- Panneau séries — rendu dynamiquement par app.js -->
+  <div id="seriesPanel" class="series-panel" hidden></div>
 
-  <div id="backdrop" class="backdrop" hidden></div>
-
-  <script src="app.js"></script>
+  <script src="app.js?v=31"></script>
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    if("serviceWorker" in navigator){
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js", { scope:"./" })
+          .then(r => console.log("SW:", r.scope))
+          .catch(e => console.warn("SW err:", e));
+      });
     }
   </script>
-
 </body>
 </html>
