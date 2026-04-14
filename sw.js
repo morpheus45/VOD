@@ -1,63 +1,43 @@
-const CACHE_NAME  = "pipsiflix-shell-v30";
-const APP_SHELL   = [
-  "./",
-  "./index.html",
-  "./player.html",
-  "./styles.css",
-  "./player.css",
-  "./app.js",
-  "./player.js",
-  "./manifest.webmanifest",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png"
-];
+// sw.js — PIPSIFLIX v3.1 — cache bust forcé
+const CACHE = "pipsiflix-v31";
+const SHELL = ["./","./index.html","./player.html","./styles.css","./player.css","./app.js","./player.js","./manifest.webmanifest","./icons/icon-192.png","./icons/icon-512.png"];
 
-self.addEventListener("install", event => {
-  event.waitUntil(
+self.addEventListener("install", e => {
+  e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      .then(() => caches.open(CACHE_NAME).then(c => c.addAll(APP_SHELL)))
+      .then(() => caches.open(CACHE).then(c => c.addAll(SHELL)))
       .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener("activate", event => {
-  event.waitUntil(
+self.addEventListener("activate", e => {
+  e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll().then(clients => clients.forEach(c => c.postMessage({ type:"RELOAD" }))))
   );
 });
 
-self.addEventListener("fetch", event => {
-  const { request } = event;
+self.addEventListener("fetch", e => {
+  const { request } = e;
   if(request.method !== "GET") return;
-
-  const url    = new URL(request.url);
+  const url = new URL(request.url);
   const isData = url.pathname.endsWith(".json") || url.pathname.endsWith(".m3u");
-
   if(isData){
-    // Données : réseau en priorité, cache en fallback
-    event.respondWith(
-      fetch(request).catch(() => caches.match(request))
-    );
+    e.respondWith(fetch(request).catch(() => caches.match(request)));
     return;
   }
-
-  // Shell : cache first + mise à jour réseau en arrière-plan
-  event.respondWith(
+  e.respondWith(
     caches.match(request).then(cached => {
-      const networkFetch = fetch(request).then(response => {
-        if(url.origin === self.location.origin && response.ok){
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(c => c.put(request, copy)).catch(() => {});
+      const net = fetch(request).then(r => {
+        if(url.origin === self.location.origin && r.ok){
+          caches.open(CACHE).then(c => c.put(request, r.clone())).catch(()=>{});
         }
-        return response;
+        return r;
       });
-      return cached ||
-        networkFetch.catch(() =>
-          request.mode === "navigate" ? caches.match("./index.html") : cached
-        );
+      return cached || net.catch(() => request.mode === "navigate" ? caches.match("./index.html") : cached);
     })
   );
 });
