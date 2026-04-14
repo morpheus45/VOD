@@ -92,7 +92,8 @@ button,select,input{ font:inherit }
 /* ── Grille ── */
 .grid{
   display:grid;
-  grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  grid-template-columns:repeat(auto-fill,minmax(130px,160px));
+  justify-content:start;
   gap:12px;
 }
 
