@@ -153,6 +153,9 @@ button,select,input{ font:inherit }
    PANNEAU SÉRIES
    ================================================================ */
 
+/* CRITIQUE : [hidden] doit toujours l'emporter sur display:flex */
+.series-panel[hidden]{ display:none !important; }
+
 .series-panel{
   position:fixed; top:0; right:0; bottom:0;
   width:min(540px,96vw);
