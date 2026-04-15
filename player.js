@@ -155,7 +155,39 @@ function resolveUrl(){
 function triggerAndroidIntent(url){
   const title  = encodeURIComponent(item?.title || "");
   const intent = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${title};end`;
+
+  // Cacher immédiatement le carré noir de la vidéo
+  const video = $("video");
+  if(video){ video.style.display = "none"; }
+  hideOverlay();
+
+  // Afficher un écran "Lecture lancée" propre à la place du carré noir
+  const shell = document.querySelector(".player-shell");
+  if(shell){
+    shell.insertAdjacentHTML("beforeend", `
+      <div id="intentScreen" style="
+        position:fixed;inset:0;z-index:999;
+        background:linear-gradient(160deg,#05101f,#08182e);
+        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;
+        color:#fff;padding:32px;text-align:center;">
+        <div style="font-size:52px">▶</div>
+        <div style="font-size:20px;font-weight:700">${item?.title || "Lecture"}</div>
+        <div style="font-size:14px;color:#8ca8cc">Ouverture dans le lecteur vidéo…</div>
+        <button onclick="history.back()" style="
+          margin-top:16px;padding:14px 28px;border-radius:14px;border:none;
+          background:linear-gradient(135deg,#ff3d5e,#ff9f2c);
+          color:#fff;font-size:16px;font-weight:700;cursor:pointer;">
+          ← Retour au catalogue
+        </button>
+      </div>`);
+  }
+
+  // Déclencher l'intent Android
   window.location.href = intent;
+
+  // Retour automatique au catalogue après 2,5 s
+  // (si l'utilisateur revient dans Chrome, il ne voit plus le carré noir)
+  setTimeout(() => history.back(), 2500);
 }
 
 // ─── Lecture native / externe ─────────────────────────────────────────────────
