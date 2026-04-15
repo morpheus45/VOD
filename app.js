@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSIFLIX — app.js v4.0                                     ║
+// ║  PIPSIFLIX — app.js v4.2 — epDb statique                     ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -44,7 +44,9 @@ const S = {
     selSeason  : null
   },
   // Cache en mémoire des épisodes chargés
-  epCache   : {}
+  epCache   : {},
+  // Base pré-générée (episodes_part*.json) — chargée en lazy au 1er clic série
+  epDb      : {}
 };
 
 // ─────────────────────────────────────────────────────────────────
@@ -219,6 +221,31 @@ async function fetchText(url){
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  BASE ÉPISODES PRÉ-GÉNÉRÉE (episodes_part*.json)
+// ─────────────────────────────────────────────────────────────────
+
+let _epDbPromise = null;
+
+async function ensureEpDb(){
+  if(_epDbPromise) return _epDbPromise;
+  _epDbPromise = (async () => {
+    try {
+      const idx = await fetchJson("episodes_index.json");
+      if(!idx || !idx.chunks){ console.warn("[PIPSIFLIX] episodes_index.json absent"); return; }
+      // Charger tous les chunks en parallèle
+      const fetches = [];
+      for(let i = 1; i <= idx.chunks; i++) fetches.push(fetchJson(`episodes_part${i}.json`));
+      const chunks = await Promise.all(fetches);
+      chunks.forEach(chunk => {
+        if(chunk && typeof chunk === "object") Object.assign(S.epDb, chunk);
+      });
+      console.log(`[PIPSIFLIX] epDb : ${Object.keys(S.epDb).length} séries chargées`);
+    } catch(e) { console.warn("[PIPSIFLIX] epDb erreur", e); }
+  })();
+  return _epDbPromise;
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  XTREAM CODES — CHARGEMENT ÉPISODES
 // ─────────────────────────────────────────────────────────────────
 //
@@ -266,6 +293,43 @@ async function loadEpisodes(series){
   const cacheKey = `s_${series.id}_${series.title}`;
   if(S.epCache[cacheKey]) return S.epCache[cacheKey];
 
+  // ── 1. Base pré-générée (priorité absolue — évite CORS/mixed-content) ──
+  await ensureEpDb();
+  const sid = String(series.id || "");
+  if(sid && S.epDb[sid]){
+    const db = S.epDb[sid];
+    const seasonsMap = {};
+    Object.entries(db.seasons || {}).forEach(([sk, epList]) => {
+      seasonsMap[String(sk)] = epList.map(ep => ({
+        id                 : ep.id,
+        episode_num        : ep.episode_num,
+        season             : ep.season,
+        title              : cleanEpTitle(ep.title || "", series.title) || `Épisode ${ep.episode_num}`,
+        url                : ep.url,        // URL HTTP goldenlink.live — intent Android
+        stream_url         : ep.url,
+        container_extension: ep.ext || "mkv",
+        duration           : ep.duration || "",
+        plot               : ep.plot || "",
+        thumb              : ep.thumb || ""
+      }));
+    });
+    const seasonsMeta = (db.seasonsMeta || []).map(s => ({
+      num  : s.num,
+      name : s.name || `Saison ${s.num}`,
+      cover: s.cover || "",
+      count: s.count || 0
+    }));
+    // Enrichir les métadonnées de la série
+    if(db.meta){
+      if(!series.plot        && db.meta.plot)  series.plot        = db.meta.plot;
+      if(!series.stream_icon && db.meta.cover) series.stream_icon = db.meta.cover;
+    }
+    const result = { seasonsMap, seasonsMeta };
+    S.epCache[cacheKey] = result;
+    return result;
+  }
+
+  // ── 2. Fallback : API Xtream en direct (HTTP, peut échouer en HTTPS) ──
   const rawApiUrl = series.stream_url || series.url || "";
   if(!rawApiUrl) return { seasonsMap: {}, seasonsMeta: [] };
 

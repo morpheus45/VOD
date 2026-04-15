@@ -1,5 +1,5 @@
 // sw.js — PIPSIFLIX v3.1 — cache bust forcé
-const CACHE = "pipsiflix-v35";
+const CACHE = "pipsiflix-v36";
 const SHELL = ["./","./index.html","./player.html","./styles.css","./player.css","./app.js","./player.js","./manifest.webmanifest","./icons/icon-192.png","./icons/icon-512.png"];
 
 self.addEventListener("install", e => {
