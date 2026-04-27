@@ -416,6 +416,123 @@ async function loadEpisodes(series){
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  PANNEAU VOD (film — synopsis + bouton lecture)
+// ─────────────────────────────────────────────────────────────────
+
+function getExt(url){
+  if(!url) return "";
+  return (url.split("?")[0].split(".").pop() || "").toLowerCase();
+}
+
+function openVodPanel(item){
+  S.panel.open     = true;
+  S.panel.series   = item;
+  S.panel.isVod    = true;
+
+  document.body.style.overflow = "hidden";
+  const panel = $("seriesPanel");
+  panel.hidden = false;
+
+  const ext    = getExt(item.stream_url || item.url || "");
+  const meta   = [item.category_name, item.quality, ext ? ext.toUpperCase() : ""].filter(Boolean).join(" · ");
+  const cover  = item.stream_icon || "";
+  const plot   = item.plot || "";
+
+  panel.innerHTML = `
+    <div class="sp-header">
+      <div class="sp-hinfo">
+        <div class="sp-kicker">🎬 Film</div>
+        <h3 class="sp-title">${esc(item.title)}</h3>
+        ${meta ? `<div class="sp-meta">${esc(meta)}</div>` : ""}
+      </div>
+      <button id="vodCloseBtn" class="sp-close" aria-label="Fermer">✕</button>
+    </div>
+
+    <div class="sp-body">
+      <div class="sp-hero">
+        ${cover
+          ? `<img class="sp-cover" src="${esc(cover)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+          : `<div class="sp-cover sp-nocover">🎬</div>`}
+        <div class="sp-hero-txt">
+          <p class="sp-plot" id="vodPlot">${esc(plot || "Chargement du synopsis…")}</p>
+        </div>
+      </div>
+
+      <div class="vod-actions">
+        <button id="vodPlayBtn" class="vod-play-btn">
+          <span class="vod-play-icon">▶</span>
+          <span>Lire le film</span>
+        </button>
+        <button class="fav-btn-large ${isFav(item) ? "is-fav" : ""}" id="vodFavBtn" type="button">
+          <span class="fav-heart">♥</span>
+          <span id="vodFavLabel">${isFav(item) ? "Favori" : "Ajouter aux favoris"}</span>
+        </button>
+      </div>
+    </div>`;
+
+  // ── Bind events ──
+  $("vodCloseBtn").addEventListener("click", closeVodPanel);
+  panel.addEventListener("click", e => { if(e.target === panel) closeVodPanel(); }, { once: true });
+
+  $("vodPlayBtn").addEventListener("click", () => {
+    closeVodPanel();
+    playItem(item);
+  });
+
+  $("vodFavBtn").addEventListener("click", () => {
+    toggleFav(item);
+    const fav = isFav(item);
+    $("vodFavBtn").classList.toggle("is-fav", fav);
+    const lbl = $("vodFavLabel");
+    if(lbl) lbl.textContent = fav ? "Favori" : "Ajouter aux favoris";
+  });
+
+  // ── Lazy-load synopsis depuis l'API si absent ──
+  if(!plot){
+    fetchVodPlot(item).then(p => {
+      const el = $("vodPlot");
+      if(el) el.textContent = p || "Aucun synopsis disponible.";
+      if(p) item.plot = p; // cache dans l'item pour ne pas re-fetcher
+    });
+  }
+}
+
+async function fetchVodPlot(item){
+  const streamUrl = item.stream_url || item.url || "";
+  if(!streamUrl) return null;
+  try {
+    const u     = new URL(streamUrl);
+    const parts = u.pathname.split("/").filter(Boolean);
+    let base = u.origin, username = "", password = "";
+    if(parts[0] === "movie" && parts.length >= 3){
+      username = parts[1]; password = parts[2];
+    } else {
+      username = u.searchParams.get("username") || "";
+      password = u.searchParams.get("password") || "";
+    }
+    if(!username || !password) return null;
+    const vodId = item.id || item.stream_id || "";
+    if(!vodId) return null;
+    const apiUrl = `${base}/player_api.php?username=${username}&password=${password}&action=get_vod_info&vod_id=${vodId}`;
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 8000);
+    const r    = await fetch(apiUrl, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if(!r.ok) return null;
+    const d = await r.json();
+    return d?.info?.plot || d?.info?.description || null;
+  } catch { return null; }
+}
+
+function closeVodPanel(){
+  S.panel.open  = false;
+  S.panel.isVod = false;
+  const panel = $("seriesPanel");
+  panel.hidden = true;
+  document.body.style.overflow = "";
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  PANNEAU SÉRIES
 // ─────────────────────────────────────────────────────────────────
 
@@ -759,7 +876,7 @@ function renderGrid(reset = false){
 
     const activate = () => {
       if(item.type === "series") openPanel(item);
-      else playItem(item);
+      else openVodPanel(item);
     };
     card.addEventListener("click", activate);
     card.addEventListener("keydown", e => {
@@ -812,7 +929,10 @@ function initTV(){
     const k = e.key;
 
     if(["Escape","GoBack","Back","BrowserBack"].includes(k)){
-      if(!$("seriesPanel")?.hidden){ e.preventDefault(); closePanel(); }
+      if(!$("seriesPanel")?.hidden){
+        e.preventDefault();
+        if(S.panel.isVod) closeVodPanel(); else closePanel();
+      }
       return;
     }
 
