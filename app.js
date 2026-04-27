@@ -960,6 +960,10 @@ function render(){
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
     cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(c)}</option>`).join("");
 
+  // Grille adaptée au type
+  const grid = $("grid");
+  if(grid) grid.className = S.type === "live" ? "grid grid--live" : "grid";
+
   S.shown[S.type] = PER_PAGE;
   renderGrid(true);
 }

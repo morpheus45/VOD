@@ -155,6 +155,23 @@ button,select,input{ font:inherit }
   gap:12px;
 }
 
+/* ── Grille Live TV : 2 colonnes larges, aspect 16/9 ── */
+.grid--live{
+  grid-template-columns:repeat(2,1fr);
+  justify-content:stretch;
+}
+.grid--live .card-media{
+  aspect-ratio:16/9;
+  background:#080f1d;
+}
+.grid--live .card-media img{
+  object-fit:contain;
+  padding:10px;
+}
+.grid--live .card-placeholder{
+  font-size:56px;
+}
+
 /* ── Carte ── */
 .card{
   background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
