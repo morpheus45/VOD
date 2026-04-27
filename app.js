@@ -1198,8 +1198,11 @@ function showApkUpdateBanner(vinfo, remoteVer){
 
   $("apkDownloadBtn").onclick = () => {
     const url = vinfo.apk_url;
-    // Ouvrir dans le navigateur système (Intent ACTION_VIEW)
-    if(typeof window.AndroidBridge?.openDownloadUrl === "function"){
+    // APK v3+ : téléchargement + installation directe sans navigateur
+    if(typeof window.AndroidBridge?.downloadAndInstall === "function"){
+      window.AndroidBridge.downloadAndInstall(url);
+    // APK v2 (fallback) : ouvre le navigateur
+    } else if(typeof window.AndroidBridge?.openDownloadUrl === "function"){
       window.AndroidBridge.openDownloadUrl(url);
     } else {
       window.open(url, "_blank");
