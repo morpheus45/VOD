@@ -155,21 +155,21 @@ button,select,input{ font:inherit }
   gap:12px;
 }
 
-/* ── Grille Live TV : 2 colonnes larges, aspect 16/9 ── */
+/* ── Grille Live TV : 3 colonnes, aspect 4/3 ── */
 .grid--live{
-  grid-template-columns:repeat(2,1fr);
+  grid-template-columns:repeat(3,1fr);
   justify-content:stretch;
 }
 .grid--live .card-media{
-  aspect-ratio:16/9;
+  aspect-ratio:4/3;
   background:#080f1d;
 }
 .grid--live .card-media img{
   object-fit:contain;
-  padding:10px;
+  padding:8px;
 }
 .grid--live .card-placeholder{
-  font-size:56px;
+  font-size:36px;
 }
 
 /* ── Carte ── */
