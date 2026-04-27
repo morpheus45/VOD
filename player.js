@@ -469,13 +469,24 @@ if($("copyBtn")) $("copyBtn").onclick = () => {
 };
 
 if($("externalBtn")) $("externalBtn").onclick = () => {
-  const url = resolveUrl();
-  if(url) window.open(url, "_blank", "noopener,noreferrer");
+  const url  = resolveUrl();
+  if(!url) return;
+  const http = url.replace(/^https?:\/\//i, "http://");
+  if(isAndroid || isTV) triggerAndroidIntent(http);
+  else window.open(url, "_blank", "noopener,noreferrer");
 };
 
 if($("vlcBtn")) $("vlcBtn").onclick = () => {
-  const url = resolveUrl();
-  if(url) window.location.href = "vlc://" + url;
+  const url  = resolveUrl();
+  if(!url) return;
+  const http = url.replace(/^https?:\/\//i, "http://");
+  if(isAndroid || isTV){
+    // Intent ciblant VLC spécifiquement
+    window.location.href =
+      `intent:${http}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;S.title=${encodeURIComponent(item?.title||"")};end`;
+  } else {
+    window.location.href = "vlc://" + http;
+  }
 };
 
 if($("playOverlayBtn")) $("playOverlayBtn").onclick = () => {

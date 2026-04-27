@@ -861,17 +861,21 @@ async function boot(){
 
   initTV();
 
-  // ── Chargement VOD ──
-  const vodJson = await fetchJson("vod.json");
+  // ── Pré-chargement épisodes en parallèle (non bloquant) ──
+  ensureEpDb();  // fire-and-forget : sera prêt avant que l'utilisateur clique une série
+
+  // ── Chargement VOD + Séries en parallèle ──
+  const [vodJson, seriesJson] = await Promise.all([
+    fetchJson("vod.json"),
+    fetchJson("series.json")
+  ]);
+
   if(vodJson){ S.vod = normalizeItems(extractArr(vodJson), "vod"); S.srcVod = "vod.json"; }
   else {
     const vodM3u = await fetchText("vod.m3u");
     if(vodM3u){ S.vod = parseM3U(vodM3u, "vod"); S.srcVod = "vod.m3u"; }
   }
 
-  // ── Chargement Séries ──
-  // series.json = liste des séries (sans épisodes), chargés en lazy au clic
-  const seriesJson = await fetchJson("series.json");
   if(seriesJson){ S.series = normalizeItems(extractArr(seriesJson), "series"); S.srcSeries = "series.json"; }
   else {
     const seriesM3u = await fetchText("series.m3u");
@@ -879,6 +883,39 @@ async function boot(){
   }
 
   render();
+
+  // ── Écoute des mises à jour Service Worker ──
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.addEventListener("message", e => {
+      if(e.data?.type === "UPDATE_AVAILABLE") showUpdateBanner();
+    });
+  }
+}
+
+function showUpdateBanner(){
+  if($("updateBanner")) return; // déjà affiché
+  const banner = document.createElement("div");
+  banner.id = "updateBanner";
+  banner.innerHTML = `
+    <span>🔄 Mise à jour disponible !</span>
+    <button id="updateNowBtn" type="button">Mettre à jour</button>
+    <button id="updateDismissBtn" type="button" aria-label="Fermer">✕</button>`;
+  banner.style.cssText = `
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    z-index:9999;display:flex;align-items:center;gap:12px;
+    background:linear-gradient(135deg,#1a2d50,#0f1e3a);
+    border:1px solid rgba(255,159,44,.4);border-radius:16px;
+    padding:14px 18px;color:#fff;font-size:14px;font-weight:600;
+    box-shadow:0 8px 32px rgba(0,0,0,.5);white-space:nowrap;
+    animation:slideUp .3s ease;`;
+  document.body.appendChild(banner);
+  $("updateNowBtn").onclick = () => {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.waiting?.postMessage({ type: "SKIP_WAITING" });
+      window.location.reload();
+    });
+  };
+  $("updateDismissBtn").onclick = () => banner.remove();
 }
 
 window.addEventListener("load", boot);

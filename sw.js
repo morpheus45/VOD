@@ -1,25 +1,39 @@
-// sw.js — PIPSIFLIX v3.1 — cache bust forcé
-const CACHE = "pipsiflix-v36";
+// sw.js — PIPSIFLIX v4.2 — mise à jour automatique + notification
+const CACHE = "pipsiflix-v37";
 const SHELL = ["./","./index.html","./player.html","./styles.css","./player.css","./app.js","./player.js","./manifest.webmanifest","./icons/icon-192.png","./icons/icon-512.png"];
 
+// ── Installation : vider anciens caches + mettre en cache le shell ──
 self.addEventListener("install", e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.map(k => caches.delete(k))))
       .then(() => caches.open(CACHE).then(c => c.addAll(SHELL)))
-      .then(() => self.skipWaiting())
+      // NE PAS appeler skipWaiting() ici — on attend que l'utilisateur accepte
   );
 });
 
+// ── Activation : supprimer les vieux caches ──
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
-      .then(() => self.clients.matchAll().then(clients => clients.forEach(c => c.postMessage({ type:"RELOAD" }))))
   );
 });
 
+// ── Message : SKIP_WAITING vient de l'app quand l'utilisateur accepte la MAJ ──
+self.addEventListener("message", e => {
+  if(e.data?.type === "SKIP_WAITING"){
+    self.skipWaiting().then(() => {
+      // Recharger tous les onglets après activation
+      self.clients.matchAll({ type:"window" }).then(clients =>
+        clients.forEach(c => c.postMessage({ type:"RELOAD" }))
+      );
+    });
+  }
+});
+
+// ── Fetch : network-first pour JSON/M3U, cache-first pour assets ──
 self.addEventListener("fetch", e => {
   const { request } = e;
   if(request.method !== "GET") return;
@@ -39,5 +53,12 @@ self.addEventListener("fetch", e => {
       });
       return cached || net.catch(() => request.mode === "navigate" ? caches.match("./index.html") : cached);
     })
+  );
+});
+
+// ── Notification de mise à jour : informer l'app qu'un nouveau SW attend ──
+self.addEventListener("install", () => {
+  self.clients.matchAll({ type:"window" }).then(clients =>
+    clients.forEach(c => c.postMessage({ type:"UPDATE_AVAILABLE" }))
   );
 });

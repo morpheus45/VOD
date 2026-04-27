@@ -80,13 +80,28 @@
   <!-- Panneau séries — rendu dynamiquement par app.js -->
   <div id="seriesPanel" class="series-panel" hidden></div>
 
-  <script src="app.js?v=42"></script>
+  <script src="app.js?v=43"></script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("./sw.js", { scope:"./" })
-          .then(r => console.log("SW:", r.scope))
+          .then(reg => {
+            console.log("SW:", reg.scope);
+            // Détecter quand un nouveau SW est en attente
+            reg.addEventListener("updatefound", () => {
+              const nw = reg.installing;
+              if(!nw) return;
+              nw.addEventListener("statechange", () => {
+                if(nw.state === "installed" && navigator.serviceWorker.controller)
+                  showUpdateBanner(); // défini dans app.js
+              });
+            });
+          })
           .catch(e => console.warn("SW err:", e));
+        // Recharger la page si le SW demande RELOAD
+        navigator.serviceWorker.addEventListener("message", e => {
+          if(e.data?.type === "RELOAD") window.location.reload();
+        });
       });
     }
   </script>

@@ -1,6 +1,22 @@
 /* ================================================================
-   PIPSIFLIX — styles.css v4.0
+   PIPSIFLIX — styles.css v4.2
    ================================================================ */
+
+@keyframes slideUp{
+  from{ transform:translateX(-50%) translateY(30px); opacity:0 }
+  to  { transform:translateX(-50%) translateY(0);    opacity:1 }
+}
+
+#updateBanner button{
+  border:none; border-radius:10px; padding:8px 14px; cursor:pointer;
+  font-weight:700; font-size:13px;
+}
+#updateNowBtn{
+  background:linear-gradient(135deg,#ff3d5e,#ff9f2c); color:#fff;
+}
+#updateDismissBtn{
+  background:rgba(255,255,255,.12); color:#fff; padding:8px 10px;
+}
 
 :root{
   --bg     :#060b16;
