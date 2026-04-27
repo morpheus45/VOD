@@ -516,15 +516,20 @@ function renderPanel(){
   let epsHtml = "";
 
   if(!sel || keys.length === 0){
-    // Pas de saisons — lecture directe
-    const directUrl = s.stream_url || s.url || "";
-    const corsNote = S.panel.directOnly
-      ? `<div class="sp-noep" style="color:#ff9f2c">⚠️ Épisodes non chargés (CORS). Lecture directe uniquement.</div>`
-      : "";
-    if(directUrl){
-      epsHtml = corsNote + `<button class="sp-direct" id="spDirectBtn" type="button">▶ Lire le flux direct</button>`;
+    // Pas d'épisodes chargés
+    if(S.panel.directOnly){
+      // Série non trouvée dans la base locale et API non joignable
+      epsHtml = `
+        <div class="sp-noep-block">
+          <div style="font-size:36px;margin-bottom:12px">📭</div>
+          <div style="font-weight:700;font-size:16px;margin-bottom:8px">Épisodes non disponibles</div>
+          <div style="font-size:13px;color:#8ca8cc;line-height:1.5">
+            Cette série n'est pas encore dans notre base de données locale.<br>
+            Relancez <code>node fetch_episodes.js</code> pour mettre à jour.
+          </div>
+        </div>`;
     } else {
-      epsHtml = `<div class="sp-noep">Aucune saison disponible.</div>`;
+      epsHtml = `<div class="sp-noep">Aucune saison disponible pour cette série.</div>`;
     }
   } else {
     const eps  = smap[sel] || [];
