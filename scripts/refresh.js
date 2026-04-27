@@ -122,17 +122,24 @@ async function refreshSeries(creds){
     return false;
   }
 
-  const items = seriesList.map(s => ({
-    id            : s.series_id || s.id,
-    series_id     : s.series_id || s.id,
-    title         : cleanTitle(s.name || s.title || ""),
-    category_id   : s.category_id || "",
-    category_name : cleanTitle(s.category_name || ""),
-    stream_icon   : s.cover || s.stream_icon || "",
-    plot          : s.plot || "",
-    quality       : inferQuality(`${s.name || ""} ${s.category_name || ""}`),
-    stream_url    : `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_series_info&series_id=${s.series_id || s.id}`
-  }));
+  // Jointure category_id → category_name
+  const catMap = {};
+  if(Array.isArray(cats)) cats.forEach(c => { catMap[String(c.category_id)] = c.category_name || ""; });
+
+  const items = seriesList.map(s => {
+    const catName = catMap[String(s.category_id)] || s.category_name || "";
+    return {
+      id            : s.series_id || s.id,
+      series_id     : s.series_id || s.id,
+      title         : cleanTitle(s.name || s.title || ""),
+      category_id   : s.category_id || "",
+      category_name : cleanTitle(catName),
+      stream_icon   : s.cover || s.stream_icon || "",
+      plot          : s.plot || "",
+      quality       : inferQuality(`${s.name || ""} ${catName}`),
+      stream_url    : `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_series_info&series_id=${s.series_id || s.id}`
+    };
+  });
 
   const out = {
     meta: {
@@ -164,17 +171,24 @@ async function refreshVod(creds){
     return;
   }
 
-  const items = vodList.map(v => ({
-    id            : v.stream_id || v.id,
-    stream_id     : v.stream_id || v.id,
-    title         : cleanTitle(v.name || v.title || ""),
-    category_id   : v.category_id || "",
-    category_name : cleanTitle(v.category_name || ""),
-    stream_icon   : v.stream_icon || v.cover || "",
-    plot          : v.plot || "",
-    quality       : inferQuality(`${v.name || ""} ${v.category_name || ""}`),
-    stream_url    : `${creds.base}/${creds.username}/${creds.password}/${v.stream_id}.${v.container_extension || "mp4"}`
-  }));
+  // Jointure category_id → category_name
+  const catMap = {};
+  if(Array.isArray(cats)) cats.forEach(c => { catMap[String(c.category_id)] = c.category_name || ""; });
+
+  const items = vodList.map(v => {
+    const catName = catMap[String(v.category_id)] || v.category_name || "";
+    return {
+      id            : v.stream_id || v.id,
+      stream_id     : v.stream_id || v.id,
+      title         : cleanTitle(v.name || v.title || ""),
+      category_id   : v.category_id || "",
+      category_name : cleanTitle(catName),
+      stream_icon   : v.stream_icon || v.cover || "",
+      plot          : v.plot || "",
+      quality       : inferQuality(`${v.name || ""} ${catName}`),
+      stream_url    : `${creds.base}/${creds.username}/${creds.password}/${v.stream_id}.${v.container_extension || "mp4"}`
+    };
+  });
 
   const out = {
     meta: {
