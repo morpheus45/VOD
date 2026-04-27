@@ -344,20 +344,32 @@ async function loadEpisodes(series){
   const rawApiUrl = series.stream_url || series.url || "";
   if(!rawApiUrl) return { seasonsMap: {}, seasonsMeta: [] };
 
-  // APK natif : HTTP autorisé via network_security_config.xml → utiliser URL directe
-  // PWA/Chrome HTTPS : mixed content bloque HTTP → tenter HTTPS (goldenlink.live n'a pas HTTPS → echec attendu)
+  // Toujours utiliser HTTP (goldenlink.live n'a pas HTTPS)
   const isNativeApk = typeof window.AndroidBridge !== "undefined";
-  const apiUrl = isNativeApk ? rawApiUrl.replace(/^https?:\/\//i, "http://") : secureUrl(rawApiUrl);
+  const apiUrl = rawApiUrl.replace(/^https?:\/\//i, "http://");
 
   // Timeout 12s + gestion CORS/réseau
   let data = null;
-  try {
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 12000);
-    const r = await fetch(apiUrl, { signal: controller.signal });
-    clearTimeout(tid);
-    data = r.ok ? await r.json() : null;
-  } catch(e) { data = null; }
+
+  // APK : AndroidBridge.fetchJson() depuis Java (pas de restriction mixed content)
+  if(isNativeApk && typeof window.AndroidBridge?.fetchJson === "function"){
+    try {
+      const raw = window.AndroidBridge.fetchJson(apiUrl);
+      if(raw) data = JSON.parse(raw);
+    } catch {}
+  }
+
+  // Fallback navigateur fetch() (fonctionne si MIXED_CONTENT_ALWAYS_ALLOW)
+  if(!data){
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 12000);
+      const r = await fetch(apiUrl, { signal: controller.signal });
+      clearTimeout(tid);
+      data = r.ok ? await r.json() : null;
+    } catch(e) { data = null; }
+  }
+
   if(!data) return { seasonsMap: {}, seasonsMeta: [], directOnly: true };
 
   const seasonsMap = {};
@@ -511,16 +523,35 @@ async function fetchVodPlot(item){
       password = u.searchParams.get("password") || "";
     }
     if(!username || !password) return null;
-    const vodId = item.id || item.stream_id || "";
+    const vodId = item.id || item.stream_id || String(item.num || "");
     if(!vodId) return null;
-    const apiUrl = `${base}/player_api.php?username=${username}&password=${password}&action=get_vod_info&vod_id=${vodId}`;
-    const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 8000);
-    const r    = await fetch(apiUrl, { signal: ctrl.signal });
-    clearTimeout(tid);
-    if(!r.ok) return null;
-    const d = await r.json();
-    return d?.info?.plot || d?.info?.description || null;
+    // Toujours HTTP (goldenlink.live n'a pas HTTPS)
+    const apiUrl = `http://${new URL(base).hostname}/player_api.php?username=${username}&password=${password}&action=get_vod_info&vod_id=${vodId}`;
+
+    let json = null;
+
+    // APK : utiliser AndroidBridge.fetchJson() qui fait la requête depuis Java
+    // (pas de restriction mixed-content côté Java)
+    if(typeof window.AndroidBridge?.fetchJson === "function"){
+      try {
+        const raw = window.AndroidBridge.fetchJson(apiUrl);
+        if(raw) json = JSON.parse(raw);
+      } catch {}
+    }
+
+    // Fallback : fetch() navigateur (fonctionne si MIXED_CONTENT_ALWAYS_ALLOW ou HTTP page)
+    if(!json){
+      const ctrl = new AbortController();
+      const tid  = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const r = await fetch(apiUrl, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if(r.ok) json = await r.json();
+      } catch { clearTimeout(tid); }
+    }
+
+    if(!json) return null;
+    return json?.info?.plot || json?.info?.description || null;
   } catch { return null; }
 }
 
