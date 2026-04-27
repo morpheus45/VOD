@@ -1,6 +1,7 @@
 /**
- * PIPSIFLIX PLAYER — v4.1
- * Fixes : progress tracking, overlay, MKV/AVI Android, mixed content, favori
+ * PIPSIFLIX PLAYER — v5.0
+ * Fix critique : HTTP sur Android → lecteur natif IMMÉDIAT (pas d'essai HTTPS)
+ * goldenlink.live:80 est HTTP pur → mixed content bloqué silencieusement par Chrome
  */
 
 "use strict";
@@ -18,46 +19,36 @@ function escapeHtml(s){
 
 const UA        = navigator.userAgent;
 const isAndroid = /Android/i.test(UA);
-const isTV      = /TV|GoogleTV|SmartTV/i.test(UA) ||
-                  (isAndroid && !UA.includes("Mobile"));
+const isTV      = /TV|GoogleTV|SmartTV|AndroidTV/i.test(UA) ||
+                  (isAndroid && !UA.includes("Mobile")) ||
+                  window.PIPSIFLIX_NATIVE === "android_tv";
 const isIOS     = /iP(hone|ad|od)/i.test(UA);
+const isNative  = typeof window.AndroidBridge !== "undefined"; // APK Android
 
 // ─── Progress tracking ─────────────────────────────────────────────────────────
-// Clé IDENTIQUE à app.js pour que la progression soit visible dans le catalogue
+
 const PROGRESS_KEY = "pf_progress_v4";
 
 function getProgress(){
   try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || "{}"); }
   catch { return {}; }
 }
-
 function saveProgress(key, pct){
   const p = getProgress();
   p[key] = { pct, ts: Date.now() };
   try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch {}
 }
-
 function currentEpKey(){
   if(!item || item.type !== "series") return null;
-  // progress_key est fourni directement par playEpisode() dans app.js
   return item.progress_key || null;
 }
 
 // ─── Favoris ──────────────────────────────────────────────────────────────────
 
 const FAV_KEY = "pf_favorites_v4";
-
-function getFavs(){
-  try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); }
-  catch { return []; }
-}
-
-function itemKey(it){
-  return `${it.type || "vod"}||${it.id || ""}||${it.title || ""}`;
-}
-
+function getFavs(){ try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch { return []; } }
+function itemKey(it){ return `${it.type || "vod"}||${it.id || ""}||${it.title || ""}`; }
 function isFav(it){ return getFavs().some(x => x.key === itemKey(it)); }
-
 function toggleFav(it){
   if(!it) return;
   const favs = getFavs();
@@ -68,7 +59,6 @@ function toggleFav(it){
   try { localStorage.setItem(FAV_KEY, JSON.stringify(favs.slice(0, 500))); } catch {}
   updateFavBtn();
 }
-
 function updateFavBtn(){
   const btn = $("favBtn");
   if(!btn || !item) return;
@@ -84,34 +74,23 @@ function getExtension(url){
   if(!url) return "";
   try {
     const path = new URL(url).pathname;
-    const ext  = path.split(".").pop().toLowerCase();
-    return ext.split("?")[0];
+    return path.split(".").pop().toLowerCase().split("?")[0];
   } catch {
     return url.split("?")[0].split(".").pop().toLowerCase();
   }
 }
 
 function isHls(url){
-  return url.includes(".m3u8") || url.includes("type=m3u8") ||
-         url.includes("/hls/") || getExtension(url) === "m3u8";
+  return url.includes(".m3u8") || url.includes("type=m3u8") || url.includes("/hls/");
 }
-
 function isMpegTs(url){
-  return getExtension(url) === "ts" || url.includes(".ts?") ||
-         url.includes("type=ts");
+  return getExtension(url) === "ts" || url.includes(".ts?");
 }
-
-// Formats non supportés nativement par la plupart des navigateurs
 function isBrowserUnfriendly(url){
-  return ["mkv", "avi", "wmv", "flv", "mov"].includes(getExtension(url));
+  return ["mkv","avi","wmv","flv","mov"].includes(getExtension(url));
 }
-
-// Tente de forcer HTTPS pour éviter le mixed content
-function secureUrl(url){
-  if(!url) return url;
-  if(location.protocol === "https:" && /^http:\/\//i.test(url))
-    return url.replace(/^http:\/\//i, "https://");
-  return url;
+function isHttpUrl(url){
+  return /^http:/i.test(url);
 }
 
 // ─── Player instances ──────────────────────────────────────────────────────────
@@ -134,7 +113,6 @@ function setStatus(msg, type){
   n.textContent = msg || "";
   n.className = "playback-status" + (type === "error" ? " playback-status--error" : "");
 }
-
 function showOverlay(){ const o = $("overlay"); if(o) o.style.display = ""; }
 function hideOverlay(){ const o = $("overlay"); if(o) o.style.display = "none"; }
 
@@ -142,7 +120,6 @@ function hideOverlay(){ const o = $("overlay"); if(o) o.style.display = "none"; 
 
 function resolveUrl(){
   if(!item) return null;
-  // Après goEpisode(), selected_episode est présent
   if(item.selected_episode){
     const ep = item.selected_episode;
     return ep.url || ep.stream_url || null;
@@ -150,31 +127,41 @@ function resolveUrl(){
   return item.stream_url || item.url || null;
 }
 
-// ─── Intent Android : ouvre l'URL dans le lecteur vidéo système ───────────────
+// ─── Lecteur externe (Android / TV) ───────────────────────────────────────────
+//
+//  goldenlink.live est HTTP uniquement (port 80, pas de SSL).
+//  Sur Android (Chrome ou WebView HTTPS) → mixed content bloqué silencieusement
+//  → Chrome ne déclenche pas toujours onerror pour les vidéos bloquées.
+//  Solution : détecter HTTP + Android et ouvrir DIRECTEMENT le lecteur externe
+//  sans aucun essai de lecture dans le navigateur.
 
-function triggerAndroidIntent(url){
-  const title  = encodeURIComponent(item?.title || "");
-  const intent = `intent:${url}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${title};end`;
+function openExternalPlayer(rawUrl){
+  // Toujours forcer HTTP (goldenlink.live n'a pas HTTPS)
+  const httpUrl = rawUrl.replace(/^https?:\/\//i, "http://");
+  const title   = item?.title || "";
 
-  // Cacher immédiatement le carré noir de la vidéo
+  // Cacher l'écran noir
   const video = $("video");
   if(video){ video.style.display = "none"; }
   hideOverlay();
+  setStatus("");
 
-  // Afficher un écran "Lecture lancée" propre à la place du carré noir
+  // Afficher l'écran "Lecture lancée"
+  const old = document.getElementById("intentScreen");
+  if(old) old.remove();
   const shell = document.querySelector(".player-shell");
   if(shell){
     shell.insertAdjacentHTML("beforeend", `
       <div id="intentScreen" style="
         position:fixed;inset:0;z-index:999;
         background:linear-gradient(160deg,#05101f,#08182e);
-        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;
-        color:#fff;padding:32px;text-align:center;">
-        <div style="font-size:52px">▶</div>
-        <div style="font-size:20px;font-weight:700">${item?.title || "Lecture"}</div>
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:20px;color:#fff;padding:32px;text-align:center;">
+        <div style="font-size:56px">▶</div>
+        <div style="font-size:20px;font-weight:700;max-width:320px">${escapeHtml(title)}</div>
         <div style="font-size:14px;color:#8ca8cc">Ouverture dans le lecteur vidéo…</div>
         <button onclick="history.back()" style="
-          margin-top:16px;padding:14px 28px;border-radius:14px;border:none;
+          margin-top:8px;padding:14px 32px;border-radius:14px;border:none;
           background:linear-gradient(135deg,#ff3d5e,#ff9f2c);
           color:#fff;font-size:16px;font-weight:700;cursor:pointer;">
           ← Retour au catalogue
@@ -182,57 +169,30 @@ function triggerAndroidIntent(url){
       </div>`);
   }
 
-  // Déclencher l'intent Android
-  window.location.href = intent;
-
-  // Retour automatique au catalogue après 2,5 s
-  // (si l'utilisateur revient dans Chrome, il ne voit plus le carré noir)
-  setTimeout(() => history.back(), 2500);
-}
-
-// ─── Lecture native / externe ─────────────────────────────────────────────────
-
-function openNative(){
-  // Toujours utiliser l'URL HTTP originale pour le lecteur natif
-  // (le lecteur système Android n'a pas de restriction mixed content)
-  const url = resolveUrl();
-  if(!url) return;
-  // Forcer HTTP pour l'Intent (le serveur goldenlink.live est HTTP uniquement)
-  const httpUrl = url.replace(/^https:\/\//i, "http://");
-  if(isAndroid || isTV){
-    triggerAndroidIntent(httpUrl);
-  } else if(isIOS){
-    window.open(url, "_blank", "noopener");
-  } else {
-    window.location.href = "vlc://" + httpUrl;
+  // ── APK Android : appel direct via JavascriptInterface ──
+  if(isNative && window.AndroidBridge?.openVideo){
+    try { window.AndroidBridge.openVideo(httpUrl, title); } catch(e){}
+    setTimeout(() => history.back(), 1200);
+    return;
   }
-}
 
-// ─── Plein écran ───────────────────────────────────────────────────────────────
+  // ── Chrome / PWA : intent: scheme ──
+  const encodedTitle = encodeURIComponent(title);
+  window.location.href =
+    `intent:${httpUrl}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodedTitle};end`;
 
-function toggleFullscreen(){
-  const video = $("video");
-  if(!video) return;
-  if(document.fullscreenElement){
-    document.exitFullscreen?.();
-  } else {
-    (video.requestFullscreen || video.webkitRequestFullscreen ||
-     video.mozRequestFullScreen || video.msRequestFullscreen)?.call(video);
-  }
+  // Retour auto au catalogue si l'utilisateur revient dans Chrome
+  setTimeout(() => history.back(), 3000);
 }
 
 // ─── Gestion d'erreur vidéo ────────────────────────────────────────────────────
-// rawUrl = URL HTTP originale (sans upgrade HTTPS), utilisée pour l'Intent Android
 
 function handleVideoError(url, rawUrl){
   const video = $("video");
   const err   = video?.error;
 
-  // Sur Android/TV : fallback automatique vers le lecteur vidéo système
-  // (pas de restriction mixed content dans les apps natives)
   if(isAndroid || isTV){
-    setStatus("Ouverture dans le lecteur vidéo natif…");
-    triggerAndroidIntent(rawUrl || url);
+    openExternalPlayer(rawUrl || url);
     return;
   }
 
@@ -253,7 +213,7 @@ function handleVideoError(url, rawUrl){
   showOverlay();
 }
 
-// ─── Stratégies de lecture ────────────────────────────────────────────────────
+// ─── Stratégies de lecture (desktop uniquement) ────────────────────────────────
 
 function playHls(video, url, storedPct){
   if(typeof Hls !== "undefined" && Hls.isSupported()){
@@ -268,18 +228,12 @@ function playHls(video, url, storedPct){
     });
     hlsInst.on(Hls.Events.ERROR, (_, d) => {
       if(d.fatal){
-        if(d.type === Hls.ErrorTypes.NETWORK_ERROR){
-          hlsInst.startLoad();
-        } else if(d.type === Hls.ErrorTypes.MEDIA_ERROR){
-          hlsInst.recoverMediaError();
-        } else {
-          setStatus("Erreur HLS fatale. Essayez ▶ Lecture native.", "error");
-          showOverlay();
-        }
+        if(d.type === Hls.ErrorTypes.NETWORK_ERROR) hlsInst.startLoad();
+        else if(d.type === Hls.ErrorTypes.MEDIA_ERROR) hlsInst.recoverMediaError();
+        else { setStatus("Erreur HLS. Essayez ▶ Lecture native.", "error"); showOverlay(); }
       }
     });
   } else if(video.canPlayType("application/vnd.apple.mpegurl")){
-    // Safari / iOS : HLS natif
     video.src = url;
     video.play().catch(() => setStatus("Appuyez sur ▶ pour démarrer"));
   } else {
@@ -290,17 +244,10 @@ function playHls(video, url, storedPct){
 
 function playMpegTs(video, url){
   if(typeof mpegts !== "undefined" && mpegts.getFeatureList().mseLivePlayback){
-    mpegtsInst = mpegts.createPlayer({
-      type: "mse", url,
-      isLive: item?.type === "live",
-      enableWorker: true
-    });
+    mpegtsInst = mpegts.createPlayer({ type:"mse", url, enableWorker:true });
     mpegtsInst.attachMediaElement(video);
     mpegtsInst.load();
-    mpegtsInst.play().catch(() => {
-      video.src = url;
-      video.play().catch(() => setStatus("Erreur MPEG-TS.", "error"));
-    });
+    mpegtsInst.play().catch(() => { video.src = url; video.play().catch(()=>{}); });
   } else {
     video.src = url;
     video.play().catch(() => setStatus("Format TS non supporté.", "error"));
@@ -314,10 +261,9 @@ function playNative(video, url, storedPct){
       video.currentTime = video.duration * storedPct / 100;
   }, { once: true });
   video.play().catch(() => {
-    const ext = getExtension(url).toUpperCase();
     setStatus(
       isBrowserUnfriendly(url)
-        ? `Format ${ext} non supporté. Utilisez ▶ Lecture native.`
+        ? `Format ${getExtension(url).toUpperCase()} non supporté. Utilisez ▶ Lecture native.`
         : "Impossible de lire ce flux. Utilisez ▶ Lecture native.",
       "error"
     );
@@ -332,10 +278,7 @@ function initPlayer(){
   const rawUrl = resolveUrl();
   if(!rawUrl){ setStatus("URL de lecture introuvable.", "error"); return; }
 
-  // Tente HTTPS si la page est en HTTPS (évite mixed content)
-  const url = secureUrl(rawUrl);
-
-  // UI : titre, sous-titre, synopsis
+  // ── UI de base (toujours affiché) ──
   const label = item.episode_label
     ? `${item.title} — ${item.episode_label}`
     : item.title || "Lecture";
@@ -348,6 +291,24 @@ function initPlayer(){
   updateNavButtons();
   updateFavBtn();
 
+  // ══════════════════════════════════════════════════════════════════════════
+  //  ANDROID / TV + URL HTTP → LECTEUR NATIF IMMÉDIAT
+  //
+  //  goldenlink.live ne supporte PAS HTTPS.
+  //  Chrome bloque silencieusement le mixed content (HTTP dans HTTPS page).
+  //  onerror n'est PAS toujours déclenché → l'utilisateur reste bloqué.
+  //  Solution : on ne tente JAMAIS la lecture dans le browser pour les URLs HTTP
+  //  sur Android/TV. On ouvre directement VLC / le lecteur système.
+  // ══════════════════════════════════════════════════════════════════════════
+  if((isAndroid || isTV) && isHttpUrl(rawUrl)){
+    setStatus("Ouverture dans le lecteur vidéo…");
+    setTimeout(() => openExternalPlayer(rawUrl), 300);
+    return;
+  }
+
+  // ── Desktop / iOS / HTTPS : lecture dans le player intégré ──
+  const url = rawUrl; // On garde l'URL telle quelle (déjà HTTPS ou contexte HTTP ok)
+
   const video = $("video");
   if(!video) return;
 
@@ -355,23 +316,13 @@ function initPlayer(){
   showOverlay();
   setStatus("Chargement du flux…");
 
-  // Événements vidéo → overlay + statut
-  // onerror reçoit les deux URLs : url (HTTPS tenté) et rawUrl (HTTP original pour Intent)
   video.onplaying = () => { hideOverlay(); setStatus(""); };
   video.onpause   = () => { if(!video.ended) showOverlay(); };
   video.onended   = () => showOverlay();
   video.onerror   = () => handleVideoError(url, rawUrl);
 
-  // Reprise de progression
   const epK       = currentEpKey();
   const storedPct = epK ? (getProgress()[epK]?.pct || 0) : 0;
-
-  // MKV / AVI sur Android/TV : ouvrir directement dans le lecteur système (HTTP natif ok)
-  if(isBrowserUnfriendly(rawUrl) && (isAndroid || isTV)){
-    setStatus("Ouverture dans le lecteur vidéo système…");
-    setTimeout(() => triggerAndroidIntent(rawUrl), 400);
-    return;
-  }
 
   setTimeout(() => {
     if(isHls(url)){
@@ -383,18 +334,16 @@ function initPlayer(){
     }
   }, 150);
 
-  // Suivi de progression toutes les 5 s
+  // ── Suivi progression ──
   if(epK){
     const tracker = setInterval(() => {
       if(!video || video.ended || video.paused || !video.duration) return;
       const pct = (video.currentTime / video.duration) * 100;
       if(pct > 1) saveProgress(epK, pct);
     }, 5000);
-
     video.addEventListener("ended", () => {
       clearInterval(tracker);
       saveProgress(epK, 100);
-      // Auto-lecture épisode suivant après 3 s
       setTimeout(() => goNext(), 3000);
     }, { once: true });
   }
@@ -406,12 +355,10 @@ function getEpList(){ return Array.isArray(item?.all_episodes) ? item.all_episod
 function getCurIdx(){ return typeof item?.current_ep_index === "number" ? item.current_ep_index : -1; }
 
 function updateNavButtons(){
-  const list    = getEpList();
-  const idx     = getCurIdx();
-  const prevBtn = $("prevEpBtn");
-  const nextBtn = $("nextEpBtn");
-  if(prevBtn) prevBtn.disabled = (idx <= 0 || list.length === 0);
-  if(nextBtn) nextBtn.disabled = (idx < 0 || idx >= list.length - 1);
+  const list = getEpList(); const idx = getCurIdx();
+  const p = $("prevEpBtn"); const n = $("nextEpBtn");
+  if(p) p.disabled = (idx <= 0 || !list.length);
+  if(n) n.disabled = (idx < 0 || idx >= list.length - 1);
 }
 
 function goEpisode(newIdx){
@@ -419,7 +366,6 @@ function goEpisode(newIdx){
   if(newIdx < 0 || newIdx >= list.length) return;
   const ep = list[newIdx];
   if(!ep || !ep.url) return;
-
   const updated = {
     ...item,
     episode_label:    `S${String(ep.season).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`,
@@ -431,7 +377,6 @@ function goEpisode(newIdx){
     selected_episode: { ...ep, stream_url: ep.url },
     current_ep_index: newIdx
   };
-
   sessionStorage.setItem("iptv_current_item", JSON.stringify(updated));
   location.reload();
 }
@@ -439,54 +384,60 @@ function goEpisode(newIdx){
 function goPrev(){ goEpisode(getCurIdx() - 1); }
 function goNext(){ goEpisode(getCurIdx() + 1); }
 
+// ─── Lecture native / externe (boutons) ───────────────────────────────────────
+
+function openNative(){
+  const rawUrl = resolveUrl();
+  if(!rawUrl) return;
+  const httpUrl = rawUrl.replace(/^https?:\/\//i, "http://");
+  if(isAndroid || isTV){ openExternalPlayer(httpUrl); }
+  else if(isIOS){ window.open(rawUrl, "_blank", "noopener"); }
+  else { window.location.href = "vlc://" + httpUrl; }
+}
+
 // ─── Bindings UI ───────────────────────────────────────────────────────────────
 
 if($("backBtn"))       $("backBtn").onclick      = () => history.back();
 if($("prevEpBtn"))     $("prevEpBtn").onclick     = goPrev;
 if($("nextEpBtn"))     $("nextEpBtn").onclick     = goNext;
-if($("fullscreenBtn")) $("fullscreenBtn").onclick = toggleFullscreen;
+if($("fullscreenBtn")) $("fullscreenBtn").onclick = () => {
+  const v = $("video");
+  if(!v) return;
+  if(document.fullscreenElement) document.exitFullscreen?.();
+  else (v.requestFullscreen || v.webkitRequestFullscreen || v.mozRequestFullScreen)?.call(v);
+};
 if($("nativeBtn"))     $("nativeBtn").onclick     = openNative;
-
-if($("favBtn")) $("favBtn").onclick = () => { if(item) toggleFav(item); };
+if($("favBtn"))        $("favBtn").onclick         = () => { if(item) toggleFav(item); };
 
 if($("copyBtn")) $("copyBtn").onclick = () => {
   const url = resolveUrl();
   if(!url) return;
   const btn = $("copyBtn");
   navigator.clipboard?.writeText(url)
-    .then(() => {
-      if(btn){ btn.textContent = "✓ Copié !"; setTimeout(() => btn.textContent = "⎘ Copier le lien", 2000); }
-    })
+    .then(() => { btn.textContent = "✓ Copié !"; setTimeout(() => btn.textContent = "⎘ Copier le lien", 2000); })
     .catch(() => {
-      // Fallback sans clipboard API (iOS, contextes non-sécurisés)
       const ta = document.createElement("textarea");
-      ta.value = url; ta.style.position = "fixed"; ta.style.opacity = "0";
-      document.body.appendChild(ta); ta.select();
-      document.execCommand("copy");
+      ta.value = url; ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta); ta.select(); document.execCommand("copy");
       document.body.removeChild(ta);
-      if(btn){ btn.textContent = "✓ Copié !"; setTimeout(() => btn.textContent = "⎘ Copier le lien", 2000); }
+      btn.textContent = "✓ Copié !"; setTimeout(() => btn.textContent = "⎘ Copier le lien", 2000);
     });
 };
 
 if($("externalBtn")) $("externalBtn").onclick = () => {
-  const url  = resolveUrl();
-  if(!url) return;
-  const http = url.replace(/^https?:\/\//i, "http://");
-  if(isAndroid || isTV) triggerAndroidIntent(http);
-  else window.open(url, "_blank", "noopener,noreferrer");
+  const u = resolveUrl();
+  if(!u) return;
+  if(isAndroid || isTV) openExternalPlayer(u.replace(/^https?:\/\//i,"http://"));
+  else window.open(u, "_blank", "noopener,noreferrer");
 };
 
 if($("vlcBtn")) $("vlcBtn").onclick = () => {
-  const url  = resolveUrl();
-  if(!url) return;
-  const http = url.replace(/^https?:\/\//i, "http://");
-  if(isAndroid || isTV){
-    // Intent ciblant VLC spécifiquement
-    window.location.href =
-      `intent:${http}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;S.title=${encodeURIComponent(item?.title||"")};end`;
-  } else {
-    window.location.href = "vlc://" + http;
-  }
+  const u = resolveUrl();
+  if(!u) return;
+  const http = u.replace(/^https?:\/\//i, "http://");
+  if(isAndroid || isTV)
+    window.location.href = `intent:${http}#Intent;action=android.intent.action.VIEW;type=video/*;package=org.videolan.vlc;end`;
+  else window.location.href = "vlc://" + http;
 };
 
 if($("playOverlayBtn")) $("playOverlayBtn").onclick = () => {
@@ -497,37 +448,16 @@ if($("playOverlayBtn")) $("playOverlayBtn").onclick = () => {
 // ─── Clavier / télécommande TV ─────────────────────────────────────────────────
 
 document.addEventListener("keydown", e => {
-  const k     = e.key;
-  const video = $("video");
-
-  if(["Escape","GoBack","BrowserBack","Back"].includes(k)){
-    e.preventDefault(); history.back();
-
-  } else if(["Enter"," ","MediaPlayPause"].includes(k)){
-    e.preventDefault();
-    if(video) video.paused ? video.play() : video.pause();
-
-  } else if(k === "ArrowRight" || k === "FastForward"){
-    if(video){ e.preventDefault(); video.currentTime = Math.min(video.duration || Infinity, video.currentTime + 10); }
-
-  } else if(k === "ArrowLeft" || k === "Rewind"){
-    if(video){ e.preventDefault(); video.currentTime = Math.max(0, video.currentTime - 10); }
-
-  } else if(k === "ArrowUp"){
-    if(video){ e.preventDefault(); video.volume = Math.min(1, video.volume + 0.1); }
-
-  } else if(k === "ArrowDown"){
-    if(video){ e.preventDefault(); video.volume = Math.max(0, video.volume - 0.1); }
-
-  } else if(k === "f" || k === "F"){
-    toggleFullscreen();
-
-  } else if(k === "n" || k === "N" || k === "ChannelUp"){
-    goNext();
-
-  } else if(k === "p" || k === "P" || k === "ChannelDown"){
-    goPrev();
-  }
+  const k = e.key; const video = $("video");
+  if(["Escape","GoBack","BrowserBack","Back"].includes(k)){ e.preventDefault(); history.back(); }
+  else if(["Enter"," ","MediaPlayPause"].includes(k)){ e.preventDefault(); if(video) video.paused?video.play():video.pause(); }
+  else if(k==="ArrowRight"||k==="FastForward"){ if(video){ e.preventDefault(); video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10); } }
+  else if(k==="ArrowLeft"||k==="Rewind"){ if(video){ e.preventDefault(); video.currentTime=Math.max(0,video.currentTime-10); } }
+  else if(k==="ArrowUp"){ if(video){ e.preventDefault(); video.volume=Math.min(1,video.volume+0.1); } }
+  else if(k==="ArrowDown"){ if(video){ e.preventDefault(); video.volume=Math.max(0,video.volume-0.1); } }
+  else if(k==="f"||k==="F"){ document.getElementById("fullscreenBtn")?.click(); }
+  else if(k==="n"||k==="N"||k==="ChannelUp"){ goNext(); }
+  else if(k==="p"||k==="P"||k==="ChannelDown"){ goPrev(); }
 });
 
 // ─── Init ──────────────────────────────────────────────────────────────────────

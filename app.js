@@ -224,25 +224,36 @@ async function fetchText(url){
 //  BASE ÉPISODES PRÉ-GÉNÉRÉE (episodes_part*.json)
 // ─────────────────────────────────────────────────────────────────
 
-let _epDbPromise = null;
+// Map series_id → numéro de chunk (téléchargé une seule fois)
+let _epMap = null;         // { "51596": 3, "18": 1, ... }
+let _epMapPromise = null;
+// Cache des chunks déjà téléchargés
+const _loadedChunks = {};  // { 1: Promise, 3: Promise, ... }
 
-async function ensureEpDb(){
-  if(_epDbPromise) return _epDbPromise;
-  _epDbPromise = (async () => {
-    try {
-      const idx = await fetchJson("episodes_index.json");
-      if(!idx || !idx.chunks){ console.warn("[PIPSIFLIX] episodes_index.json absent"); return; }
-      // Charger tous les chunks en parallèle
-      const fetches = [];
-      for(let i = 1; i <= idx.chunks; i++) fetches.push(fetchJson(`episodes_part${i}.json`));
-      const chunks = await Promise.all(fetches);
-      chunks.forEach(chunk => {
-        if(chunk && typeof chunk === "object") Object.assign(S.epDb, chunk);
-      });
-      console.log(`[PIPSIFLIX] epDb : ${Object.keys(S.epDb).length} séries chargées`);
-    } catch(e) { console.warn("[PIPSIFLIX] epDb erreur", e); }
-  })();
-  return _epDbPromise;
+async function getEpMap(){
+  if(_epMap) return _epMap;
+  if(_epMapPromise) return _epMapPromise;
+  _epMapPromise = fetchJson("episodes_map.json").then(m => {
+    _epMap = m || {};
+    console.log(`[PIPSIFLIX] epMap : ${Object.keys(_epMap).length} séries indexées`);
+    return _epMap;
+  });
+  return _epMapPromise;
+}
+
+async function ensureEpDb(seriesId){
+  const map = await getEpMap();
+  const chunkNum = seriesId ? map[String(seriesId)] : null;
+  if(!chunkNum) return false; // série absente de l'index
+
+  if(!_loadedChunks[chunkNum]){
+    _loadedChunks[chunkNum] = fetchJson(`episodes_part${chunkNum}.json`).then(chunk => {
+      if(chunk && typeof chunk === "object") Object.assign(S.epDb, chunk);
+      console.log(`[PIPSIFLIX] chunk ${chunkNum} chargé (${Object.keys(chunk||{}).length} séries)`);
+    });
+  }
+  await _loadedChunks[chunkNum];
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -293,9 +304,9 @@ async function loadEpisodes(series){
   const cacheKey = `s_${series.id}_${series.title}`;
   if(S.epCache[cacheKey]) return S.epCache[cacheKey];
 
-  // ── 1. Base pré-générée (priorité absolue — évite CORS/mixed-content) ──
-  await ensureEpDb();
+  // ── 1. Base pré-générée (charge uniquement le chunk nécessaire) ──
   const sid = String(series.id || "");
+  await ensureEpDb(sid); // télécharge 1 fichier ~4MB au lieu de 21MB
   if(sid && S.epDb[sid]){
     const db = S.epDb[sid];
     const seasonsMap = {};
@@ -861,8 +872,8 @@ async function boot(){
 
   initTV();
 
-  // ── Pré-chargement épisodes en parallèle (non bloquant) ──
-  ensureEpDb();  // fire-and-forget : sera prêt avant que l'utilisateur clique une série
+  // ── Pré-chargement de l'index épisodes (1 Ko, non bloquant) ──
+  getEpMap();  // charge episodes_map.json en avance (1 Ko seulement)
 
   // ── Chargement VOD + Séries en parallèle ──
   const [vodJson, seriesJson] = await Promise.all([
