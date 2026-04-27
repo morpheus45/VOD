@@ -27,13 +27,15 @@ const S = {
   type      : "vod",
   vod       : [],
   series    : [],
+  live      : [],
   srcVod    : "",
   srcSeries : "",
+  srcLive   : "",
   cat       : "",
   search    : "",
   quality   : "",
   sort      : "title",
-  shown     : { vod: 0, series: 0 },
+  shown     : { vod: 0, series: 0, live: 0 },
   loading   : false,
   // Panneau séries
   panel     : {
@@ -843,7 +845,7 @@ function playItem(item){
 // ─────────────────────────────────────────────────────────────────
 
 function filtered(){
-  let items = [...(S.type === "vod" ? S.vod : S.series)];
+  let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
   if(S.cat)    items = items.filter(x => x.category_name === S.cat);
   if(S.search){
     const q = S.search.toLowerCase();
@@ -851,7 +853,8 @@ function filtered(){
       x.title.toLowerCase().includes(q) || (x.plot||"").toLowerCase().includes(q)
     );
   }
-  if(S.quality) items = items.filter(x => x.quality === S.quality);
+  // Qualité non applicable au live
+  if(S.quality && S.type !== "live") items = items.filter(x => x.quality === S.quality);
   if(S.sort === "category")
     items.sort((a,b) => a.category_name.localeCompare(b.category_name)||a.title.localeCompare(b.title));
   else if(S.sort !== "recent")
@@ -885,15 +888,18 @@ function renderGrid(reset = false){
     card.dataset.key  = key;
 
     const isSeries = item.type === "series";
+    const isLive   = item.type === "live";
     const poster   = item.stream_icon || "";
+    const badgeCls = isLive ? "card-badge--live" : isSeries ? "card-badge--s" : "card-badge--f";
+    const badgeTxt = isLive ? "📡 Live" : isSeries ? "Série" : "Film";
 
     card.innerHTML = `
       <div class="card-media">
         ${poster
           ? `<img src="${esc(poster)}" alt="" loading="lazy">`
-          : `<div class="card-placeholder">🎬</div>`}
-        <span class="card-badge ${isSeries?"card-badge--s":"card-badge--f"}">${isSeries?"Série":"Film"}</span>
-        ${item.quality ? `<span class="card-qual">${esc(item.quality)}</span>` : ""}
+          : `<div class="card-placeholder">${isLive?"📡":"🎬"}</div>`}
+        <span class="card-badge ${badgeCls}">${badgeTxt}</span>
+        ${item.quality && !isLive ? `<span class="card-qual">${esc(item.quality)}</span>` : ""}
         <button class="fav-btn ${isFav(item)?"is-fav":""}" type="button" aria-label="Favori">♥</button>
       </div>
       <div class="card-info">
@@ -907,6 +913,7 @@ function renderGrid(reset = false){
 
     const activate = () => {
       if(item.type === "series") openPanel(item);
+      else if(item.type === "live") playItem(item);   // lecture directe pour live
       else openVodPanel(item);
     };
     card.addEventListener("click", activate);
@@ -936,13 +943,19 @@ function loadMore(){
 
 function render(){
   const col   = filtered();
-  const label = S.type === "vod" ? "Films" : "Séries";
+  const label = S.type === "vod" ? "Films" : S.type === "series" ? "Séries" : "TV en direct";
   $("heroTitle").textContent  = label;
   $("statType").textContent   = label;
   $("statCount").textContent  = `${col.length} éléments`;
-  $("statSource").textContent = `source : ${(S.type==="vod"?S.srcVod:S.srcSeries)||"locale"}`;
+  const src = S.type === "vod" ? S.srcVod : S.type === "series" ? S.srcSeries : S.srcLive;
+  $("statSource").textContent = `source : ${src || "locale"}`;
 
-  const all  = S.type === "vod" ? S.vod : S.series;
+  // Masquer le filtre qualité pour le live (non pertinent)
+  const qualEl = $("qualitySelect")?.closest
+    ? $("qualitySelect").parentElement : null;
+  if($("qualitySelect")) $("qualitySelect").style.display = S.type === "live" ? "none" : "";
+
+  const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
   const cats = [...new Set(all.map(x => x.category_name))].sort();
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
     cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(c)}</option>`).join("");
@@ -1061,10 +1074,11 @@ async function boot(){
   // ── Pré-chargement de l'index épisodes (1 Ko, non bloquant) ──
   getEpMap();  // charge episodes_map.json en avance (1 Ko seulement)
 
-  // ── Chargement VOD + Séries + index en parallèle ──
-  const [vodJson, seriesJson, epIndex] = await Promise.all([
+  // ── Chargement VOD + Séries + Live + index en parallèle ──
+  const [vodJson, seriesJson, liveJson, epIndex] = await Promise.all([
     fetchJson("vod.json"),
     fetchJson("series.json"),
+    fetchJson("live.json"),
     fetchJson("episodes_index.json")
   ]);
 
@@ -1078,6 +1092,25 @@ async function boot(){
   else {
     const seriesM3u = await fetchText("series.m3u");
     if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); S.srcSeries = "series.m3u"; }
+  }
+
+  if(liveJson){
+    // Les items live ont déjà type:"live" dans le JSON — normalisation légère
+    const liveItems = extractArr(liveJson);
+    S.live = liveItems.map((x, i) => ({
+      id           : x.id || x.stream_id || String(i),
+      stream_id    : x.stream_id || x.id || String(i),
+      title        : x.title || x.name || "Sans titre",
+      category_id  : x.category_id || "",
+      category_name: x.category_name || "Autre",
+      stream_icon  : x.stream_icon || x.image || "",
+      stream_url   : x.stream_url || x.url || "",
+      url          : x.stream_url || x.url || "",
+      plot         : "",
+      type         : "live",
+      quality      : ""
+    }));
+    S.srcLive = "live.json";
   }
 
   // ── Afficher date dernière mise à jour dans la barre fixe ──

@@ -58,7 +58,7 @@ button,select,input{ font:inherit }
   background:linear-gradient(120deg,var(--accent),var(--accent2));
   -webkit-background-clip:text; color:transparent;
 }
-.nav-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px }
+.nav-row{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px }
 .nav-btn{
   border:1px solid var(--line); background:var(--panel); color:var(--text);
   padding:13px; border-radius:14px; cursor:pointer; font-size:14px;
@@ -185,6 +185,14 @@ button,select,input{ font:inherit }
 }
 .card-badge--f{ background:rgba(0,0,0,.75) }
 .card-badge--s{ background:rgba(30,90,220,.9) }
+.card-badge--live{
+  background:rgba(220,30,30,.92);
+  animation:livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse{
+  0%,100%{ box-shadow:0 0 0 0 rgba(220,30,30,.6) }
+  50%    { box-shadow:0 0 0 4px rgba(220,30,30,0) }
+}
 .card-qual{
   position:absolute; top:7px; right:7px;
   background:rgba(255,61,94,.9); padding:3px 7px;

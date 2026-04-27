@@ -23,6 +23,7 @@ const http = require("http");
 const ROOT        = path.join(__dirname, "..");
 const SERIES_JSON = path.join(ROOT, "series.json");
 const VOD_JSON    = path.join(ROOT, "vod.json");
+const LIVE_JSON   = path.join(ROOT, "live.json");
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const CHUNK_SIZE  = 500;
@@ -111,7 +112,7 @@ function inferQuality(src){
 
 // ─── Refresh séries ───────────────────────────────────────────────────────────
 async function refreshSeries(creds){
-  console.log("\n1/3  Séries...");
+  console.log("\n1/4  Séries...");
   const [seriesList, cats] = await Promise.all([
     fetchJson(apiUrl(creds, "get_series")),
     fetchJson(apiUrl(creds, "get_series_categories"))
@@ -160,7 +161,7 @@ async function refreshSeries(creds){
 
 // ─── Refresh VOD ──────────────────────────────────────────────────────────────
 async function refreshVod(creds){
-  console.log("\n2/3  Films VOD...");
+  console.log("\n2/4  Films VOD...");
   const [vodList, cats] = await Promise.all([
     fetchJson(apiUrl(creds, "get_vod_streams")),
     fetchJson(apiUrl(creds, "get_vod_categories"))
@@ -205,9 +206,60 @@ async function refreshVod(creds){
   console.log(`   ✓ ${items.length} films → vod.json`);
 }
 
+// ─── Refresh Live TV ─────────────────────────────────────────────────────────
+async function refreshLive(creds){
+  console.log("\n3/4  Chaînes TV en direct...");
+  const [streams, cats] = await Promise.all([
+    fetchJson(apiUrl(creds, "get_live_streams")),
+    fetchJson(apiUrl(creds, "get_live_categories"))
+  ]);
+
+  if(!Array.isArray(streams)){
+    console.warn("   ⚠  Impossible de charger get_live_streams — live.json non mis à jour");
+    return;
+  }
+
+  const catMap = {};
+  if(Array.isArray(cats)) cats.forEach(c => { catMap[String(c.category_id)] = c.category_name || ""; });
+
+  function cleanLiveTitle(t){
+    if(!t) return "";
+    let s = String(t);
+    // Supprimer les séparateurs décoratifs ##### NOM #####
+    s = s.replace(/^#{2,}\s*/, "").replace(/\s*#{2,}$/, "").trim();
+    s = s.replace(/^(FR|EN|EU)\s*[-|:]\s*/i, "");
+    return s.replace(/\s+/g, " ").trim();
+  }
+
+  const items = streams.map(s => ({
+    id           : s.stream_id,
+    stream_id    : s.stream_id,
+    title        : cleanLiveTitle(s.name || ""),
+    category_id  : s.category_id || "",
+    category_name: cleanTitle(catMap[String(s.category_id)] || s.category_name || "Autre"),
+    stream_icon  : s.stream_icon || "",
+    stream_url   : `${creds.base}:80/live/${creds.username}/${creds.password}/${s.stream_id}.m3u8`,
+    type         : "live"
+  }));
+
+  const out = {
+    meta: {
+      kind       : "live",
+      created_at : new Date().toISOString(),
+      source_base: creds.base,
+      username   : creds.username
+    },
+    categories: Array.isArray(cats) ? cats : [],
+    items
+  };
+
+  fs.writeFileSync(LIVE_JSON, JSON.stringify(out), "utf8");
+  console.log(`   ✓ ${items.length} chaînes TV → live.json`);
+}
+
 // ─── Refresh épisodes (incrémental) ──────────────────────────────────────────
 async function refreshEpisodes(creds, seriesItems){
-  console.log("\n3/3  Épisodes (incrémental)...");
+  console.log("\n4/4  Épisodes (incrémental)...");
 
   // Charger cache existant
   const existing = {};
@@ -351,6 +403,7 @@ async function main(){
   if(!seriesItems){ process.exit(1); }
 
   await refreshVod(creds);
+  await refreshLive(creds);
   await refreshEpisodes(creds, seriesItems);
 
   console.log("\n✅  Refresh terminé avec succès !");
