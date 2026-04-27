@@ -116,6 +116,42 @@ function setStatus(msg, type){
 function showOverlay(){ const o = $("overlay"); if(o) o.style.display = ""; }
 function hideOverlay(){ const o = $("overlay"); if(o) o.style.display = "none"; }
 
+// ─── Lazy plot depuis l'API Xtream ────────────────────────────────────────────
+// Extrait base/user/pass depuis l'URL de stream (http://host:80/movie/USER/PASS/id.ext)
+function parseCredsFromUrl(streamUrl){
+  if(!streamUrl) return null;
+  try {
+    const u = new URL(streamUrl);
+    // Format: /movie/username/password/id.ext
+    const parts = u.pathname.split("/").filter(Boolean);
+    if(parts[0] === "movie" && parts.length >= 3)
+      return { base: u.origin, username: parts[1], password: parts[2] };
+    // Format API: ?username=X&password=Y
+    const usr = u.searchParams.get("username");
+    const pwd = u.searchParams.get("password");
+    if(usr && pwd) return { base: u.origin, username: usr, password: pwd };
+  } catch {}
+  return null;
+}
+
+async function loadPlotFromApi(it){
+  const streamUrl = it.stream_url || it.url || "";
+  const creds = parseCredsFromUrl(streamUrl);
+  if(!creds) return null;
+  const vodId = it.id || it.stream_id || "";
+  if(!vodId) return null;
+  const apiUrl = `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_vod_info&vod_id=${vodId}`;
+  try {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 8000);
+    const r    = await fetch(apiUrl.replace(/^https?:\/\//i, "http://"), { signal: ctrl.signal });
+    clearTimeout(tid);
+    if(!r.ok) return null;
+    const d = await r.json();
+    return d?.info?.plot || d?.info?.description || d?.movie_data?.plot || null;
+  } catch { return null; }
+}
+
 // ─── Resolve playback URL ──────────────────────────────────────────────────────
 
 function resolveUrl(){
@@ -286,7 +322,16 @@ function initPlayer(){
 
   if($("playerTitle")) $("playerTitle").textContent = label;
   if($("playerSub"))   $("playerSub").textContent   = sub;
-  if($("plotText"))    $("plotText").textContent     = item.plot || "Aucune description.";
+  if($("plotText"))    $("plotText").textContent     = item.plot || "Chargement du synopsis…";
+
+  // ── Lazy-load synopsis depuis l'API Xtream (si plot absent) ──
+  if(!item.plot && item.type !== "series"){
+    loadPlotFromApi(item).then(plot => {
+      if(plot && $("plotText")) $("plotText").textContent = plot;
+    });
+  } else if(!item.plot){
+    if($("plotText")) $("plotText").textContent = "Aucune description.";
+  }
 
   updateNavButtons();
   updateFavBtn();

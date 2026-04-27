@@ -186,7 +186,7 @@ async function refreshVod(creds){
       stream_icon   : v.stream_icon || v.cover || "",
       plot          : v.plot || "",
       quality       : inferQuality(`${v.name || ""} ${catName}`),
-      stream_url    : `${creds.base}/${creds.username}/${creds.password}/${v.stream_id}.${v.container_extension || "mp4"}`
+      stream_url    : `${creds.base}:80/movie/${creds.username}/${creds.password}/${v.stream_id}.${v.container_extension || "mkv"}`
     };
   });
 

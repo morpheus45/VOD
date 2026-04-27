@@ -866,17 +866,24 @@ async function boot(){
     const btn = $("refreshCacheBtn");
     btn.disabled = true;
     btn.textContent = "⏳";
+
+    // APK Android : clearCache() vide le cache WebView natif + reload
+    const isNativeApk = typeof window.AndroidBridge !== "undefined";
+    if(isNativeApk && window.AndroidBridge?.clearCache){
+      try { window.AndroidBridge.clearCache(); } catch(e){}
+      return; // Java gère le reload
+    }
+
+    // PWA / navigateur : vider le cache Service Worker
     try {
-      // Vider le cache Service Worker
       if("caches" in window){
         const keys = await caches.keys();
         await Promise.all(keys.map(k => caches.delete(k)));
       }
-      // Notifier le SW de se mettre à jour
       const reg = await navigator.serviceWorker?.ready;
       if(reg?.waiting) reg.waiting.postMessage({ type:"SKIP_WAITING" });
     } catch {}
-    // Recharger la page avec ?nocache pour bypasser le SW
+    // Reload forcé avec timestamp pour bypasser le SW
     window.location.href = window.location.href.split("?")[0] + "?nocache=" + Date.now();
   });
 
