@@ -340,18 +340,20 @@ async function loadEpisodes(series){
     return result;
   }
 
-  // ── 2. Fallback : API Xtream en direct (HTTP, peut échouer en HTTPS) ──
+  // ── 2. Fallback : API Xtream en direct ──
   const rawApiUrl = series.stream_url || series.url || "";
   if(!rawApiUrl) return { seasonsMap: {}, seasonsMeta: [] };
 
-  // Upgrade HTTP→HTTPS si page HTTPS (évite mixed content Android Chrome)
-  const apiUrl = secureUrl(rawApiUrl);
+  // APK natif : HTTP autorisé via network_security_config.xml → utiliser URL directe
+  // PWA/Chrome HTTPS : mixed content bloque HTTP → tenter HTTPS (goldenlink.live n'a pas HTTPS → echec attendu)
+  const isNativeApk = typeof window.AndroidBridge !== "undefined";
+  const apiUrl = isNativeApk ? rawApiUrl.replace(/^https?:\/\//i, "http://") : secureUrl(rawApiUrl);
 
-  // Timeout 8s + gestion CORS/réseau
+  // Timeout 12s + gestion CORS/réseau
   let data = null;
   try {
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 8000);
+    const tid = setTimeout(() => controller.abort(), 12000);
     const r = await fetch(apiUrl, { signal: controller.signal });
     clearTimeout(tid);
     data = r.ok ? await r.json() : null;
@@ -848,15 +850,34 @@ function initTV(){
 async function boot(){
 
   // Navigation type
-  document.querySelectorAll(".nav-btn").forEach(btn => {
+  document.querySelectorAll(".nav-btn[data-type]").forEach(btn => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".nav-btn[data-type]").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       S.type = btn.dataset.type;
       S.cat = ""; S.search = "";
       $("searchInput").value = "";
       render();
     });
+  });
+
+  // Bouton refresh cache
+  $("refreshCacheBtn")?.addEventListener("click", async () => {
+    const btn = $("refreshCacheBtn");
+    btn.disabled = true;
+    btn.textContent = "⏳";
+    try {
+      // Vider le cache Service Worker
+      if("caches" in window){
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      // Notifier le SW de se mettre à jour
+      const reg = await navigator.serviceWorker?.ready;
+      if(reg?.waiting) reg.waiting.postMessage({ type:"SKIP_WAITING" });
+    } catch {}
+    // Recharger la page avec ?nocache pour bypasser le SW
+    window.location.href = window.location.href.split("?")[0] + "?nocache=" + Date.now();
   });
 
   $("categorySelect").addEventListener("change", e => { S.cat = e.target.value; render(); });
@@ -880,10 +901,11 @@ async function boot(){
   // ── Pré-chargement de l'index épisodes (1 Ko, non bloquant) ──
   getEpMap();  // charge episodes_map.json en avance (1 Ko seulement)
 
-  // ── Chargement VOD + Séries en parallèle ──
-  const [vodJson, seriesJson] = await Promise.all([
+  // ── Chargement VOD + Séries + index en parallèle ──
+  const [vodJson, seriesJson, epIndex] = await Promise.all([
     fetchJson("vod.json"),
-    fetchJson("series.json")
+    fetchJson("series.json"),
+    fetchJson("episodes_index.json")
   ]);
 
   if(vodJson){ S.vod = normalizeItems(extractArr(vodJson), "vod"); S.srcVod = "vod.json"; }
@@ -896,6 +918,14 @@ async function boot(){
   else {
     const seriesM3u = await fetchText("series.m3u");
     if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); S.srcSeries = "series.m3u"; }
+  }
+
+  // ── Afficher date dernière mise à jour ──
+  if(epIndex?.generated){
+    const d = new Date(epIndex.generated);
+    const fmt = d.toLocaleDateString("fr-FR", { day:"2-digit", month:"short", year:"numeric" });
+    const el = document.getElementById("lastUpdateDate");
+    if(el) el.textContent = `MAJ : ${fmt}`;
   }
 
   render();
