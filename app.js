@@ -1103,6 +1103,9 @@ async function boot(){
       if(e.data?.type === "UPDATE_AVAILABLE") showUpdateBanner();
     });
   }
+
+  // ── Vérification auto-update APK (non bloquant) ──
+  checkApkUpdate();
 }
 
 function showUpdateBanner(){
@@ -1129,6 +1132,84 @@ function showUpdateBanner(){
     });
   };
   $("updateDismissBtn").onclick = () => banner.remove();
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  APK AUTO-UPDATE — vérifie version.json et propose le téléchargement
+// ─────────────────────────────────────────────────────────────────
+
+async function checkApkUpdate(){
+  const isNativeApk = typeof window.AndroidBridge !== "undefined";
+  if(!isNativeApk) return; // inutile hors APK
+
+  try {
+    const vinfo = await fetchJson("version.json");
+    if(!vinfo || !vinfo.apk_version || !vinfo.apk_url) return;
+
+    const remoteVer = Number(vinfo.apk_version);
+
+    // getApkVersion() est présent dans les APK v2+
+    // Les APK v1 (sans la méthode) sont traités comme version 1
+    let localVer = 1;
+    if(typeof window.AndroidBridge?.getApkVersion === "function"){
+      try { localVer = Number(window.AndroidBridge.getApkVersion()) || 1; } catch {}
+    }
+
+    if(remoteVer <= localVer) return; // déjà à jour
+
+    // Respecter "plus tard" (rappel dans 24h)
+    const remindAt = Number(localStorage.getItem("pf_apk_remind") || 0);
+    if(Date.now() < remindAt) return;
+
+    showApkUpdateBanner(vinfo, remoteVer);
+  } catch {}
+}
+
+function showApkUpdateBanner(vinfo, remoteVer){
+  if($("apkUpdateBanner")) return;
+  const banner = document.createElement("div");
+  banner.id = "apkUpdateBanner";
+  banner.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:22px">📦</span>
+      <div>
+        <div style="font-weight:700;font-size:14px">PIPSIFLIX v${remoteVer} disponible !</div>
+        <div style="font-size:12px;opacity:.8;margin-top:2px">${vinfo.changes || "Améliorations & corrections"}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-shrink:0">
+      <button id="apkDownloadBtn" type="button"
+        style="background:#4caf50;color:#fff;border:none;border-radius:10px;padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer">
+        Installer
+      </button>
+      <button id="apkDismissBtn" type="button" aria-label="Plus tard"
+        style="background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:10px;padding:8px 12px;font-size:14px;cursor:pointer">
+        ✕
+      </button>
+    </div>`;
+  banner.style.cssText = `
+    position:fixed;top:0;left:0;right:0;z-index:9999;
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    background:linear-gradient(135deg,#1a3d1a,#0a2a0a);
+    border-bottom:2px solid #4caf50;
+    padding:12px 18px;color:#fff;
+    box-shadow:0 4px 24px rgba(0,0,0,.6);`;
+  document.body.appendChild(banner);
+
+  $("apkDownloadBtn").onclick = () => {
+    const url = vinfo.apk_url;
+    // Ouvrir dans le navigateur système (Intent ACTION_VIEW)
+    if(typeof window.AndroidBridge?.openDownloadUrl === "function"){
+      window.AndroidBridge.openDownloadUrl(url);
+    } else {
+      window.open(url, "_blank");
+    }
+    banner.remove();
+  };
+  $("apkDismissBtn").onclick = () => {
+    banner.remove();
+    localStorage.setItem("pf_apk_remind", String(Date.now() + 86400000)); // +24h
+  };
 }
 
 window.addEventListener("load", boot);
