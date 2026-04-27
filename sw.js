@@ -1,5 +1,5 @@
 // sw.js — PIPSIFLIX v4.2 — mise à jour automatique + notification
-const CACHE = "pipsiflix-v42";
+const CACHE = "pipsiflix-v43";
 const SHELL = ["./","./index.html","./player.html","./styles.css","./player.css","./app.js","./player.js","./manifest.webmanifest","./icons/icon-192.png","./icons/icon-512.png"];
 
 // ── Installation : vider anciens caches + mettre en cache le shell ──

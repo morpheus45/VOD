@@ -26,10 +26,6 @@
       <div class="nav-row">
         <button class="nav-btn active" data-type="vod">🎬 Films</button>
         <button class="nav-btn"        data-type="series">📺 Séries</button>
-        <button class="nav-btn nav-btn--refresh" id="refreshCacheBtn" title="Vider le cache et recharger les données">🔄</button>
-      </div>
-      <div class="topbar-meta">
-        <span id="lastUpdateDate"></span>
       </div>
     </header>
 
@@ -84,7 +80,21 @@
   <!-- Panneau séries — rendu dynamiquement par app.js -->
   <div id="seriesPanel" class="series-panel" hidden></div>
 
-  <script src="app.js?v=53"></script>
+  <!-- Barre fixe Mettre à jour -->
+  <div id="updateBar" class="update-bar">
+    <div class="update-bar__left">
+      <span class="update-bar__icon">🔄</span>
+      <div class="update-bar__text">
+        <span class="update-bar__label">Catalogue</span>
+        <span class="update-bar__date" id="lastUpdateDate">Chargement…</span>
+      </div>
+    </div>
+    <button class="update-bar__btn" id="refreshCacheBtn">
+      Mettre à jour
+    </button>
+  </div>
+
+  <script src="app.js?v=54"></script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {

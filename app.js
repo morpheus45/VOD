@@ -861,11 +861,13 @@ async function boot(){
     });
   });
 
-  // Bouton refresh cache
+  // Barre fixe "Mettre à jour"
   $("refreshCacheBtn")?.addEventListener("click", async () => {
-    const btn = $("refreshCacheBtn");
-    btn.disabled = true;
-    btn.textContent = "⏳";
+    const btn  = $("refreshCacheBtn");
+    const date = $("lastUpdateDate");
+    btn.disabled    = true;
+    btn.textContent = "⏳ Mise à jour…";
+    if(date) date.textContent = "Actualisation en cours…";
 
     // APK Android : clearCache() vide le cache WebView natif + reload
     const isNativeApk = typeof window.AndroidBridge !== "undefined";
@@ -927,12 +929,19 @@ async function boot(){
     if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); S.srcSeries = "series.m3u"; }
   }
 
-  // ── Afficher date dernière mise à jour ──
-  if(epIndex?.generated){
-    const d = new Date(epIndex.generated);
-    const fmt = d.toLocaleDateString("fr-FR", { day:"2-digit", month:"short", year:"numeric" });
+  // ── Afficher date dernière mise à jour dans la barre fixe ──
+  {
     const el = document.getElementById("lastUpdateDate");
-    if(el) el.textContent = `MAJ : ${fmt}`;
+    if(el){
+      if(epIndex?.generated){
+        const d   = new Date(epIndex.generated);
+        const fmt = d.toLocaleDateString("fr-FR", { day:"2-digit", month:"short", year:"numeric" });
+        const nb  = epIndex.total ? ` · ${epIndex.total.toLocaleString("fr-FR")} séries` : "";
+        el.textContent = `Mise à jour le ${fmt}${nb}`;
+      } else {
+        el.textContent = "Données en cache";
+      }
+    }
   }
 
   render();
