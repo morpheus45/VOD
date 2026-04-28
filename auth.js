@@ -15,11 +15,22 @@ const SUPABASE_ANON = "VOTRE_ANON_KEY";
 const ADMIN_EMAIL   = "cedric.lago@gmail.com";
 
 // ─────────────────────────────────────────────────────────────────
-//  CLIENT SUPABASE
+//  DÉTECTION CONFIG
 // ─────────────────────────────────────────────────────────────────
-const _supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-  auth: { persistSession: true, autoRefreshToken: true, storageKey: "pipsily_auth" }
-});
+const _configured = !SUPABASE_URL.includes("VOTRE_PROJET") && !SUPABASE_ANON.includes("VOTRE_ANON");
+
+// ─────────────────────────────────────────────────────────────────
+//  CLIENT SUPABASE (protégé contre CDN manquant ou config vide)
+// ─────────────────────────────────────────────────────────────────
+let _supa = null;
+try {
+  if(!window.supabase) throw new Error("Supabase CDN non chargé");
+  _supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: { persistSession: true, autoRefreshToken: true, storageKey: "pipsily_auth" }
+  });
+} catch(e) {
+  console.warn("[PIPSILY] Supabase non disponible :", e.message);
+}
 
 // ─────────────────────────────────────────────────────────────────
 //  DEVICE FINGERPRINT
@@ -49,22 +60,30 @@ function getDeviceName(){
 //  AUTHENTIFICATION
 // ─────────────────────────────────────────────────────────────────
 async function getSession(){
-  const { data: { session } } = await _supa.auth.getSession();
-  return session;
+  if(!_supa) return null;
+  try {
+    const { data: { session } } = await _supa.auth.getSession();
+    return session;
+  } catch { return null; }
 }
 
 async function signIn(email, password){
+  if(!_supa) return { error: { message: "Supabase non configuré — remplissez auth.js" } };
+  if(!_configured) return { error: { message: "Clés Supabase manquantes dans auth.js" } };
   return _supa.auth.signInWithPassword({ email, password });
 }
 
 async function signUp(email, password){
+  if(!_supa) return { error: { message: "Supabase non configuré — remplissez auth.js" } };
+  if(!_configured) return { error: { message: "Clés Supabase manquantes dans auth.js" } };
   return _supa.auth.signUp({ email, password });
 }
 
 async function signOut(){
+  if(!_supa) { window.location.href = "./login.html"; return; }
   const session = await getSession();
   if(session){
-    await _supa.from("sessions").delete().eq("user_id", session.user.id);
+    try { await _supa.from("sessions").delete().eq("user_id", session.user.id); } catch {}
     localStorage.removeItem("pipsily_session_token");
   }
   return _supa.auth.signOut();
@@ -74,12 +93,11 @@ async function signOut(){
 //  PROFIL & ABONNEMENT
 // ─────────────────────────────────────────────────────────────────
 async function getProfile(userId){
-  const { data, error } = await _supa
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
-  return error ? null : data;
+  if(!_supa) return null;
+  try {
+    const { data, error } = await _supa.from("profiles").select("*").eq("id", userId).single();
+    return error ? null : data;
+  } catch { return null; }
 }
 
 async function checkSubscription(userId){
@@ -99,32 +117,30 @@ async function checkSubscription(userId){
 async function registerSession(userId){
   const token = crypto.randomUUID?.() || ("tok" + Date.now());
   localStorage.setItem("pipsily_session_token", token);
-  // Supprimer les anciennes sessions de l'utilisateur
-  await _supa.from("sessions").delete().eq("user_id", userId);
-  await _supa.from("sessions").insert({
-    user_id: userId, device_id: getDeviceId(), token,
-    created_at: new Date().toISOString()
-  });
+  if(!_supa) return token;
+  try {
+    await _supa.from("sessions").delete().eq("user_id", userId);
+    await _supa.from("sessions").insert({ user_id: userId, device_id: getDeviceId(), token, created_at: new Date().toISOString() });
+  } catch {}
   return token;
 }
 
 async function validateSession(userId){
+  if(!_supa) return true; // pas de vérif si non configuré
   const localToken = localStorage.getItem("pipsily_session_token");
   if(!localToken) return false;
-  const { data } = await _supa
-    .from("sessions")
-    .select("token")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .single();
-  return data?.token === localToken;
+  try {
+    const { data } = await _supa.from("sessions").select("token").eq("user_id", userId)
+      .order("created_at", { ascending: false }).limit(1).single();
+    return data?.token === localToken;
+  } catch { return true; }
 }
 
 // ─────────────────────────────────────────────────────────────────
 //  GESTION DES APPAREILS
 // ─────────────────────────────────────────────────────────────────
 async function ensureDevice(userId){
+  if(!_supa) return { newDevice: false, blocked: false };
   const deviceId   = getDeviceId();
   const deviceName = getDeviceName();
 
@@ -189,11 +205,15 @@ async function addExtraDevice(userId){
 //  CODE PARENTAL
 // ─────────────────────────────────────────────────────────────────
 async function getParentalPin(userId){
-  const { data } = await _supa.from("profiles").select("parental_pin").eq("id", userId).single();
-  return data?.parental_pin || null;
+  if(!_supa) return null;
+  try {
+    const { data } = await _supa.from("profiles").select("parental_pin").eq("id", userId).single();
+    return data?.parental_pin || null;
+  } catch { return null; }
 }
 
 async function setParentalPin(userId, pin){
+  if(!_supa) return { error: { message: "Non configuré" } };
   return _supa.from("profiles").update({ parental_pin: pin }).eq("id", userId);
 }
 
@@ -261,6 +281,12 @@ function promptParentalPin(storedPin){
 //  AUTH GATE — appelé au démarrage de l'app (index.html)
 // ─────────────────────────────────────────────────────────────────
 async function authGate(){
+  // Supabase pas encore configuré → mode développement, tout passe
+  if(!_configured || !_supa){
+    console.warn("[PIPSILY] Supabase non configuré — auth désactivée (mode dev)");
+    return { session: { user: { id: "dev", email: ADMIN_EMAIL } }, sub: { ok: true, plan: "admin", unlimited: true } };
+  }
+
   const session = await getSession();
   if(!session){
     window.location.href = "./login.html";
@@ -272,7 +298,7 @@ async function authGate(){
   // Admin (cedric.lago@gmail.com) → accès illimité sans vérification
   if(session.user.email === ADMIN_EMAIL || sub.plan === "admin" || sub.plan === "unlimited"){
     // S'assurer que le profil admin existe
-    if(!sub.plan || sub.plan === "free"){
+    if(_supa && (!sub.plan || sub.plan === "free")){
       await _supa.from("profiles")
         .upsert({ id: session.user.id, email: session.user.email, plan: "admin", devices_allowed: 999 });
     }

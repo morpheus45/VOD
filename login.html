@@ -106,7 +106,7 @@
       <button class="tab" id="tabSignup" onclick="switchTab('signup')">Créer un compte</button>
     </div>
 
-    <form id="authForm" autocomplete="on">
+    <form id="authForm" autocomplete="on" action="javascript:void(0)">
       <div class="form-group">
         <label for="emailInput">Adresse e-mail</label>
         <input type="email" id="emailInput" placeholder="votre@email.com"
@@ -120,7 +120,7 @@
           <button type="button" class="toggle-pw" id="togglePw" onclick="togglePw()">👁</button>
         </div>
       </div>
-      <div id="signupExtra">
+      <div id="signupExtra" style="display:none">
         <div class="form-group">
           <label for="pwConfirm">Confirmer le mot de passe</label>
           <div class="password-wrap">
@@ -146,13 +146,16 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./auth.js"></script>
   <script>
-    const { signIn, signUp, getSession, ADMIN_EMAIL } = window.PIPSILY_AUTH;
+    // ── Accès sécurisé à PIPSILY_AUTH (CDN peut échouer) ──
+    const _A = window.PIPSILY_AUTH || null;
     let mode = "login";
 
     // Rediriger si déjà connecté
-    getSession().then(session => {
-      if(session) window.location.href = "./index.html";
-    });
+    if(_A && _A.getSession){
+      _A.getSession().then(session => {
+        if(session) window.location.href = "./index.html";
+      }).catch(() => {});
+    }
 
     function switchTab(m){
       mode = m;
@@ -163,7 +166,8 @@
       document.getElementById("submitBtn").textContent = m === "login" ? "Se connecter" : "Créer mon compte";
       document.querySelector("#pwInput").autocomplete = m === "login" ? "current-password" : "new-password";
       document.getElementById("forgotLink").style.display = m === "login" ? "block" : "none";
-      document.getElementById("pwConfirm") && (document.getElementById("pwConfirm").required = m === "signup");
+      const pc = document.getElementById("pwConfirm");
+      if(pc) pc.required = m === "signup";
       clearMsg();
     }
 
@@ -173,7 +177,10 @@
       el.innerHTML = text;
       el.style.display = "block";
     }
-    function clearMsg(){ document.getElementById("authMsg").style.display = "none"; }
+    function clearMsg(){
+      const el = document.getElementById("authMsg");
+      if(el) el.style.display = "none";
+    }
 
     function togglePw(){
       const inp = document.getElementById("pwInput");
@@ -182,18 +189,24 @@
 
     async function forgotPw(e){
       e.preventDefault();
+      if(!_A || !_A.supabase){ showMsg("error","Service non disponible."); return; }
       const email = document.getElementById("emailInput").value.trim();
       if(!email){ showMsg("error","Entrez votre e-mail d'abord."); return; }
-      const { error } = await window.PIPSILY_AUTH.supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + "/login.html"
-      });
-      if(error) showMsg("error", error.message);
-      else showMsg("success","Lien de réinitialisation envoyé à " + email);
+      try {
+        const { error } = await _A.supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin + "/login.html"
+        });
+        if(error) showMsg("error", error.message);
+        else showMsg("success","Lien de réinitialisation envoyé à " + email);
+      } catch(err){ showMsg("error", err.message); }
     }
 
     document.getElementById("authForm").addEventListener("submit", async e => {
       e.preventDefault();
       clearMsg();
+
+      if(!_A){ showMsg("error","⚠ Service d'authentification non chargé. Rechargez la page."); return; }
+
       const btn   = document.getElementById("submitBtn");
       const email = document.getElementById("emailInput").value.trim().toLowerCase();
       const pw    = document.getElementById("pwInput").value;
@@ -205,24 +218,23 @@
 
       try {
         if(mode === "signup"){
-          const pw2 = document.getElementById("pwConfirm").value;
+          const pw2 = document.getElementById("pwConfirm")?.value || "";
           if(pw !== pw2){ showMsg("error","Les mots de passe ne correspondent pas."); return; }
-          if(pw.length < 8){ showMsg("error","Mot de passe trop court (8 caractères min)."); return; }
-          const { error } = await signUp(email, pw);
+          if(pw.length < 8){ showMsg("error","Mot de passe trop court (8 caractères minimum)."); return; }
+          const { error } = await _A.signUp(email, pw);
           if(error){ showMsg("error", error.message); return; }
           showMsg("success",
             "✅ Compte créé ! Vérifiez votre e-mail pour confirmer votre inscription.<br>" +
-            "Votre compte sera activé par l'administrateur sous peu."
+            "Votre accès sera activé par l'administrateur."
           );
         } else {
-          const { error, data } = await signIn(email, pw);
+          const { error, data } = await _A.signIn(email, pw);
           if(error){ showMsg("error","E-mail ou mot de passe incorrect."); return; }
-          // Enregistrer la session
-          await window.PIPSILY_AUTH.registerSession(data.session.user.id);
+          await _A.registerSession(data.session.user.id).catch(() => {});
           window.location.href = "./index.html";
         }
       } catch(err){
-        showMsg("error", "Erreur : " + err.message);
+        showMsg("error","Erreur inattendue : " + (err.message || err));
       } finally {
         btn.disabled = false;
         btn.textContent = mode === "login" ? "Se connecter" : "Créer mon compte";

@@ -135,7 +135,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./auth.js"></script>
   <script>
-    const A = window.PIPSILY_AUTH;
+    const A = window.PIPSILY_AUTH || {};
+    if(!A.getSession){ document.getElementById("adminContent").innerHTML = '<div style="text-align:center;padding:60px;color:#ff8899">⚠ Service non disponible — rechargez la page.</div>'; throw new Error("PIPSILY_AUTH manquant"); }
     let _allUsers = [];
     let _session  = null;
 
