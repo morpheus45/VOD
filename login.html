@@ -196,7 +196,7 @@
       if(!email){ showMsg("error","Entrez votre e-mail d'abord."); return; }
       try {
         const { error } = await _A.supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: window.location.origin + "/login.html"
+          redirectTo: "https://morpheus45.github.io/VOD/login.html"
         });
         if(error) showMsg("error", error.message);
         else showMsg("success","Lien de réinitialisation envoyé à " + email);

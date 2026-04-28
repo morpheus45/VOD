@@ -100,7 +100,8 @@ async function signUp(email, password){
   if(!_configured || !_supa){
     return { error: { message: "⚙️ Configuration en cours. Lancez SETUP.bat pour activer les inscriptions." } };
   }
-  return _supa.auth.signUp({ email, password });
+  const redirectTo = "https://morpheus45.github.io/VOD/login.html";
+  return _supa.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
 }
 
 async function signOut(){
