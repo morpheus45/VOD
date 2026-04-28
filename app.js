@@ -921,6 +921,9 @@ function renderGrid(reset = false){
     card.addEventListener("keydown", e => {
       if(e.key === "Enter" || e.key === " "){ e.preventDefault(); activate(); }
     });
+    // Classe JS pour focus visible (TV D-pad / iframe)
+    card.addEventListener("focus", () => card.classList.add("is-tv-focused"));
+    card.addEventListener("blur",  () => card.classList.remove("is-tv-focused"));
 
     frag.appendChild(card);
   });
@@ -1057,6 +1060,12 @@ function renderNouveautes(){
     card.addEventListener("keydown", e => {
       if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openVodPanel(item); }
     });
+    // Classe JS pour focus visible même dans iframe (preview / webview)
+    card.addEventListener("focus", () => {
+      document.querySelectorAll(".nou-card.is-tv-focused").forEach(c => c.classList.remove("is-tv-focused"));
+      card.classList.add("is-tv-focused");
+    });
+    card.addEventListener("blur", () => card.classList.remove("is-tv-focused"));
     frag.appendChild(card);
   });
   row.appendChild(frag);

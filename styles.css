@@ -202,7 +202,8 @@ button,select,input{ font:inherit }
 .nou-row{
   display:flex; gap:10px;
   align-items:flex-start;
-  overflow-x:auto; padding-bottom:8px;
+  overflow-x:auto;
+  padding:8px 4px 12px;   /* padding haut/bas pour laisser place aux outlines */
   scroll-snap-type:x mandatory;
   -webkit-overflow-scrolling:touch;
 }
@@ -588,24 +589,48 @@ button,select,input{ font:inherit }
   box-shadow:0 0 0 6px rgba(232,51,74,.25);
 }
 
-/* Focus extra-fort en mode TV (grands écrans) */
+/* Focus TOUJOURS visible sur TV (D-pad Android TV) */
 @media (min-width:1280px){
-  :focus-visible{
-    outline:4px solid var(--accent) !important;
-    outline-offset:5px !important;
-    box-shadow:0 0 0 10px rgba(232,51,74,.22), 0 0 30px rgba(232,51,74,.15) !important;
+  /* Indicateur global TV — box-shadow non clippé par overflow */
+  :focus{
+    outline:none !important;
+    box-shadow:0 0 0 4px var(--accent), 0 0 0 8px rgba(232,51,74,.25), 0 0 30px rgba(232,51,74,.15) !important;
   }
-  .nou-card:focus-visible .nou-media{
-    outline:4px solid var(--accent);
-    outline-offset:3px;
-    box-shadow:0 0 0 10px rgba(232,51,74,.25), 0 0 30px rgba(232,51,74,.2);
+  /* Cartes Nouveautés — focus via box-shadow sur la média + classe JS .is-tv-focused */
+  .nou-card:focus,
+  .nou-card.is-tv-focused{
+    outline:none !important;
+    box-shadow:none !important;
   }
-  .card:focus-visible{
+  .nou-card:focus .nou-media,
+  .nou-card.is-tv-focused .nou-media{
+    box-shadow:0 0 0 4px var(--accent), 0 0 0 10px rgba(232,51,74,.28), 0 0 32px rgba(232,51,74,.2);
+    border-radius:14px;
+    transform:scale(1.06);
+    transition:transform .2s, box-shadow .2s;
+  }
+  /* Cartes catalogue — focus avec lift + glow (+ classe JS pour TV) */
+  .card:focus,
+  .card.is-tv-focused{
     transform:translateY(-8px) scale(1.03) !important;
     box-shadow:0 24px 60px rgba(0,0,0,.7),
                0 0 0 4px var(--accent),
+               0 0 0 10px rgba(232,51,74,.25),
                0 0 40px rgba(232,51,74,.3) !important;
     border-color:var(--accent) !important;
+    outline:none !important;
+  }
+  /* Nav buttons — outline classique */
+  .nav-btn:focus{
+    outline:4px solid var(--accent) !important;
+    outline-offset:3px !important;
+    box-shadow:0 0 20px rgba(232,51,74,.3) !important;
+  }
+  /* Boutons update bar */
+  .update-bar__btn:focus{
+    outline:4px solid #fff !important;
+    outline-offset:3px !important;
+    box-shadow:0 0 0 8px rgba(232,51,74,.3) !important;
   }
 }
 
