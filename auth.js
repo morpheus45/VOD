@@ -8,8 +8,8 @@
 //  CONFIG SUPABASE — à remplir après création du projet
 //  https://supabase.com → New project → Settings → API
 // ─────────────────────────────────────────────────────────────────
-const SUPABASE_URL  = "https://gwmuazostbbgroplnlql.supabase.co";
-const SUPABASE_ANON = "sb_secret_7UU8xG7kdoFmPqVier-52w_piCsBvti";
+const SUPABASE_URL  = https://gwmuazostbbgroplnlql.supabase.co ;
+const SUPABASE_ANON = sb_secret_7UU8xG7kdoFmPqVier-52w_piCsBvti;
 //qaehOyHFvPymhtua
 // E-mail du compte admin (accès illimité, panel admin visible)
 const ADMIN_EMAIL   = "cedric.lago@gmail.com";
