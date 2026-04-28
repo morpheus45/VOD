@@ -1,5 +1,5 @@
 /* ================================================================
-   PIPSIFLIX — styles.css v5.0 — Dark Cinema
+   PIPSILY — styles.css v5.0 — Dark Cinema
    ================================================================ */
 
 @keyframes slideUp{
@@ -179,6 +179,36 @@ button,select,input{ font:inherit }
   border-radius:999px; color:#cdd9ef; font-size:11px; font-weight:600;
   letter-spacing:.02em;
 }
+
+/* ── Category Pills ── */
+.cat-pills{
+  display:flex; gap:8px;
+  overflow-x:auto; overflow-y:hidden;
+  padding:14px 0 10px;
+  scroll-snap-type:x mandatory;
+  -webkit-overflow-scrolling:touch;
+  border-bottom:1px solid var(--line);
+  margin-bottom:4px;
+}
+.cat-pills[hidden]{ display:none }
+.cat-pills::-webkit-scrollbar{ height:3px }
+.cat-pills::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.1); border-radius:2px }
+.cat-pill{
+  flex:0 0 auto; scroll-snap-align:start;
+  padding:7px 16px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.05);
+  color:var(--muted); cursor:pointer;
+  font-size:12px; font-weight:600; white-space:nowrap;
+  transition:all .15s; min-height:34px; line-height:1;
+}
+.cat-pill:hover{ background:rgba(255,255,255,.1); color:var(--text); border-color:rgba(255,255,255,.2) }
+.cat-pill--active{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-color:transparent; color:#fff;
+  box-shadow:0 3px 12px rgba(232,51,74,.35);
+}
+.cat-pill:focus{ outline:2px solid var(--accent); outline-offset:2px }
 
 /* ── Sections ── */
 .section-block{ margin-top:24px }
@@ -546,18 +576,71 @@ button,select,input{ font:inherit }
    GOOGLE TV / ANDROID TV (>= 1280px landscape)
    ================================================================ */
 @media (min-width:1280px) and (orientation:landscape){
-  .app-shell{ max-width:100%; padding:0 48px 0; padding-bottom:100px }
-  .hero{ height:320px }
-  .hero h1{ font-size:32px }
+
+  /* ── Layout global TV ── */
+  .app-shell{ max-width:100%; padding:0 0 100px }
+
+  /* Topbar FIXE en haut — toujours visible sur TV */
+  .topbar{
+    position:fixed; top:0; left:0; right:0; z-index:50;
+    padding:12px 48px;
+  }
+
+  /* Barre de recherche/filtres FIXE sous le topbar — toujours accessible */
+  .sticky-controls{
+    position:fixed; top:80px; left:0; right:0; z-index:40;
+    background:rgba(5,8,15,.96);
+    backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+    border-bottom:1px solid rgba(255,255,255,.06);
+    padding:10px 48px 12px;
+  }
+  .controls-grid--four{ grid-template-columns:1.6fr 2fr .8fr .8fr; gap:12px }
+  .controls-grid--four select,
+  .controls-grid--four input{ padding:14px 18px; font-size:15px; border-radius:14px }
+
+  /* Décalage du contenu pour compenser les barres fixes (topbar ~80px + controls ~72px) */
+  .content{ padding-top:168px }
+
+  /* Pills catégories sur TV */
+  .cat-pills{ padding:10px 48px 12px; gap:10px; border-bottom:none }
+  .cat-pill{ padding:9px 20px; font-size:14px; min-height:42px }
+
+  /* ── Typographie TV ── */
+  .brand{ font-size:26px; margin-bottom:0 }
+  .nav-row{ gap:12px }
+  .nav-btn{ padding:12px 24px; font-size:15px; border-radius:14px; min-height:50px }
+
+  /* ── Hero ── */
+  .hero{ height:320px; border-radius:16px; margin:0 48px 24px }
+  .hero h1{ font-size:34px }
+  /* Masquer annotations techniques dans le hero */
+  #heroSubtitle{ display:none }
+  #statSource  { display:none }
+  .hero-stats  { gap:8px; margin-top:14px }
+  .hero-stats span{ padding:5px 14px; font-size:12px }
+
+  /* ── Sections ── */
+  .section-block{ margin:0 48px 20px }
+  .section-title-row h2,.section-h2{ font-size:22px }
+  .section-title-row h2::before,.section-h2::before{ width:5px; height:22px }
+  /* Masquer le compte "48 affichés" — trop technique */
+  #catalogCount{ display:none }
+  .section-sub{ display:none }
+
+  /* ── Grille catalogue ── */
   .grid{ grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:20px }
   .card{ border-radius:20px }
   .card-title{ font-size:15px }
-  .card-cat{ font-size:12px }
+  .card-cat{ font-size:12px; display:none }   /* catégorie masquée sur TV = plus clean */
   .card-info{ padding:12px 14px 14px }
-  .nav-btn{ padding:16px 20px; font-size:16px; border-radius:14px; min-height:56px }
-  .brand{ font-size:26px; margin-bottom:14px }
-  .controls-grid--four select,
-  .controls-grid--four input{ padding:16px 20px; font-size:16px; border-radius:14px }
+
+  /* ── Nouveautés ── */
+  .nou-card{ flex:0 0 160px }
+  .nou-media{ width:160px; height:240px }
+  .nou-title{ font-size:13px }
+  .nou-date { display:none }   /* date masquée = plus épuré */
+
+  /* ── Panneau séries ── */
   .series-panel{ width:min(640px,96vw) }
   .sp-title{ font-size:22px }
   .sp-cover{ width:130px }
@@ -568,18 +651,12 @@ button,select,input{ font:inherit }
   .sp-ep-code{ font-size:12px }
   .sp-tab{ padding:12px 22px; font-size:16px }
   .sp-direct{ padding:20px; font-size:19px }
-  /* Nouveautés bien plus grandes pour voir de loin */
-  .nou-card{ flex:0 0 160px }
-  .nou-media{ width:160px; height:240px }
-  .nou-title{ font-size:13px }
-  .nou-date{ font-size:11px }
-  /* Update bar plus haute et atteignable */
+
+  /* ── Update bar ── */
   .update-bar{ padding:18px 48px; padding-bottom:18px }
   .update-bar__btn{ padding:14px 36px; font-size:16px; border-radius:14px; min-height:52px }
   .update-bar__label{ font-size:13px }
-  .update-bar__date{ font-size:12px }
-  .section-title-row h2,.section-h2{ font-size:22px }
-  .section-title-row h2::before,.section-h2::before{ width:5px; height:22px }
+  .update-bar__date{ display:none }  /* date de MAJ masquée = plus propre */
 }
 
 /* ── Focus global — bien visible sur TV (D-pad) ── */

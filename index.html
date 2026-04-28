@@ -8,10 +8,10 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="PIPSIFLIX" />
-  <meta name="application-name" content="PIPSIFLIX" />
+  <meta name="apple-mobile-web-app-title" content="PIPSILY" />
+  <meta name="application-name" content="PIPSILY" />
   <meta name="msapplication-TileColor" content="#0f172a" />
-  <title>PIPSIFLIX</title>
+  <title>PIPSILY</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/icon-192.png" type="image/png" />
   <link rel="shortcut icon" href="./icons/icon-192.png" type="image/png" />
@@ -22,7 +22,7 @@
   <div class="app-shell">
 
     <header class="topbar">
-      <div class="brand">PIPSIFLIX</div>
+      <div class="brand">PIPSILY</div>
       <div class="nav-row">
         <button class="nav-btn active" data-type="vod">🎬 Films</button>
         <button class="nav-btn"        data-type="series">📺 Séries</button>
@@ -53,9 +53,12 @@
 
     <main class="content">
 
+      <!-- Pills catégories (Films / Séries — masqué pour Live) -->
+      <div id="catPills" class="cat-pills" hidden></div>
+
       <section class="hero" id="hero">
         <div class="hero-text">
-          <h1 id="heroTitle">PIPSIFLIX</h1>
+          <h1 id="heroTitle">PIPSILY</h1>
           <p id="heroSubtitle">Chargement intelligent des flux JSON / M3U.</p>
           <div class="hero-stats">
             <span id="statType">VOD</span>
@@ -104,7 +107,7 @@
     </button>
   </div>
 
-  <script src="app.js?v=62"></script>
+  <script src="app.js?v=63"></script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {

@@ -1,6 +1,6 @@
 {
-  "name": "PIPSIFLIX - Lecteur IPTV",
-  "short_name": "PIPSIFLIX",
+  "name": "PIPSILY - Lecteur IPTV",
+  "short_name": "PIPSILY",
   "description": "Lecteur IPTV pour flux live, films et séries",
   "start_url": "./index.html",
   "scope": "./",

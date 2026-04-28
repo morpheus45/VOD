@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSIFLIX — app.js v4.2 — epDb statique                     ║
+// ║  PIPSILY — app.js v5.0 — epDb statique                     ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -238,7 +238,7 @@ async function getEpMap(){
   if(_epMapPromise) return _epMapPromise;
   _epMapPromise = fetchJson("episodes_map.json").then(m => {
     _epMap = m || {};
-    console.log(`[PIPSIFLIX] epMap : ${Object.keys(_epMap).length} séries indexées`);
+    console.log(`[PIPSILY] epMap : ${Object.keys(_epMap).length} séries indexées`);
     return _epMap;
   });
   return _epMapPromise;
@@ -252,7 +252,7 @@ async function ensureEpDb(seriesId){
   if(!_loadedChunks[chunkNum]){
     _loadedChunks[chunkNum] = fetchJson(`episodes_part${chunkNum}.json`).then(chunk => {
       if(chunk && typeof chunk === "object") Object.assign(S.epDb, chunk);
-      console.log(`[PIPSIFLIX] chunk ${chunkNum} chargé (${Object.keys(chunk||{}).length} séries)`);
+      console.log(`[PIPSILY] chunk ${chunkNum} chargé (${Object.keys(chunk||{}).length} séries)`);
     });
   }
   await _loadedChunks[chunkNum];
@@ -827,12 +827,40 @@ function playEpisode(series, ep, season){
     current_ep_index : curIdx
   };
 
+  // APK Android v4+ : lecteur VLC embarqué pour les épisodes aussi
+  if(typeof window.AndroidBridge !== "undefined"
+     && typeof window.AndroidBridge.openInVlc === "function"){
+    const epTitle = `${series.title} — ${code}${ep.title ? " " + ep.title : ""}`;
+    try {
+      window.AndroidBridge.openInVlc(ep.url, epTitle, false);
+      return;
+    } catch(e) {
+      console.warn("VLC bridge error:", e);
+    }
+  }
+
   sessionStorage.setItem("iptv_current_item", JSON.stringify(playerItem));
   window.location.href = "player.html";
 }
 
 function playItem(item){
   pushHist(item);
+  const url    = item.url || item.stream_url || "";
+  const title  = item.title || "";
+  const isLive = item.type === "live";
+
+  // APK Android v4+ : lecteur VLC embarqué
+  if(typeof window.AndroidBridge !== "undefined"
+     && typeof window.AndroidBridge.openInVlc === "function"){
+    try {
+      window.AndroidBridge.openInVlc(url, title, isLive);
+      return;
+    } catch(e) {
+      console.warn("VLC bridge error:", e);
+    }
+  }
+
+  // Fallback : player.html (navigateur / APK < v4)
   sessionStorage.setItem("iptv_current_item", JSON.stringify({
     ...item,
     stream_url : item.stream_url || item.url,
@@ -948,21 +976,33 @@ function loadMore(){
 function render(){
   const col   = filtered();
   const label = S.type === "vod" ? "Films" : S.type === "series" ? "Séries" : "TV en direct";
-  $("heroTitle").textContent  = label;
-  $("statType").textContent   = label;
-  $("statCount").textContent  = `${col.length} éléments`;
-  const src = S.type === "vod" ? S.srcVod : S.type === "series" ? S.srcSeries : S.srcLive;
-  $("statSource").textContent = `source : ${src || "locale"}`;
+
+  // ── Visibilité hero + nouveautés ──
+  // Films / Séries : pas de hero ni de nouveautés (design SmartersPro)
+  // Live          : hero conservé tel quel (user: "laisse comme ça")
+  const heroEl  = $("hero");
+  const novSect = $("nouveautesSection");
+  if(S.type === "live"){
+    if(heroEl)  heroEl.hidden  = false;
+    $("heroTitle").textContent  = label;
+    $("statType").textContent   = label;
+    $("statCount").textContent  = `${col.length} éléments`;
+    $("statSource").textContent = `source : ${S.srcLive || "locale"}`;
+  } else {
+    if(heroEl)  heroEl.hidden  = true;
+    if(novSect) novSect.hidden = true;
+  }
 
   // Masquer le filtre qualité pour le live (non pertinent)
-  const qualEl = $("qualitySelect")?.closest
-    ? $("qualitySelect").parentElement : null;
   if($("qualitySelect")) $("qualitySelect").style.display = S.type === "live" ? "none" : "";
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const cats = [...new Set(all.map(x => x.category_name))].sort();
+  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
     cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(c)}</option>`).join("");
+
+  // Pills catégories (Films / Séries)
+  renderCatPills(cats);
 
   // Grille adaptée au type
   const grid = $("grid");
@@ -970,6 +1010,34 @@ function render(){
 
   S.shown[S.type] = PER_PAGE;
   renderGrid(true);
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  PILLS CATÉGORIES
+// ─────────────────────────────────────────────────────────────────
+
+function renderCatPills(cats){
+  const pills = $("catPills");
+  if(!pills) return;
+  if(S.type === "live"){ pills.hidden = true; return; }
+  pills.hidden = false;
+  pills.innerHTML =
+    `<button class="cat-pill ${!S.cat ? "cat-pill--active" : ""}" data-cat="">Tout</button>` +
+    cats.map(c =>
+      `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`
+    ).join("");
+  pills.querySelectorAll(".cat-pill").forEach(btn => {
+    btn.addEventListener("click", () => {
+      S.cat = btn.dataset.cat;
+      const sel = $("categorySelect");
+      if(sel) sel.value = S.cat;
+      S.shown[S.type] = PER_PAGE;
+      pills.querySelectorAll(".cat-pill").forEach(b =>
+        b.classList.toggle("cat-pill--active", b.dataset.cat === S.cat)
+      );
+      renderGrid(true);
+    });
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1098,7 +1166,7 @@ function renderHero(item){
     hero.style.backgroundImage = `url('${item.stream_icon}')`;
     hero.classList.add("hero--img");
   }
-  $("heroTitle").textContent    = item.title || "PIPSIFLIX";
+  $("heroTitle").textContent    = item.title || "PIPSILY";
   $("heroSubtitle").textContent = item.category_name || "";
 }
 
@@ -1302,7 +1370,7 @@ function showApkUpdateBanner(vinfo, remoteVer){
     <div style="display:flex;align-items:center;gap:10px;">
       <span style="font-size:22px">📦</span>
       <div>
-        <div style="font-weight:700;font-size:14px">PIPSIFLIX v${remoteVer} disponible !</div>
+        <div style="font-weight:700;font-size:14px">PIPSILY v${remoteVer} disponible !</div>
         <div style="font-size:12px;opacity:.8;margin-top:2px">${vinfo.changes || "Améliorations & corrections"}</div>
       </div>
     </div>

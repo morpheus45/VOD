@@ -1,5 +1,5 @@
 /**
- * PIPSIFLIX PLAYER — v5.0
+ * PIPSILY PLAYER — v5.0
  * Fix critique : HTTP sur Android → lecteur natif IMMÉDIAT (pas d'essai HTTPS)
  * goldenlink.live:80 est HTTP pur → mixed content bloqué silencieusement par Chrome
  */
@@ -21,7 +21,7 @@ const UA        = navigator.userAgent;
 const isAndroid = /Android/i.test(UA);
 const isTV      = /TV|GoogleTV|SmartTV|AndroidTV/i.test(UA) ||
                   (isAndroid && !UA.includes("Mobile")) ||
-                  window.PIPSIFLIX_NATIVE === "android_tv";
+                  window.PIPSILY_NATIVE === "android_tv";
 const isIOS     = /iP(hone|ad|od)/i.test(UA);
 const isNative  = typeof window.AndroidBridge !== "undefined"; // APK Android
 

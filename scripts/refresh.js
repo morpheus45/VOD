@@ -1,5 +1,5 @@
 /**
- * scripts/refresh.js — PIPSIFLIX v1.0
+ * scripts/refresh.js — PIPSILY v1.0
  * ────────────────────────────────────
  * Rafraîchit TOUTES les données IPTV statiques :
  *   • series.json   — liste complète des séries
@@ -395,7 +395,7 @@ function writeChunks(db){
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main(){
   console.log("╔══════════════════════════════════════╗");
-  console.log("║  PIPSIFLIX — Refresh données IPTV    ║");
+  console.log("║  PIPSILY — Refresh données IPTV    ║");
   console.log("╚══════════════════════════════════════╝");
 
   const creds = getCredentials();
