@@ -1221,6 +1221,9 @@ async function boot(){
       const adminBtn = $("adminBtn");
       if(adminBtn) adminBtn.style.display = "inline-flex";
     }
+
+    // Surveillance session : déconnexion forcée si autre appareil se connecte (Standard/Test)
+    window.PIPSILY_AUTH.startSessionWatcher?.(S._userId);
   }
 
   // Navigation type

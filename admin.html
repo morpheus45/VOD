@@ -186,18 +186,20 @@
               Double-cliquez sur <strong style="color:#eef4ff">SETUP.bat</strong> dans le dossier VOD
               pour configurer automatiquement Supabase (2 min).
             </p>
-            <div style="font-size:12px;color:#4a6080;padding:10px;background:rgba(255,255,255,.03);border-radius:8px">
-              En mode dev, vous (admin) avez accès à tout le contenu.
-            </div>
           </div>`;
         return;
       }
-      const { data: users } = await A.supabase.from("profiles").select("*").order("created_at", { ascending: false });
-      const { data: payments } = await A.supabase.from("payments").select("*");
-      const { data: devices  } = await A.supabase.from("devices").select("*");
+      const [{ data: users }, { data: payments }, { data: devices }, { data: sessions }] = await Promise.all([
+        A.supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+        A.supabase.from("payments").select("*"),
+        A.supabase.from("devices").select("*"),
+        A.supabase.from("sessions").select("*").order("last_seen", { ascending: false })
+      ]);
 
-      _allUsers = users || [];
-      renderAdmin(users || [], payments || [], devices || []);
+      _allUsers    = users    || [];
+      window._allDevices  = devices  || [];
+      window._allSessions = sessions || [];
+      renderAdmin(users || [], payments || [], devices || [], sessions || []);
     }
 
     function fmtDate(iso){ if(!iso) return "—"; return new Date(iso).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) }
@@ -222,7 +224,7 @@
       }, 0);
     }
 
-    function renderAdmin(users, payments, devices){
+    function renderAdmin(users, payments, devices, sessions){
       const now = new Date();
       const active   = users.filter(u => {
         if(u.plan==="admin"||u.plan==="unlimited") return false;
@@ -235,7 +237,8 @@
         const exp = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
         return !exp || exp < now;
       });
-      const revenue = calcMonthlyRevenue(users, devices);
+      const revenue   = calcMonthlyRevenue(users, devices);
+      const connected = (sessions||[]).length;
 
       document.getElementById("adminContent").innerHTML = `
         <!-- Stats -->
@@ -255,6 +258,10 @@
           <div class="stat-card">
             <div class="stat-num">${pending.length}</div>
             <div class="stat-label">En attente</div>
+          </div>
+          <div class="stat-card stat-card--blue">
+            <div class="stat-num">${connected}</div>
+            <div class="stat-label">Connectés</div>
           </div>
           <div class="stat-card stat-card--accent">
             <div class="stat-num">${fmtMoney(revenue)}</div>
@@ -289,7 +296,7 @@
           <div class="card-title">Abonnés (${users.length})</div>
           <input type="text" class="search-bar" id="userSearch" placeholder="Rechercher un e-mail…" oninput="filterUsers()" />
           <div id="userCardList">
-            ${renderUserCards(users, devices)}
+            ${renderUserCards(users, devices, sessions||[])}
           </div>
         </div>
       `;
@@ -299,21 +306,58 @@
       document.getElementById("newExpiry").value = d30.toISOString().slice(0,10);
     }
 
-    function renderUserCards(users, devices){
+    function fmtRelative(iso){
+      if(!iso) return "—";
+      const diff = Date.now() - new Date(iso).getTime();
+      if(diff < 60000)   return "à l'instant";
+      if(diff < 3600000) return `il y a ${Math.round(diff/60000)} min`;
+      if(diff < 86400000)return `il y a ${Math.round(diff/3600000)} h`;
+      return `il y a ${Math.round(diff/86400000)} j`;
+    }
+
+    function renderUserCards(users, devices, sessions){
       if(!users.length) return '<p style="text-align:center;color:#7a9cc0;padding:20px">Aucun utilisateur</p>';
       return users.map(u => {
         const exp      = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
         const userDevs = (window._allDevices || devices || []).filter(d=>d.user_id===u.id);
+        const userSess = (window._allSessions || sessions || []).filter(s=>s.user_id===u.id);
         const devFees  = userDevs.reduce((s,d)=>s+(d.monthly_fee||0),0);
         const monthly  = (u.plan==="admin"||u.plan==="unlimited"||u.plan==="pending") ? null :
           (exp && exp > new Date() ? fmtMoney(4.99+devFees) : null);
         const isMe     = u.email === A.ADMIN_EMAIL;
         const devLimit = u.plan==="admin"||u.plan==="unlimited" ? "∞" : (u.devices_allowed||1);
+        const isOnline = userSess.length > 0;
+
+        // Sessions actives avec géolocalisation
+        const sessHtml = userSess.length === 0 ? "" : `
+          <div style="margin:10px 0 4px;font-size:11px;font-weight:800;text-transform:uppercase;
+            letter-spacing:.06em;color:#4a6080">📡 Sessions actives (${userSess.length})</div>
+          ${userSess.map(s => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:6px;
+              border-radius:10px;background:rgba(100,220,140,.06);border:1px solid rgba(100,220,140,.15)">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12px;font-weight:700;color:#eef4ff">${s.device_name||"Appareil"}</div>
+                <div style="font-size:11px;color:#7a9cc0;margin-top:2px;line-height:1.4">
+                  ${[s.city, s.region, s.country].filter(Boolean).join(", ") || "Localisation inconnue"}
+                  ${s.ip ? ` · ${s.ip}` : ""}
+                  ${s.isp ? `<br>${s.isp}` : ""}
+                </div>
+                <div style="font-size:10px;color:#4a6080;margin-top:2px">Vu ${fmtRelative(s.last_seen)}</div>
+              </div>
+              <button onclick="kickSession('${s.id}')"
+                style="flex-shrink:0;padding:6px 10px;border-radius:8px;border:1px solid rgba(232,51,74,.3);
+                  background:rgba(232,51,74,.12);color:#ff8899;font-size:11px;font-weight:700;cursor:pointer">
+                ✕ Kick
+              </button>
+            </div>`).join("")}`;
 
         return `
           <div class="user-card" data-email="${(u.email||"").toLowerCase()}">
             <div class="user-card__top">
-              <div class="user-card__email">${u.email||"?"}</div>
+              <div class="user-card__email">
+                ${isOnline ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6ef7b0;margin-right:6px;flex-shrink:0"></span>' : ''}
+                ${u.email||"?"}
+              </div>
               ${statusBadge(u)}
             </div>
             <div class="user-card__meta">
@@ -321,6 +365,7 @@
               <span>📱 ${userDevs.length}/${devLimit} appareils</span>
               ${monthly ? `<span>💳 ${monthly}/mois</span>` : ""}
             </div>
+            ${sessHtml}
             ${isMe
               ? `<div style="font-size:12px;color:#7a9cc0;padding:4px 0">Votre compte administrateur</div>`
               : `<div class="user-card__actions">
@@ -332,6 +377,13 @@
             }
           </div>`;
       }).join("");
+    }
+
+    async function kickSession(sessionId){
+      if(!confirm("Déconnecter cet appareil ?")) return;
+      await A.supabase.from("sessions").delete().eq("id", sessionId);
+      showGlobalMsg("✓ Appareil déconnecté");
+      loadAdmin();
     }
 
     function filterUsers(){
@@ -427,8 +479,7 @@
       setTimeout(()=>t.remove(), 3000);
     }
 
-    // Stocker les appareils pour la table
-    A.supabase && A.supabase.from("devices").select("*").then(({data})=>{ window._allDevices = data||[]; });
+    // Pré-chargement (géré dans loadAdmin via Promise.all)
 
     init();
   </script>

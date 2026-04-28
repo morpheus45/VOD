@@ -146,26 +146,146 @@ async function checkSubscription(userId){
 // ─────────────────────────────────────────────────────────────────
 //  SESSION UNIQUE (1 connexion simultanée max)
 // ─────────────────────────────────────────────────────────────────
+//  GÉOLOCALISATION IP SILENCIEUSE (aucune permission requise)
+// ─────────────────────────────────────────────────────────────────
+async function getGeoInfo(){
+  try {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 5000);
+    const r    = await fetch("https://ipapi.co/json/", { signal: ctrl.signal });
+    clearTimeout(tid);
+    if(!r.ok) return {};
+    const d = await r.json();
+    return {
+      ip      : d.ip            || "",
+      country : d.country_name  || d.country_code || "",
+      city    : d.city          || "",
+      region  : d.region        || "",
+      isp     : d.org           || ""
+    };
+  } catch { return {}; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  SESSION UNIQUE — 1 connexion par compte (Standard/Test)
+//  Illimité/Admin : sessions multiples autorisées
+// ─────────────────────────────────────────────────────────────────
 async function registerSession(userId){
   const token = crypto.randomUUID?.() || ("tok" + Date.now());
   localStorage.setItem("pipsily_session_token", token);
   if(!_supa) return token;
   try {
-    await _supa.from("sessions").delete().eq("user_id", userId);
-    await _supa.from("sessions").insert({ user_id: userId, device_id: getDeviceId(), token, created_at: new Date().toISOString() });
-  } catch {}
+    // Plan du compte
+    const { data: prof } = await _supa.from("profiles").select("plan").eq("id", userId).single();
+    const isUnlimited = prof?.plan === "admin" || prof?.plan === "unlimited";
+
+    // Standard/Test → forcer la déconnexion de tous les autres appareils
+    if(!isUnlimited){
+      await _supa.from("sessions").delete().eq("user_id", userId);
+    }
+
+    // Géolocalisation silencieuse (parallèle)
+    const geo = await getGeoInfo();
+
+    await _supa.from("sessions").insert({
+      user_id     : userId,
+      device_id   : getDeviceId(),
+      device_name : getDeviceName(),
+      token,
+      ip          : geo.ip      || null,
+      country     : geo.country || null,
+      city        : geo.city    || null,
+      region      : geo.region  || null,
+      isp         : geo.isp     || null,
+      last_seen   : new Date().toISOString(),
+      created_at  : new Date().toISOString()
+    });
+  } catch(e){ console.warn("[PIPSILY] registerSession:", e.message); }
   return token;
 }
 
 async function validateSession(userId){
-  if(!_supa) return true; // pas de vérif si non configuré
+  if(!_supa) return true;
   const localToken = localStorage.getItem("pipsily_session_token");
   if(!localToken) return false;
   try {
-    const { data } = await _supa.from("sessions").select("token").eq("user_id", userId)
-      .order("created_at", { ascending: false }).limit(1).single();
-    return data?.token === localToken;
+    const { data } = await _supa.from("sessions").select("id")
+      .eq("user_id", userId).eq("token", localToken).maybeSingle();
+    return !!data;
   } catch { return true; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  SURVEILLANCE SESSION — heartbeat 30s + Realtime
+//  Déconnexion forcée si un autre appareil prend la session
+// ─────────────────────────────────────────────────────────────────
+let _watchInterval = null;
+let _watchChannel  = null;
+
+function _showForcedLogout(){
+  // Nettoyer
+  clearInterval(_watchInterval);
+  try { if(_watchChannel) _supa?.removeChannel(_watchChannel); } catch {}
+  localStorage.removeItem(_DEV_SESSION_KEY);
+  localStorage.removeItem("pipsily_session_token");
+
+  // Écran de déconnexion forcée
+  const overlay = document.createElement("div");
+  overlay.style.cssText = [
+    "position:fixed;inset:0;z-index:99999",
+    "background:rgba(5,8,15,.97)",
+    "display:flex;align-items:center;justify-content:center",
+    "flex-direction:column;gap:16px;color:#fff",
+    "font-family:'Segoe UI',system-ui,sans-serif;text-align:center;padding:32px"
+  ].join(";");
+  overlay.innerHTML = `
+    <div style="font-size:52px">📵</div>
+    <div style="font-size:20px;font-weight:800;color:#eef4ff">Session terminée</div>
+    <div style="font-size:14px;color:#7a9cc0;line-height:1.65;max-width:300px">
+      Ce compte vient de se connecter sur un autre appareil.<br>
+      Une seule connexion simultanée est autorisée.
+    </div>
+    <button onclick="window.location.href='./login.html'"
+      style="margin-top:8px;padding:14px 32px;border-radius:14px;border:none;
+             background:linear-gradient(135deg,#e8334a,#f5a623);color:#fff;
+             font-size:15px;font-weight:700;cursor:pointer">
+      Se reconnecter
+    </button>`;
+  document.body.appendChild(overlay);
+  setTimeout(() => { window.location.href = "./login.html"; }, 6000);
+}
+
+async function _heartbeat(userId){
+  if(!_supa) return;
+  const localToken = localStorage.getItem("pipsily_session_token");
+  if(!localToken){ _showForcedLogout(); return; }
+  try {
+    const { data } = await _supa.from("sessions").select("id")
+      .eq("user_id", userId).eq("token", localToken).maybeSingle();
+    if(!data){ _showForcedLogout(); return; }
+    // Mettre à jour last_seen
+    await _supa.from("sessions").update({ last_seen: new Date().toISOString() }).eq("id", data.id);
+  } catch { /* erreur réseau : ne pas déconnecter */ }
+}
+
+async function startSessionWatcher(userId){
+  if(!_supa || !userId) return;
+
+  // Heartbeat toutes les 30 secondes
+  _watchInterval = setInterval(() => _heartbeat(userId), 30_000);
+
+  // Realtime : déconnexion instantanée si session supprimée/modifiée
+  try {
+    _watchChannel = _supa
+      .channel(`sw_${userId}`)
+      .on("postgres_changes", {
+        event  : "*",
+        schema : "public",
+        table  : "sessions",
+        filter : `user_id=eq.${userId}`
+      }, () => _heartbeat(userId))
+      .subscribe();
+  } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -472,7 +592,7 @@ function _showSessionExpired(){
 //  EXPORT GLOBAL
 // ─────────────────────────────────────────────────────────────────
 window.PIPSILY_AUTH = {
-  supabase     : _supa,
+  supabase           : _supa,
   ADMIN_EMAIL,
   getSession,
   signIn,
@@ -489,7 +609,9 @@ window.PIPSILY_AUTH = {
   promptParentalPin,
   authGate,
   getDeviceId,
-  getDeviceName
+  getDeviceName,
+  getGeoInfo,
+  startSessionWatcher
 };
 
 // ─────────────────────────────────────────────────────────────────
