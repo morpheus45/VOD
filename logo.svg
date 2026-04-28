@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 52" width="230" height="52">
+  <defs>
+    <linearGradient id="tvGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7B6FE8"/>
+      <stop offset="100%" stop-color="#4A8FD9"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Antenne gauche : ligne + dot -->
+  <line x1="12" y1="16" x2="7"  y2="5" stroke="#7B6FE8" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="7"  cy="4.5" r="3" fill="#7B6FE8"/>
+
+  <!-- Antenne droite : ligne + dot -->
+  <line x1="30" y1="16" x2="35" y2="5" stroke="#4A8FD9" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="35" cy="4.5" r="3" fill="#4A8FD9"/>
+
+  <!-- Corps TV — outline dégradé, coins arrondis -->
+  <rect x="2" y="15" width="38" height="29" rx="7" ry="7"
+        fill="none" stroke="url(#tvGrad)" stroke-width="2.6"/>
+
+  <!-- PIPSILY — gras blanc -->
+  <text x="50" y="38"
+        font-family="'Segoe UI Black','Arial Black','Impact',sans-serif"
+        font-weight="900"
+        font-size="28"
+        fill="#FFFFFF"
+        letter-spacing="-0.4">PIPSILY</text>
+</svg>

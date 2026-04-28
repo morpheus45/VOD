@@ -63,12 +63,10 @@ button,select,input{ font:inherit }
 .topbar-brand-row{
   display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
 }
-.brand{
-  font-size:20px; font-weight:900;
-  letter-spacing:-.5px;
-  background:linear-gradient(120deg,var(--accent) 0%,var(--accent2) 50%,#fff 100%);
-  -webkit-background-clip:text; color:transparent;
-  filter:drop-shadow(0 0 12px rgba(232,51,74,.4));
+.brand-logo{
+  height:36px; width:auto;
+  display:block;
+  filter:drop-shadow(0 0 10px rgba(123,111,232,.35));
 }
 .topbar-user-btns{ display:flex; align-items:center; gap:8px }
 .user-btn{
@@ -576,7 +574,7 @@ button,select,input{ font:inherit }
 }
 @media (max-width:700px){
   .app-shell{ padding:0 10px 0 }
-  .brand{ display:none }
+  .brand-logo{ height:28px }
   .topbar{ padding:8px 0 }
   .hero{ height:200px; border-radius:16px }
   .hero h1{ font-size:18px }
@@ -624,7 +622,7 @@ button,select,input{ font:inherit }
 
   /* ── Typographie TV ── */
   .topbar-brand-row{ margin-bottom:0 }
-  .brand{ font-size:26px }
+  .brand-logo{ height:46px }
   .nav-row{ gap:12px }
   .nav-btn{ padding:12px 24px; font-size:15px; border-radius:14px; min-height:50px }
 
