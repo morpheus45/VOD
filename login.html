@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PIPSILY — Connexion</title>
+  <style>
+    *{ box-sizing:border-box; margin:0; padding:0 }
+    body{
+      min-height:100vh; display:flex; align-items:center; justify-content:center;
+      background:
+        radial-gradient(ellipse at 20% 0%,rgba(232,51,74,.18),transparent 50%),
+        radial-gradient(ellipse at 80% 0%,rgba(59,124,244,.14),transparent 50%),
+        #05080f;
+      font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+      color:#eef4ff; padding:20px;
+    }
+    .card{
+      width:100%; max-width:400px;
+      background:rgba(12,20,34,.85);
+      border:1px solid rgba(255,255,255,.09);
+      border-radius:24px; padding:36px 32px;
+      backdrop-filter:blur(20px);
+    }
+    .logo{
+      text-align:center; margin-bottom:28px;
+    }
+    .logo-text{
+      font-size:28px; font-weight:900; letter-spacing:-.5px;
+      background:linear-gradient(120deg,#e8334a 0%,#f5a623 50%,#fff 100%);
+      -webkit-background-clip:text; color:transparent;
+      filter:drop-shadow(0 0 12px rgba(232,51,74,.4));
+    }
+    .logo-sub{ font-size:12px; color:#7a9cc0; margin-top:4px; letter-spacing:.04em }
+    .tabs{
+      display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:24px;
+      background:rgba(255,255,255,.05); border-radius:12px; padding:4px;
+    }
+    .tab{
+      padding:10px; border-radius:9px; border:none; cursor:pointer;
+      font-size:14px; font-weight:600; transition:all .2s;
+      background:transparent; color:#7a9cc0;
+    }
+    .tab.active{
+      background:linear-gradient(135deg,#e8334a,#f5a623); color:#fff;
+    }
+    .form-group{ margin-bottom:16px }
+    label{ display:block; font-size:12px; font-weight:600; color:#7a9cc0;
+      margin-bottom:6px; letter-spacing:.03em; text-transform:uppercase }
+    input[type=email], input[type=password]{
+      width:100%; padding:13px 16px; border-radius:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06); color:#eef4ff;
+      font-size:15px; outline:none;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    input:focus{
+      border-color:#e8334a;
+      box-shadow:0 0 0 3px rgba(232,51,74,.2);
+    }
+    .btn-primary{
+      width:100%; padding:14px; border-radius:13px; border:none; cursor:pointer;
+      background:linear-gradient(135deg,#e8334a,#f5a623); color:#fff;
+      font-size:15px; font-weight:700; letter-spacing:.02em;
+      transition:opacity .15s, transform .12s; margin-top:4px;
+      box-shadow:0 6px 24px rgba(232,51,74,.3);
+    }
+    .btn-primary:hover{ opacity:.9 }
+    .btn-primary:active{ transform:scale(.97) }
+    .btn-primary:disabled{ opacity:.5; cursor:default; transform:none }
+    .msg{
+      margin-top:14px; padding:12px 16px; border-radius:11px;
+      font-size:13px; line-height:1.5; text-align:center; display:none;
+    }
+    .msg--error{ background:rgba(232,51,74,.12); border:1px solid rgba(232,51,74,.3); color:#ff8899 }
+    .msg--success{ background:rgba(100,220,140,.1); border:1px solid rgba(100,220,140,.3); color:#7ef7b0 }
+    .msg--info{ background:rgba(59,124,244,.1); border:1px solid rgba(59,124,244,.3); color:#82b4ff }
+    .forgot{ display:block; text-align:center; color:#7a9cc0; font-size:12px;
+      text-decoration:none; margin-top:14px; transition:color .15s }
+    .forgot:hover{ color:#eef4ff }
+    .divider{ display:flex; align-items:center; gap:12px; margin:20px 0; color:#3a5070; font-size:12px }
+    .divider::before,.divider::after{ content:''; flex:1; height:1px; background:rgba(255,255,255,.08) }
+    #signupExtra{ display:none }
+    .password-wrap{ position:relative }
+    .toggle-pw{
+      position:absolute; right:14px; top:50%; transform:translateY(-50%);
+      background:none; border:none; color:#7a9cc0; cursor:pointer; font-size:16px;
+      padding:4px; line-height:1;
+    }
+    .info-box{
+      background:rgba(59,124,244,.08); border:1px solid rgba(59,124,244,.2);
+      border-radius:12px; padding:14px 16px; margin-bottom:16px;
+      font-size:13px; color:#82b4ff; line-height:1.6; display:none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <div class="logo-text">PIPSILY</div>
+      <div class="logo-sub">Votre cinéma à la maison</div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tabLogin" onclick="switchTab('login')">Se connecter</button>
+      <button class="tab" id="tabSignup" onclick="switchTab('signup')">Créer un compte</button>
+    </div>
+
+    <form id="authForm" autocomplete="on">
+      <div class="form-group">
+        <label for="emailInput">Adresse e-mail</label>
+        <input type="email" id="emailInput" placeholder="votre@email.com"
+          autocomplete="email" required />
+      </div>
+      <div class="form-group">
+        <label for="pwInput">Mot de passe</label>
+        <div class="password-wrap">
+          <input type="password" id="pwInput" placeholder="••••••••"
+            autocomplete="current-password" required minlength="8" />
+          <button type="button" class="toggle-pw" id="togglePw" onclick="togglePw()">👁</button>
+        </div>
+      </div>
+      <div id="signupExtra">
+        <div class="form-group">
+          <label for="pwConfirm">Confirmer le mot de passe</label>
+          <div class="password-wrap">
+            <input type="password" id="pwConfirm" placeholder="••••••••"
+              autocomplete="new-password" minlength="8" />
+          </div>
+        </div>
+        <div class="info-box" id="signupInfo">
+          📋 Après inscription, votre compte sera <strong>en attente d'activation</strong>.
+          Contactez l'administrateur pour activer votre accès.
+          <br><br>
+          💳 <strong>Abonnement : 4,99 €/mois</strong>
+          <br>Appareils supplémentaires : +1,50 €/mois chacun.
+        </div>
+      </div>
+      <button type="submit" class="btn-primary" id="submitBtn">Se connecter</button>
+    </form>
+
+    <div class="msg" id="authMsg"></div>
+    <a href="#" class="forgot" id="forgotLink" onclick="forgotPw(event)">Mot de passe oublié ?</a>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="./auth.js"></script>
+  <script>
+    const { signIn, signUp, getSession, ADMIN_EMAIL } = window.PIPSILY_AUTH;
+    let mode = "login";
+
+    // Rediriger si déjà connecté
+    getSession().then(session => {
+      if(session) window.location.href = "./index.html";
+    });
+
+    function switchTab(m){
+      mode = m;
+      document.getElementById("tabLogin").classList.toggle("active", m === "login");
+      document.getElementById("tabSignup").classList.toggle("active", m === "signup");
+      document.getElementById("signupExtra").style.display = m === "signup" ? "block" : "none";
+      document.getElementById("signupInfo").style.display  = m === "signup" ? "block" : "none";
+      document.getElementById("submitBtn").textContent = m === "login" ? "Se connecter" : "Créer mon compte";
+      document.querySelector("#pwInput").autocomplete = m === "login" ? "current-password" : "new-password";
+      document.getElementById("forgotLink").style.display = m === "login" ? "block" : "none";
+      document.getElementById("pwConfirm") && (document.getElementById("pwConfirm").required = m === "signup");
+      clearMsg();
+    }
+
+    function showMsg(type, text){
+      const el = document.getElementById("authMsg");
+      el.className = `msg msg--${type}`;
+      el.innerHTML = text;
+      el.style.display = "block";
+    }
+    function clearMsg(){ document.getElementById("authMsg").style.display = "none"; }
+
+    function togglePw(){
+      const inp = document.getElementById("pwInput");
+      inp.type = inp.type === "password" ? "text" : "password";
+    }
+
+    async function forgotPw(e){
+      e.preventDefault();
+      const email = document.getElementById("emailInput").value.trim();
+      if(!email){ showMsg("error","Entrez votre e-mail d'abord."); return; }
+      const { error } = await window.PIPSILY_AUTH.supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/login.html"
+      });
+      if(error) showMsg("error", error.message);
+      else showMsg("success","Lien de réinitialisation envoyé à " + email);
+    }
+
+    document.getElementById("authForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      clearMsg();
+      const btn   = document.getElementById("submitBtn");
+      const email = document.getElementById("emailInput").value.trim().toLowerCase();
+      const pw    = document.getElementById("pwInput").value;
+
+      if(!email || !pw){ showMsg("error","Remplissez tous les champs."); return; }
+
+      btn.disabled = true;
+      btn.textContent = mode === "login" ? "Connexion…" : "Création…";
+
+      try {
+        if(mode === "signup"){
+          const pw2 = document.getElementById("pwConfirm").value;
+          if(pw !== pw2){ showMsg("error","Les mots de passe ne correspondent pas."); return; }
+          if(pw.length < 8){ showMsg("error","Mot de passe trop court (8 caractères min)."); return; }
+          const { error } = await signUp(email, pw);
+          if(error){ showMsg("error", error.message); return; }
+          showMsg("success",
+            "✅ Compte créé ! Vérifiez votre e-mail pour confirmer votre inscription.<br>" +
+            "Votre compte sera activé par l'administrateur sous peu."
+          );
+        } else {
+          const { error, data } = await signIn(email, pw);
+          if(error){ showMsg("error","E-mail ou mot de passe incorrect."); return; }
+          // Enregistrer la session
+          await window.PIPSILY_AUTH.registerSession(data.session.user.id);
+          window.location.href = "./index.html";
+        }
+      } catch(err){
+        showMsg("error", "Erreur : " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = mode === "login" ? "Se connecter" : "Créer mon compte";
+      }
+    });
+  </script>
+</body>
+</html>

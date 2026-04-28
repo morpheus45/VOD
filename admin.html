@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PIPSILY — Administration</title>
+  <style>
+    *{ box-sizing:border-box; margin:0; padding:0 }
+    body{
+      min-height:100vh;
+      background:
+        radial-gradient(ellipse at 10% 0%,rgba(59,124,244,.15),transparent 40%),
+        radial-gradient(ellipse at 90% 0%,rgba(232,51,74,.12),transparent 40%),
+        #05080f;
+      font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+      color:#eef4ff;
+    }
+    .topbar{
+      display:flex; align-items:center; gap:12px; padding:14px 20px;
+      background:rgba(5,8,15,.92); border-bottom:1px solid rgba(255,255,255,.08);
+      backdrop-filter:blur(20px);
+    }
+    .logo-text{
+      font-size:20px; font-weight:900;
+      background:linear-gradient(120deg,#e8334a,#f5a623,#fff);
+      -webkit-background-clip:text; color:transparent;
+    }
+    .admin-badge{
+      padding:4px 10px; border-radius:999px; font-size:11px; font-weight:800;
+      background:rgba(59,124,244,.2); border:1px solid rgba(59,124,244,.4); color:#82b4ff;
+      letter-spacing:.06em;
+    }
+    .back-btn{
+      margin-left:auto; display:flex; align-items:center; gap:6px;
+      padding:8px 14px; border-radius:10px;
+      border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.05);
+      color:#7a9cc0; font-size:13px; font-weight:600; cursor:pointer;
+      text-decoration:none; transition:all .15s;
+    }
+    .back-btn:hover{ background:rgba(255,255,255,.1); color:#eef4ff }
+    .page{ max-width:900px; margin:0 auto; padding:24px 16px 80px }
+    .stats-grid{
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
+      gap:12px; margin-bottom:24px;
+    }
+    .stat-card{
+      background:rgba(12,20,34,.85); border:1px solid rgba(255,255,255,.08);
+      border-radius:16px; padding:18px; text-align:center;
+    }
+    .stat-num{ font-size:28px; font-weight:900; margin-bottom:4px }
+    .stat-label{ font-size:12px; color:#7a9cc0; font-weight:600; letter-spacing:.03em }
+    .stat-card--accent .stat-num{ color:#f5a623 }
+    .stat-card--blue   .stat-num{ color:#82b4ff }
+    .stat-card--green  .stat-num{ color:#6ef7b0 }
+    .stat-card--red    .stat-num{ color:#ff8899 }
+    .card{
+      background:rgba(12,20,34,.85); border:1px solid rgba(255,255,255,.08);
+      border-radius:18px; padding:20px; margin-bottom:16px; overflow-x:auto;
+    }
+    .card-header{
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:16px; flex-wrap:wrap; gap:10px;
+    }
+    .card-title{
+      font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
+      color:#7a9cc0; display:flex; align-items:center; gap:8px;
+    }
+    .card-title::before{
+      content:''; width:3px; height:14px; border-radius:2px;
+      background:linear-gradient(180deg,#e8334a,#f5a623); display:block;
+    }
+    table{ width:100%; border-collapse:collapse; font-size:13px }
+    th{ text-align:left; padding:8px 12px; color:#7a9cc0; font-weight:700;
+      border-bottom:1px solid rgba(255,255,255,.06); white-space:nowrap }
+    td{ padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.04);
+      vertical-align:middle }
+    tr:last-child td{ border-bottom:none }
+    tr:hover td{ background:rgba(255,255,255,.02) }
+    .badge{
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 9px; border-radius:999px; font-size:11px; font-weight:700;
+      white-space:nowrap;
+    }
+    .badge--active   { background:rgba(100,220,140,.15); color:#6ef7b0; border:1px solid rgba(100,220,140,.25) }
+    .badge--expired  { background:rgba(232,51,74,.15);   color:#ff8899; border:1px solid rgba(232,51,74,.25) }
+    .badge--pending  { background:rgba(245,166,35,.12);  color:#f5a623; border:1px solid rgba(245,166,35,.25) }
+    .badge--admin    { background:rgba(59,124,244,.15);  color:#82b4ff; border:1px solid rgba(59,124,244,.25) }
+    .badge--unlimited{ background:rgba(100,220,140,.15); color:#6ef7b0; border:1px solid rgba(100,220,140,.25) }
+    .action-btn{
+      padding:5px 12px; border-radius:8px; border:none; cursor:pointer;
+      font-size:12px; font-weight:700; transition:all .15s; white-space:nowrap;
+    }
+    .action-btn--green{ background:rgba(100,220,140,.15); color:#6ef7b0; border:1px solid rgba(100,220,140,.3) }
+    .action-btn--red  { background:rgba(232,51,74,.15);   color:#ff8899; border:1px solid rgba(232,51,74,.3) }
+    .action-btn--blue { background:rgba(59,124,244,.15);  color:#82b4ff; border:1px solid rgba(59,124,244,.3) }
+    .action-btn--gold { background:rgba(245,166,35,.15);  color:#f5a623; border:1px solid rgba(245,166,35,.3) }
+    .action-btn:hover{ opacity:.75 }
+    .action-btn:disabled{ opacity:.3; cursor:default }
+    .actions-cell{ display:flex; gap:6px; flex-wrap:wrap; align-items:center }
+    .form-inline{ display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+    input[type=email], input[type=password], input[type=date], select{
+      padding:10px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.1);
+      background:rgba(255,255,255,.06); color:#eef4ff; font-size:13px; outline:none;
+    }
+    input:focus, select:focus{ border-color:#e8334a; box-shadow:0 0 0 3px rgba(232,51,74,.2) }
+    .btn{ padding:10px 18px; border-radius:10px; border:none; cursor:pointer;
+      font-size:13px; font-weight:700 }
+    .btn-primary{ background:linear-gradient(135deg,#e8334a,#f5a623); color:#fff }
+    .btn:disabled{ opacity:.5; cursor:default }
+    .msg{ padding:10px 14px; border-radius:10px; font-size:13px; margin-top:12px; display:none }
+    .msg--success{ background:rgba(100,220,140,.1); border:1px solid rgba(100,220,140,.3); color:#7ef7b0 }
+    .msg--error{ background:rgba(232,51,74,.12); border:1px solid rgba(232,51,74,.3); color:#ff8899 }
+    .loading{ text-align:center; padding:40px; color:#7a9cc0 }
+    .email-cell{ max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    .search-bar{
+      padding:9px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.1);
+      background:rgba(255,255,255,.06); color:#eef4ff; font-size:13px; outline:none;
+      width:200px;
+    }
+    .search-bar:focus{ border-color:#e8334a }
+    .date-input{ min-width:140px }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo-text">PIPSILY</div>
+    <span class="admin-badge">ADMIN</span>
+    <a href="./index.html" class="back-btn">← App</a>
+  </div>
+
+  <div class="page">
+    <div id="adminContent" class="loading">Vérification des droits…</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="./auth.js"></script>
+  <script>
+    const A = window.PIPSILY_AUTH;
+    let _allUsers = [];
+    let _session  = null;
+
+    async function init(){
+      _session = await A.getSession();
+      if(!_session){ window.location.href = "./login.html"; return; }
+      const prof = await A.getProfile(_session.user.id);
+      if(!prof || (prof.plan !== "admin" && _session.user.email !== A.ADMIN_EMAIL)){
+        document.getElementById("adminContent").innerHTML =
+          '<div style="text-align:center;padding:60px;color:#ff8899">⛔ Accès refusé</div>';
+        return;
+      }
+      loadAdmin();
+    }
+
+    async function loadAdmin(){
+      const { data: users } = await A.supabase.from("profiles").select("*").order("created_at", { ascending: false });
+      const { data: payments } = await A.supabase.from("payments").select("*");
+      const { data: devices  } = await A.supabase.from("devices").select("*");
+
+      _allUsers = users || [];
+      renderAdmin(users || [], payments || [], devices || []);
+    }
+
+    function fmtDate(iso){ if(!iso) return "—"; return new Date(iso).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) }
+    function fmtMoney(n){ return typeof n === "number" ? n.toFixed(2).replace(".",",")+" €" : "—" }
+
+    function statusBadge(p){
+      if(p.plan==="admin")     return '<span class="badge badge--admin">⚡ Admin</span>';
+      if(p.plan==="unlimited") return '<span class="badge badge--unlimited">∞ Illimité</span>';
+      const exp = p.subscription_expires_at ? new Date(p.subscription_expires_at) : null;
+      if(exp && exp > new Date()) return '<span class="badge badge--active">✓ Actif</span>';
+      if(exp) return '<span class="badge badge--expired">Expiré</span>';
+      return '<span class="badge badge--pending">⏳ En attente</span>';
+    }
+
+    function calcMonthlyRevenue(users, devs){
+      return users.reduce((sum, u) => {
+        if(u.plan === "admin" || u.plan === "unlimited" || u.plan === "pending") return sum;
+        const exp = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
+        if(!exp || exp < new Date()) return sum;
+        const userDevFees = devs.filter(d=>d.user_id===u.id).reduce((s,d)=>s+(d.monthly_fee||0),0);
+        return sum + 4.99 + userDevFees;
+      }, 0);
+    }
+
+    function renderAdmin(users, payments, devices){
+      const now = new Date();
+      const active   = users.filter(u => {
+        if(u.plan==="admin"||u.plan==="unlimited") return false;
+        const exp = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
+        return exp && exp > now;
+      });
+      const pending  = users.filter(u => u.plan === "pending" || (!u.subscription_expires_at && u.plan === "active"));
+      const expired  = users.filter(u => {
+        if(u.plan==="admin"||u.plan==="unlimited") return false;
+        const exp = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
+        return !exp || exp < now;
+      });
+      const revenue = calcMonthlyRevenue(users, devices);
+
+      document.getElementById("adminContent").innerHTML = `
+        <!-- Stats -->
+        <div class="stats-grid">
+          <div class="stat-card stat-card--blue">
+            <div class="stat-num">${users.length}</div>
+            <div class="stat-label">Comptes total</div>
+          </div>
+          <div class="stat-card stat-card--green">
+            <div class="stat-num">${active.length}</div>
+            <div class="stat-label">Abonnés actifs</div>
+          </div>
+          <div class="stat-card stat-card--red">
+            <div class="stat-num">${expired.length}</div>
+            <div class="stat-label">Expirés</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num">${pending.length}</div>
+            <div class="stat-label">En attente</div>
+          </div>
+          <div class="stat-card stat-card--accent">
+            <div class="stat-num">${fmtMoney(revenue)}</div>
+            <div class="stat-label">Revenus/mois</div>
+          </div>
+          <div class="stat-card stat-card--accent">
+            <div class="stat-num">${fmtMoney(revenue * 12)}</div>
+            <div class="stat-label">Revenus/an (est.)</div>
+          </div>
+        </div>
+
+        <!-- Créer un compte -->
+        <div class="card">
+          <div class="card-title">Créer un compte</div>
+          <div class="form-inline">
+            <input type="email" id="newEmail" placeholder="email@exemple.com" />
+            <input type="password" id="newPw" placeholder="Mot de passe" />
+            <select id="newPlan">
+              <option value="active">Standard (4,99 €/mois)</option>
+              <option value="unlimited">Illimité</option>
+              <option value="admin">Admin</option>
+              <option value="test">Test (7 jours)</option>
+            </select>
+            <input type="date" id="newExpiry" class="date-input" title="Date d'expiration" />
+            <button class="btn btn-primary" onclick="createAccount()">Créer</button>
+          </div>
+          <div class="msg" id="createMsg"></div>
+        </div>
+
+        <!-- Abonnés -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Abonnés (${users.length})</div>
+            <input type="text" class="search-bar" id="userSearch" placeholder="Rechercher…" oninput="filterUsers()" />
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>E-mail</th>
+                <th>Statut</th>
+                <th>Expiration</th>
+                <th>Appareils</th>
+                <th>Mensuel</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody">
+              ${renderUserRows(users, devices)}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      // Auto-remplir la date d'expiration à 30 jours
+      const d30 = new Date(); d30.setDate(d30.getDate()+30);
+      document.getElementById("newExpiry").value = d30.toISOString().slice(0,10);
+    }
+
+    function renderUserRows(users, devices){
+      if(!users.length) return '<tr><td colspan="6" style="text-align:center;color:#7a9cc0;padding:20px">Aucun utilisateur</td></tr>';
+      return users.map(u => {
+        const exp   = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
+        const userDevs = (window._allDevices || devices || []).filter(d=>d.user_id===u.id);
+        const devFees  = userDevs.reduce((s,d)=>s+(d.monthly_fee||0),0);
+        const monthly  = (u.plan==="admin"||u.plan==="unlimited"||u.plan==="pending") ? "—" :
+          (exp && exp > new Date() ? fmtMoney(4.99+devFees) : "—");
+        const isMe = u.email === A.ADMIN_EMAIL;
+        return `
+          <tr data-email="${(u.email||"").toLowerCase()}">
+            <td class="email-cell" title="${u.email||""}">${u.email||"?"}</td>
+            <td>${statusBadge(u)}</td>
+            <td>${fmtDate(u.subscription_expires_at)}</td>
+            <td style="text-align:center">${userDevs.length}/${u.plan==="admin"||u.plan==="unlimited"?"∞":(u.devices_allowed||1)}</td>
+            <td>${monthly}</td>
+            <td>
+              <div class="actions-cell">
+                ${isMe ? '<span style="font-size:12px;color:#7a9cc0">(vous)</span>' : `
+                <button class="action-btn action-btn--green"  onclick="activateUser('${u.id}',30)">+30j</button>
+                <button class="action-btn action-btn--blue"   onclick="setUnlimited('${u.id}')">Illimité</button>
+                <button class="action-btn action-btn--gold"   onclick="setTest('${u.id}')">Test 7j</button>
+                <button class="action-btn action-btn--red"    onclick="deactivate('${u.id}')">Bloquer</button>
+                `}
+              </div>
+            </td>
+          </tr>`;
+      }).join("");
+    }
+
+    function filterUsers(){
+      const q = document.getElementById("userSearch").value.toLowerCase();
+      document.querySelectorAll("#userTableBody tr[data-email]").forEach(tr => {
+        tr.style.display = tr.dataset.email.includes(q) ? "" : "none";
+      });
+    }
+
+    async function createAccount(){
+      const btn    = document.querySelector("[onclick='createAccount()']");
+      const email  = document.getElementById("newEmail").value.trim();
+      const pw     = document.getElementById("newPw").value;
+      const plan   = document.getElementById("newPlan").value;
+      const expiry = document.getElementById("newExpiry").value;
+      const msg    = document.getElementById("createMsg");
+
+      if(!email || !pw){ showMsg(msg,"error","E-mail et mot de passe requis."); return; }
+      btn.disabled = true; btn.textContent = "Création…";
+
+      try {
+        // Créer l'auth user via admin (Supabase Admin API pas disponible côté client — on utilise signUp + mise à jour profil)
+        const { data, error } = await A.supabase.auth.admin.createUser({ email, password: pw, email_confirm: true });
+        if(error) throw error;
+
+        const expAt = plan==="test"
+          ? new Date(Date.now()+7*24*3600*1000).toISOString()
+          : (expiry ? new Date(expiry).toISOString() : null);
+
+        await A.supabase.from("profiles").upsert({
+          id: data.user.id, email,
+          plan: plan === "test" ? "active" : plan,
+          subscription_expires_at: expAt,
+          devices_allowed: (plan==="admin"||plan==="unlimited") ? 999 : 1
+        });
+
+        showMsg(msg,"success","✓ Compte créé : " + email);
+        loadAdmin();
+      } catch(err){
+        showMsg(msg,"error", err.message);
+      } finally {
+        btn.disabled = false; btn.textContent = "Créer";
+      }
+    }
+
+    async function activateUser(userId, days){
+      const expAt = new Date(Date.now() + days*24*3600*1000).toISOString();
+      await A.supabase.from("profiles").update({ plan:"active", subscription_expires_at: expAt }).eq("id",userId);
+      // Enregistrer le paiement
+      await A.supabase.from("payments").insert({
+        user_id: userId, amount: 4.99, type:"subscription",
+        period_start: new Date().toISOString().slice(0,10),
+        period_end: expAt.slice(0,10),
+        confirmed_at: new Date().toISOString(), confirmed_by: _session.user.id
+      });
+      showGlobalMsg("✓ Activé pour " + days + " jours");
+      loadAdmin();
+    }
+
+    async function setUnlimited(userId){
+      await A.supabase.from("profiles").update({ plan:"unlimited", subscription_expires_at: null, devices_allowed: 999 }).eq("id",userId);
+      showGlobalMsg("✓ Compte illimité");
+      loadAdmin();
+    }
+
+    async function setTest(userId){
+      const expAt = new Date(Date.now()+7*24*3600*1000).toISOString();
+      await A.supabase.from("profiles").update({ plan:"active", subscription_expires_at: expAt }).eq("id",userId);
+      showGlobalMsg("✓ Accès test 7 jours");
+      loadAdmin();
+    }
+
+    async function deactivate(userId){
+      if(!confirm("Bloquer cet utilisateur ?")) return;
+      await A.supabase.from("profiles").update({ plan:"pending", subscription_expires_at: null }).eq("id",userId);
+      showGlobalMsg("✓ Utilisateur bloqué");
+      loadAdmin();
+    }
+
+    function showMsg(el, type, text){
+      el.className = `msg msg--${type}`;
+      el.textContent = text;
+      el.style.display = "block";
+      setTimeout(()=>{ el.style.display="none"; }, 5000);
+    }
+
+    function showGlobalMsg(text){
+      const t = document.createElement("div");
+      t.textContent = text;
+      t.style.cssText="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:12px 20px;border-radius:12px;background:rgba(100,220,140,.15);border:1px solid rgba(100,220,140,.3);color:#6ef7b0;font-size:13px;font-weight:700;z-index:999;white-space:nowrap";
+      document.body.appendChild(t);
+      setTimeout(()=>t.remove(), 3000);
+    }
+
+    // Stocker les appareils pour la table
+    A.supabase && A.supabase.from("devices").select("*").then(({data})=>{ window._allDevices = data||[]; });
+
+    init();
+  </script>
+</body>
+</html>

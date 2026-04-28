@@ -843,7 +843,17 @@ function playEpisode(series, ep, season){
   window.location.href = "player.html";
 }
 
-function playItem(item){
+async function playItem(item){
+  // ── Code parental (catégories for adults) ──
+  const isAdultCat = /adult|adulte|\+18|xxx|erot|for adult/i.test(item.category_name || "");
+  if(isAdultCat && window.PIPSILY_AUTH && S._userId){
+    const pin = await window.PIPSILY_AUTH.getParentalPin(S._userId);
+    if(pin){
+      const ok = await window.PIPSILY_AUTH.promptParentalPin(pin);
+      if(!ok) return; // annulé ou mauvais PIN
+    }
+  }
+
   pushHist(item);
   const url    = item.url || item.stream_url || "";
   const title  = item.title || "";
@@ -1175,6 +1185,26 @@ function renderHero(item){
 // ─────────────────────────────────────────────────────────────────
 
 async function boot(){
+
+  // ── Auth gate (skip dans l'APK Android natif) ──
+  const isApk = typeof window.AndroidBridge !== "undefined";
+  if(!isApk && window.PIPSILY_AUTH){
+    const auth = await window.PIPSILY_AUTH.authGate();
+    if(!auth) return; // redirigé vers login.html ou paywall
+
+    // Stocker la session pour le parental PIN
+    S._userId  = auth.session.user.id;
+    S._isAdmin = auth.sub.plan === "admin" || auth.session.user.email === window.PIPSILY_AUTH.ADMIN_EMAIL;
+    S._unlim   = auth.sub.unlimited;
+
+    // Afficher les boutons user dans la topbar
+    const userBtns = $("topbarUserBtns");
+    if(userBtns) userBtns.style.display = "flex";
+    if(S._isAdmin){
+      const adminBtn = $("adminBtn");
+      if(adminBtn) adminBtn.style.display = "inline-flex";
+    }
+  }
 
   // Navigation type
   document.querySelectorAll(".nav-btn[data-type]").forEach(btn => {

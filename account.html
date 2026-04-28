@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PIPSILY — Mon compte</title>
+  <style>
+    *{ box-sizing:border-box; margin:0; padding:0 }
+    body{
+      min-height:100vh;
+      background:
+        radial-gradient(ellipse at 15% 0%,rgba(59,124,244,.12),transparent 40%),
+        radial-gradient(ellipse at 85% 0%,rgba(232,51,74,.10),transparent 40%),
+        #05080f;
+      font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+      color:#eef4ff;
+    }
+    .topbar{
+      display:flex; align-items:center; gap:16px; padding:14px 20px;
+      background:rgba(5,8,15,.9); border-bottom:1px solid rgba(255,255,255,.08);
+      backdrop-filter:blur(20px);
+    }
+    .logo-text{
+      font-size:20px; font-weight:900;
+      background:linear-gradient(120deg,#e8334a,#f5a623,#fff);
+      -webkit-background-clip:text; color:transparent;
+    }
+    .back-btn{
+      display:flex; align-items:center; gap:6px; padding:8px 14px; border-radius:10px;
+      border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.05);
+      color:#7a9cc0; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none;
+      transition:all .15s;
+    }
+    .back-btn:hover{ background:rgba(255,255,255,.1); color:#eef4ff }
+    .page{ max-width:600px; margin:0 auto; padding:24px 16px 80px }
+    .page-title{ font-size:22px; font-weight:800; margin-bottom:6px }
+    .page-sub{ font-size:13px; color:#7a9cc0; margin-bottom:24px }
+    .card{
+      background:rgba(12,20,34,.85); border:1px solid rgba(255,255,255,.08);
+      border-radius:18px; padding:20px; margin-bottom:16px;
+    }
+    .card-title{
+      font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.08em;
+      color:#7a9cc0; margin-bottom:14px; display:flex; align-items:center; gap:8px;
+    }
+    .card-title::before{
+      content:''; width:3px; height:14px; border-radius:2px;
+      background:linear-gradient(180deg,#e8334a,#f5a623); display:block;
+    }
+    .info-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.05) }
+    .info-row:last-child{ border-bottom:none }
+    .info-label{ font-size:13px; color:#7a9cc0 }
+    .info-value{ font-size:13px; font-weight:600; color:#eef4ff }
+    .badge{
+      display:inline-flex; align-items:center; gap:4px;
+      padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700;
+    }
+    .badge--active{ background:rgba(100,220,140,.15); color:#6ef7b0; border:1px solid rgba(100,220,140,.3) }
+    .badge--expired{ background:rgba(232,51,74,.15); color:#ff8899; border:1px solid rgba(232,51,74,.3) }
+    .badge--pending{ background:rgba(245,166,35,.12); color:#f5a623; border:1px solid rgba(245,166,35,.3) }
+    .badge--admin{ background:rgba(59,124,244,.15); color:#82b4ff; border:1px solid rgba(59,124,244,.3) }
+    .device-item{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:12px; border-radius:12px; background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.06); margin-bottom:8px;
+    }
+    .device-icon{ font-size:22px; flex-shrink:0 }
+    .device-info{ flex:1; min-width:0 }
+    .device-name{ font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    .device-meta{ font-size:11px; color:#7a9cc0; margin-top:2px }
+    .device-current{ font-size:10px; font-weight:700; color:#6ef7b0; margin-left:6px }
+    .device-fee{ font-size:12px; color:#f5a623; font-weight:600; flex-shrink:0 }
+    label{ display:block; font-size:12px; font-weight:600; color:#7a9cc0;
+      margin-bottom:6px; letter-spacing:.03em; text-transform:uppercase }
+    input[type=password], input[type=text]{
+      width:100%; padding:12px 14px; border-radius:11px;
+      border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.06);
+      color:#eef4ff; font-size:15px; outline:none; margin-bottom:12px;
+      transition:border-color .2s, box-shadow .2s;
+    }
+    input:focus{ border-color:#e8334a; box-shadow:0 0 0 3px rgba(232,51,74,.2) }
+    .btn{ padding:12px 20px; border-radius:12px; border:none; cursor:pointer;
+      font-size:14px; font-weight:700; transition:all .15s }
+    .btn-primary{ background:linear-gradient(135deg,#e8334a,#f5a623); color:#fff; box-shadow:0 4px 16px rgba(232,51,74,.25) }
+    .btn-secondary{ background:rgba(255,255,255,.08); color:#eef4ff; border:1px solid rgba(255,255,255,.12) }
+    .btn-danger{ background:rgba(232,51,74,.15); color:#ff8899; border:1px solid rgba(232,51,74,.3) }
+    .btn:hover{ opacity:.85 }
+    .btn:active{ transform:scale(.97) }
+    .btn:disabled{ opacity:.5; cursor:default; transform:none }
+    .pin-row{ display:flex; gap:10px; align-items:flex-end }
+    .pin-row input{ flex:1; margin-bottom:0 }
+    .msg{ margin-top:12px; padding:10px 14px; border-radius:10px; font-size:13px;
+      display:none; line-height:1.5 }
+    .msg--success{ background:rgba(100,220,140,.1); border:1px solid rgba(100,220,140,.3); color:#7ef7b0 }
+    .msg--error{ background:rgba(232,51,74,.12); border:1px solid rgba(232,51,74,.3); color:#ff8899 }
+    .logout-wrap{ text-align:center; margin-top:8px }
+    .btn-logout{ background:transparent; border:1px solid rgba(255,255,255,.12);
+      color:#7a9cc0; padding:12px 32px; border-radius:12px; cursor:pointer;
+      font-size:14px; font-weight:600 }
+    .btn-logout:hover{ color:#eef4ff; border-color:rgba(255,255,255,.25) }
+    .loading{ text-align:center; padding:40px; color:#7a9cc0; font-size:14px }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="./index.html" class="back-btn">← Retour</a>
+    <div class="logo-text">PIPSILY</div>
+  </div>
+
+  <div class="page">
+    <div class="page-title">Mon compte</div>
+    <div class="page-sub">Gérez votre abonnement et vos paramètres</div>
+
+    <div id="pageContent" class="loading">Chargement…</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="./auth.js"></script>
+  <script>
+    const A = window.PIPSILY_AUTH;
+
+    async function load(){
+      const session = await A.getSession();
+      if(!session){ window.location.href = "./login.html"; return; }
+
+      const sub  = await A.checkSubscription(session.user.id);
+      const prof = sub;
+
+      const { data: devs } = await A.supabase
+        .from("devices").select("*").eq("user_id", session.user.id).order("created_at");
+
+      renderPage(session, prof, devs || []);
+    }
+
+    function statusBadge(prof){
+      if(prof.plan === "admin")      return '<span class="badge badge--admin">⚡ Admin</span>';
+      if(prof.plan === "unlimited")  return '<span class="badge badge--active">∞ Illimité</span>';
+      if(prof.ok)                    return '<span class="badge badge--active">✓ Actif</span>';
+      if(prof.subscription_expires_at) return '<span class="badge badge--expired">Expiré</span>';
+      return '<span class="badge badge--pending">⏳ En attente</span>';
+    }
+
+    function fmtDate(iso){
+      if(!iso) return "—";
+      return new Date(iso).toLocaleDateString("fr-FR",{ day:"2-digit", month:"long", year:"numeric" });
+    }
+
+    function deviceIcon(name){
+      if(!name) return "📱";
+      if(/TV|tv/i.test(name))   return "📺";
+      if(/Android/i.test(name)) return "📱";
+      if(/iOS|iPhone|iPad/i.test(name)) return "📱";
+      if(/Mac/i.test(name))     return "💻";
+      if(/PC|Windows/i.test(name)) return "🖥";
+      return "📱";
+    }
+
+    function renderPage(session, prof, devs){
+      const currentDevice = A.getDeviceId();
+      const expiresAt = prof.subscription_expires_at ? new Date(prof.subscription_expires_at) : null;
+      const monthlyTotal = 4.99 + devs.reduce((s,d) => s + (d.monthly_fee || 0), 0);
+
+      document.getElementById("pageContent").innerHTML = `
+
+        <!-- Abonnement -->
+        <div class="card">
+          <div class="card-title">Abonnement</div>
+          <div class="info-row">
+            <span class="info-label">Statut</span>
+            <span>${statusBadge(prof)}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">E-mail</span>
+            <span class="info-value">${session.user.email}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">Plan</span>
+            <span class="info-value">${prof.plan === "admin" ? "Administrateur" : prof.plan === "unlimited" ? "Illimité" : "Standard 4,99 €/mois"}</span>
+          </div>
+          ${expiresAt ? `
+          <div class="info-row">
+            <span class="info-label">Valable jusqu'au</span>
+            <span class="info-value">${fmtDate(expiresAt)}</span>
+          </div>` : ""}
+          ${prof.plan === "admin" || prof.plan === "unlimited" ? "" : `
+          <div class="info-row">
+            <span class="info-label">Total mensuel</span>
+            <span class="info-value" style="color:#f5a623;font-size:15px;font-weight:800">${monthlyTotal.toFixed(2).replace(".",",")} €</span>
+          </div>
+          <div style="margin-top:14px;padding:14px;border-radius:12px;background:rgba(59,124,244,.07);border:1px solid rgba(59,124,244,.15);font-size:13px;color:#82b4ff;line-height:1.6">
+            💳 Pour renouveler votre abonnement, contactez l'administrateur.
+            <br>Le renouvellement sera activé après confirmation du paiement.
+          </div>`}
+        </div>
+
+        <!-- Appareils -->
+        <div class="card">
+          <div class="card-title">Mes appareils (${devs.length}/${prof.plan==="admin"||prof.plan==="unlimited" ? "∞" : (prof.devices_allowed || 1)})</div>
+          <div id="deviceList">
+            ${devs.length === 0 ? '<p style="color:#7a9cc0;font-size:13px">Aucun appareil enregistré.</p>' :
+              devs.map(d => `
+                <div class="device-item">
+                  <span class="device-icon">${deviceIcon(d.device_name)}</span>
+                  <div class="device-info">
+                    <div class="device-name">${d.device_name || "Appareil"}
+                      ${d.device_id === currentDevice ? '<span class="device-current">● Cet appareil</span>' : ""}
+                    </div>
+                    <div class="device-meta">Ajouté le ${fmtDate(d.created_at)} · Vu le ${fmtDate(d.last_seen)}</div>
+                  </div>
+                  ${d.monthly_fee > 0 ? `<span class="device-fee">+${(d.monthly_fee).toFixed(2).replace(".",",")} €/mois</span>` : ""}
+                </div>`).join("")
+            }
+          </div>
+          ${prof.plan !== "admin" && prof.plan !== "unlimited" ? `
+          <p style="margin-top:14px;font-size:12px;color:#7a9cc0;line-height:1.5">
+            Appareil supplémentaire : <strong style="color:#eef4ff">+1,50 €/mois</strong> facturé automatiquement.
+          </p>` : ""}
+        </div>
+
+        <!-- Code parental -->
+        <div class="card">
+          <div class="card-title">Code parental</div>
+          <p style="font-size:13px;color:#7a9cc0;margin-bottom:14px;line-height:1.5">
+            Protégez les contenus réservés aux adultes avec un code PIN à 4-6 chiffres.
+          </p>
+          <label>Code parental (4-6 chiffres)</label>
+          <div class="pin-row">
+            <input type="password" id="pinInput" inputmode="numeric" maxlength="6" placeholder="••••" />
+            <button class="btn btn-primary" onclick="savePin()">Enregistrer</button>
+          </div>
+          <div class="msg" id="pinMsg"></div>
+        </div>
+
+        <!-- Mot de passe -->
+        <div class="card">
+          <div class="card-title">Sécurité</div>
+          <label>Nouveau mot de passe</label>
+          <input type="password" id="newPwInput" placeholder="8 caractères minimum" minlength="8" />
+          <button class="btn btn-primary" onclick="changePw()">Changer le mot de passe</button>
+          <div class="msg" id="pwMsg"></div>
+        </div>
+
+        <!-- Déconnexion -->
+        <div class="logout-wrap">
+          <button class="btn-logout" onclick="logout()">Se déconnecter</button>
+        </div>
+      `;
+
+      // Pré-remplir le PIN s'il existe
+      A.getParentalPin(session.user.id).then(pin => {
+        if(pin) document.getElementById("pinInput").placeholder = "Code enregistré (modifier)";
+      });
+
+      window._userId = session.user.id;
+    }
+
+    async function savePin(){
+      const pin = document.getElementById("pinInput").value.trim();
+      const msg = document.getElementById("pinMsg");
+      if(!/^\d{4,6}$/.test(pin)){ showMsg(msg, "error", "4 à 6 chiffres requis."); return; }
+      const { error } = await A.setParentalPin(window._userId, pin);
+      if(error) showMsg(msg, "error", error.message);
+      else showMsg(msg, "success", "✓ Code parental enregistré.");
+    }
+
+    async function changePw(){
+      const pw  = document.getElementById("newPwInput").value;
+      const msg = document.getElementById("pwMsg");
+      if(pw.length < 8){ showMsg(msg, "error", "8 caractères minimum."); return; }
+      const { error } = await A.supabase.auth.updateUser({ password: pw });
+      if(error) showMsg(msg, "error", error.message);
+      else showMsg(msg, "success", "✓ Mot de passe mis à jour.");
+    }
+
+    async function logout(){
+      await A.signOut();
+      window.location.href = "./login.html";
+    }
+
+    function showMsg(el, type, text){
+      el.className = `msg msg--${type}`;
+      el.textContent = text;
+      el.style.display = "block";
+      setTimeout(() => { el.style.display = "none"; }, 4000);
+    }
+
+    load();
+  </script>
+</body>
+</html>

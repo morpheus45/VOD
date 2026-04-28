@@ -60,13 +60,30 @@ button,select,input{ font:inherit }
   border-bottom:1px solid var(--line);
   padding:10px 0 10px;
 }
+.topbar-brand-row{
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
+}
 .brand{
-  font-size:20px; font-weight:900; margin-bottom:10px;
+  font-size:20px; font-weight:900;
   letter-spacing:-.5px;
   background:linear-gradient(120deg,var(--accent) 0%,var(--accent2) 50%,#fff 100%);
   -webkit-background-clip:text; color:transparent;
   filter:drop-shadow(0 0 12px rgba(232,51,74,.4));
 }
+.topbar-user-btns{ display:flex; align-items:center; gap:8px }
+.user-btn{
+  display:inline-flex; align-items:center; gap:5px;
+  padding:6px 12px; border-radius:10px; font-size:12px; font-weight:700;
+  text-decoration:none; transition:all .15s; border:1px solid;
+}
+.user-btn--admin{
+  background:rgba(59,124,244,.15); border-color:rgba(59,124,244,.35); color:#82b4ff;
+}
+.user-btn--admin:hover{ background:rgba(59,124,244,.25) }
+.user-btn--account{
+  background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.15); color:var(--text);
+}
+.user-btn--account:hover{ background:rgba(255,255,255,.14) }
 .nav-row{
   display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;
 }
@@ -606,7 +623,8 @@ button,select,input{ font:inherit }
   .cat-pill{ padding:9px 20px; font-size:14px; min-height:42px }
 
   /* ── Typographie TV ── */
-  .brand{ font-size:26px; margin-bottom:0 }
+  .topbar-brand-row{ margin-bottom:0 }
+  .brand{ font-size:26px }
   .nav-row{ gap:12px }
   .nav-btn{ padding:12px 24px; font-size:15px; border-radius:14px; min-height:50px }
 
