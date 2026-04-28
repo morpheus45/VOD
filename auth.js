@@ -1,3 +1,4 @@
+YOUR_ANON
 // ╔══════════════════════════════════════════════════════════════╗
 // ║  PIPSILY — auth.js v1.0 — Supabase Auth + Abonnements       ║
 // ║  NE PAS COMMITTER les clés Supabase dans un repo public      ║
@@ -17,7 +18,7 @@ const ADMIN_EMAIL   = "cedric.lago@gmail.com";
 // ─────────────────────────────────────────────────────────────────
 //  DÉTECTION CONFIG
 // ─────────────────────────────────────────────────────────────────
-const _configured = !SUPABASE_URL.includes("VOTRE_PROJET") && !SUPABASE_ANON.includes("VOTRE_ANON");
+const _configured = !SUPABASE_URL.includes("VOD") && !SUPABASE_ANON.includes("sb_publishable_cNZ37Mjd57b_9nlyCvtkkA_wSIszOMR");
 
 // ─────────────────────────────────────────────────────────────────
 //  CLIENT SUPABASE (protégé contre CDN manquant ou config vide)
