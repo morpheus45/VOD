@@ -138,7 +138,8 @@ async function refreshSeries(creds){
       stream_icon   : s.cover || s.stream_icon || "",
       plot          : s.plot || "",
       quality       : inferQuality(`${s.name || ""} ${catName}`),
-      stream_url    : `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_series_info&series_id=${s.series_id || s.id}`
+      stream_url    : `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_series_info&series_id=${s.series_id || s.id}`,
+      added         : s.added ? Number(s.added) : 0
     };
   });
 
@@ -187,7 +188,8 @@ async function refreshVod(creds){
       stream_icon   : v.stream_icon || v.cover || "",
       plot          : v.plot || "",
       quality       : inferQuality(`${v.name || ""} ${catName}`),
-      stream_url    : `${creds.base}:80/movie/${creds.username}/${creds.password}/${v.stream_id}.${v.container_extension || "mkv"}`
+      stream_url    : `${creds.base}:80/movie/${creds.username}/${creds.password}/${v.stream_id}.${v.container_extension || "mkv"}`,
+      added         : v.added ? Number(v.added) : 0
     };
   });
 

@@ -196,6 +196,7 @@ function normalizeItems(arr, type){
     plot          : x.plot || x.description || x.overview || "",
     type,
     quality       : inferQuality([x.title, x.name, x.category_name, x.plot].join(" ")),
+    added         : x.added || 0,
     _xtream       : type === "series" && !!(x.url || x.stream_url || "").includes("get_series_info"),
     episodes      : {},
     seasons       : []
@@ -1012,6 +1013,70 @@ function initTV(){
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  SECTION NOUVEAUTÉS
+// ─────────────────────────────────────────────────────────────────
+
+function renderNouveautes(){
+  const sect = $("nouveautesSection");
+  const row  = $("nouveautesRow");
+  if(!sect || !row) return;
+
+  // Top 20 VOD récents (added desc) avec poster
+  const recent = [...S.vod]
+    .filter(x => x.added > 0 && x.stream_icon)
+    .sort((a, b) => b.added - a.added)
+    .slice(0, 20);
+
+  if(!recent.length){ sect.hidden = true; return; }
+  sect.hidden = false;
+
+  row.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  recent.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "nou-card";
+    card.tabIndex  = 0;
+    const d = item.added ? new Date(item.added * 1000) : null;
+    const dateStr = d
+      ? d.toLocaleDateString("fr-FR", { day:"2-digit", month:"short" })
+      : "";
+    card.innerHTML = `
+      <div class="nou-media">
+        <img src="${esc(item.stream_icon)}" alt="" loading="lazy"
+             onerror="this.parentElement.parentElement.style.display='none'">
+        ${item.quality ? `<span class="nou-qual">${esc(item.quality)}</span>` : ""}
+        <div class="nou-overlay">
+          <span class="nou-play">▶</span>
+        </div>
+      </div>
+      <div class="nou-info">
+        <div class="nou-title">${esc(item.title)}</div>
+        ${dateStr ? `<div class="nou-date">${dateStr}</div>` : ""}
+      </div>`;
+    card.addEventListener("click", () => openVodPanel(item));
+    card.addEventListener("keydown", e => {
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openVodPanel(item); }
+    });
+    frag.appendChild(card);
+  });
+  row.appendChild(frag);
+
+  // Hero : mettre en avant le 1er item avec une belle image
+  renderHero(recent[0]);
+}
+
+function renderHero(item){
+  const hero = $("hero");
+  if(!hero || !item) return;
+  if(item.stream_icon){
+    hero.style.backgroundImage = `url('${item.stream_icon}')`;
+    hero.classList.add("hero--img");
+  }
+  $("heroTitle").textContent    = item.title || "PIPSIFLIX";
+  $("heroSubtitle").textContent = item.category_name || "";
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  BOOT
 // ─────────────────────────────────────────────────────────────────
 
@@ -1132,6 +1197,7 @@ async function boot(){
     }
   }
 
+  renderNouveautes();
   render();
 
   // ── Écoute des mises à jour Service Worker ──
