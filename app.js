@@ -860,7 +860,11 @@ async function playItem(item){
   const isLive = item.type === "live";
 
   // APK Android v4+ : lecteur VLC embarqué
-  if(typeof window.AndroidBridge !== "undefined"
+  // Sur Android TV : on garde le player.html car VLC bridge peut planter
+  const isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
+               (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
+
+  if(!isTV && typeof window.AndroidBridge !== "undefined"
      && typeof window.AndroidBridge.openInVlc === "function"){
     try {
       window.AndroidBridge.openInVlc(url, title, isLive);
@@ -870,7 +874,7 @@ async function playItem(item){
     }
   }
 
-  // Fallback : player.html (navigateur / APK < v4)
+  // Fallback : player.html (TV / navigateur / APK < v4)
   sessionStorage.setItem("iptv_current_item", JSON.stringify({
     ...item,
     stream_url : item.stream_url || item.url,
@@ -1055,6 +1059,7 @@ function renderCatPills(cats){
 // ─────────────────────────────────────────────────────────────────
 
 function initTV(){
+  // ── Navigation D-pad TV ──
   document.addEventListener("keydown", e => {
     const k = e.key;
 
@@ -1067,15 +1072,28 @@ function initTV(){
     }
 
     if(!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)) return;
+    e.preventDefault();
 
     const panelOpen = !$("seriesPanel")?.hidden;
+    // Inclure les boutons des banners de mise à jour dans les focusables
+    const bannerBtns = [...document.querySelectorAll(
+      "#updateNowBtn, #updateDismissBtn, #apkDownloadBtn, #apkDismissBtn"
+    )].filter(b => b.offsetParent !== null);
+
     const focusables = panelOpen
       ? [...$("seriesPanel").querySelectorAll(".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct")]
-      : [...document.querySelectorAll(".card, .nav-btn, .controls-grid select, .controls-grid input")];
+      : [
+          ...bannerBtns,
+          ...document.querySelectorAll(".card, .nav-btn, .controls-grid select, .controls-grid input")
+        ];
 
-    const idx = focusables.indexOf(document.activeElement);
-    if(idx < 0) return;
-    e.preventDefault();
+    let idx = focusables.indexOf(document.activeElement);
+
+    // Aucun élément focalisé → focaliser le premier automatiquement
+    if(idx < 0){
+      focusables[0]?.focus();
+      return;
+    }
 
     let cols = 1;
     if(!panelOpen){
@@ -1186,18 +1204,15 @@ function renderHero(item){
 
 async function boot(){
 
-  // ── Auth gate (skip dans l'APK Android natif) ──
-  const isApk = typeof window.AndroidBridge !== "undefined";
-  if(!isApk && window.PIPSILY_AUTH){
+  // ── Auth gate (APK + PWA) ──
+  if(window.PIPSILY_AUTH){
     const auth = await window.PIPSILY_AUTH.authGate();
     if(!auth) return; // redirigé vers login.html ou paywall
 
-    // Stocker la session pour le parental PIN
     S._userId  = auth.session.user.id;
     S._isAdmin = auth.sub.plan === "admin" || auth.session.user.email === window.PIPSILY_AUTH.ADMIN_EMAIL;
     S._unlim   = auth.sub.unlimited;
 
-    // Afficher les boutons user dans la topbar
     const userBtns = $("topbarUserBtns");
     if(userBtns) userBtns.style.display = "flex";
     if(S._isAdmin){
@@ -1336,29 +1351,41 @@ async function boot(){
 }
 
 function showUpdateBanner(){
-  if($("updateBanner")) return; // déjà affiché
+  if($("updateBanner")) return;
+  const isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
+               (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
   const banner = document.createElement("div");
   banner.id = "updateBanner";
   banner.innerHTML = `
     <span>🔄 Mise à jour disponible !</span>
-    <button id="updateNowBtn" type="button">Mettre à jour</button>
-    <button id="updateDismissBtn" type="button" aria-label="Fermer">✕</button>`;
-  banner.style.cssText = `
-    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
-    z-index:9999;display:flex;align-items:center;gap:12px;
-    background:linear-gradient(135deg,#1a2d50,#0f1e3a);
-    border:1px solid rgba(255,159,44,.4);border-radius:16px;
-    padding:14px 18px;color:#fff;font-size:14px;font-weight:600;
-    box-shadow:0 8px 32px rgba(0,0,0,.5);white-space:nowrap;
-    animation:slideUp .3s ease;`;
+    <button id="updateNowBtn" type="button" tabindex="0"
+      style="background:linear-gradient(135deg,#e8334a,#f5a623);color:#fff;border:none;
+             border-radius:10px;padding:10px 20px;font-weight:700;font-size:14px;cursor:pointer">
+      Mettre à jour
+    </button>
+    <button id="updateDismissBtn" type="button" tabindex="0" aria-label="Fermer"
+      style="background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:10px;
+             padding:10px 14px;font-size:14px;cursor:pointer">✕</button>`;
+  // Sur TV : bannière en HAUT pour être accessible par D-pad (pas en bas hors écran)
+  banner.style.cssText = isTV
+    ? `position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;
+       justify-content:center;gap:16px;padding:14px 20px;color:#fff;font-size:14px;font-weight:600;
+       background:linear-gradient(135deg,#1a2d50,#0f1e3a);border-bottom:2px solid rgba(255,159,44,.5);
+       box-shadow:0 4px 24px rgba(0,0,0,.6);`
+    : `position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;
+       display:flex;align-items:center;gap:12px;padding:14px 18px;color:#fff;font-size:14px;font-weight:600;
+       background:linear-gradient(135deg,#1a2d50,#0f1e3a);border:1px solid rgba(255,159,44,.4);
+       border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.5);white-space:nowrap;`;
   document.body.appendChild(banner);
-  $("updateNowBtn").onclick = () => {
-    navigator.serviceWorker.ready.then(reg => {
+  $("updateNowBtn").addEventListener("click", () => {
+    navigator.serviceWorker?.ready.then(reg => {
       reg.waiting?.postMessage({ type: "SKIP_WAITING" });
       window.location.reload();
-    });
-  };
-  $("updateDismissBtn").onclick = () => banner.remove();
+    }).catch(() => window.location.reload());
+  });
+  $("updateDismissBtn").addEventListener("click", () => banner.remove());
+  // Auto-focus sur TV pour que le D-pad puisse sélectionner tout de suite
+  if(isTV) setTimeout(() => $("updateNowBtn")?.focus(), 100);
 }
 
 // ─────────────────────────────────────────────────────────────────

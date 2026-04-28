@@ -9,16 +9,16 @@ YOUR_ANON
 //  CONFIG SUPABASE — à remplir après création du projet
 //  https://supabase.com → New project → Settings → API
 // ─────────────────────────────────────────────────────────────────
-const SUPABASE_URL  = "https://gwmuazostbbgroplnlql.supabase.co" ;
+const SUPABASE_URL  = "https://gwmuazostbbgroplnlql.supabase.co";
 const SUPABASE_ANON = "sb_publishable_cNZ37Mjd57b_9nlyCvtkkA_wSIszOMR";
-//qaehOyHFvPymhtua
+
 // E-mail du compte admin (accès illimité, panel admin visible)
 const ADMIN_EMAIL   = "cedric.lago@gmail.com";
 
 // ─────────────────────────────────────────────────────────────────
 //  DÉTECTION CONFIG
 // ─────────────────────────────────────────────────────────────────
-const _configured = !SUPABASE_URL.includes("VOD") && !SUPABASE_ANON.includes("sb_publishable_cNZ37Mjd57b_9nlyCvtkkA_wSIszOMR");
+const _configured = !SUPABASE_URL.includes("VOTRE_PROJET") && !SUPABASE_ANON.includes("VOTRE_ANON");
 
 // ─────────────────────────────────────────────────────────────────
 //  CLIENT SUPABASE (protégé contre CDN manquant ou config vide)
