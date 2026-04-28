@@ -1,4 +1,3 @@
-YOUR_ANON
 // ╔══════════════════════════════════════════════════════════════╗
 // ║  PIPSILY — auth.js v1.0 — Supabase Auth + Abonnements       ║
 // ║  NE PAS COMMITTER les clés Supabase dans un repo public      ║
