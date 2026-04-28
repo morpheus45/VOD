@@ -344,11 +344,6 @@
                 </div>
                 <div style="font-size:10px;color:#4a6080;margin-top:2px">Vu ${fmtRelative(s.last_seen)}</div>
               </div>
-              <button onclick="kickSession('${s.id}')"
-                style="flex-shrink:0;padding:6px 10px;border-radius:8px;border:1px solid rgba(232,51,74,.3);
-                  background:rgba(232,51,74,.12);color:#ff8899;font-size:11px;font-weight:700;cursor:pointer">
-                ✕ Kick
-              </button>
             </div>`).join("")}`;
 
         return `
@@ -379,12 +374,6 @@
       }).join("");
     }
 
-    async function kickSession(sessionId){
-      if(!confirm("Déconnecter cet appareil ?")) return;
-      await A.supabase.from("sessions").delete().eq("id", sessionId);
-      showGlobalMsg("✓ Appareil déconnecté");
-      loadAdmin();
-    }
 
     function filterUsers(){
       const q = document.getElementById("userSearch").value.toLowerCase();
