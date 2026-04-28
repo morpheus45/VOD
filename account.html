@@ -127,8 +127,9 @@
       const sub  = await A.checkSubscription(session.user.id);
       const prof = sub;
 
-      const { data: devs } = await A.supabase
-        .from("devices").select("*").eq("user_id", session.user.id).order("created_at");
+      const { data: devs } = A.supabase
+        ? await A.supabase.from("devices").select("*").eq("user_id", session.user.id).order("created_at")
+        : { data: [] };
 
       renderPage(session, prof, devs || []);
     }
@@ -268,6 +269,7 @@
       const pw  = document.getElementById("newPwInput").value;
       const msg = document.getElementById("pwMsg");
       if(pw.length < 8){ showMsg(msg, "error", "8 caractères minimum."); return; }
+      if(!A.supabase){ showMsg(msg, "error", "⚙️ Supabase non configuré."); return; }
       const { error } = await A.supabase.auth.updateUser({ password: pw });
       if(error) showMsg(msg, "error", error.message);
       else showMsg(msg, "success", "✓ Mot de passe mis à jour.");

@@ -59,8 +59,23 @@ function getDeviceName(){
 // ─────────────────────────────────────────────────────────────────
 //  AUTHENTIFICATION
 // ─────────────────────────────────────────────────────────────────
+// ── Session locale pour mode dev (Supabase non configuré) ──
+const _DEV_SESSION_KEY = "pipsily_dev_session";
+
+function _mkDevSession(email){
+  return {
+    user: { id: "dev-" + btoa(email).replace(/=/g,""), email },
+    access_token: "dev-token"
+  };
+}
+
 async function getSession(){
-  if(!_supa) return null;
+  // Mode dev : lire la session locale si pas de Supabase
+  if(!_supa || !_configured){
+    const raw = localStorage.getItem(_DEV_SESSION_KEY);
+    if(raw){ try { return JSON.parse(raw); } catch{} }
+    return null;
+  }
   try {
     const { data: { session } } = await _supa.auth.getSession();
     return session;
@@ -68,23 +83,32 @@ async function getSession(){
 }
 
 async function signIn(email, password){
-  if(!_supa) return { error: { message: "Supabase non configuré — remplissez auth.js" } };
-  if(!_configured) return { error: { message: "Clés Supabase manquantes dans auth.js" } };
+  // Mode dev : accès admin sans Supabase
+  if(!_configured || !_supa){
+    if(email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && password === "!Morpheus45!"){
+      const session = _mkDevSession(email);
+      localStorage.setItem(_DEV_SESSION_KEY, JSON.stringify(session));
+      return { data: { session }, error: null };
+    }
+    return { error: { message: "⚙️ Supabase non configuré. Lancez SETUP.bat pour activer les comptes." } };
+  }
   return _supa.auth.signInWithPassword({ email, password });
 }
 
 async function signUp(email, password){
-  if(!_supa) return { error: { message: "Supabase non configuré — remplissez auth.js" } };
-  if(!_configured) return { error: { message: "Clés Supabase manquantes dans auth.js" } };
+  if(!_configured || !_supa){
+    return { error: { message: "⚙️ Configuration en cours. Lancez SETUP.bat pour activer les inscriptions." } };
+  }
   return _supa.auth.signUp({ email, password });
 }
 
 async function signOut(){
-  if(!_supa) { window.location.href = "./login.html"; return; }
+  localStorage.removeItem(_DEV_SESSION_KEY);
+  localStorage.removeItem("pipsily_session_token");
+  if(!_supa || !_configured){ window.location.href = "./login.html"; return; }
   const session = await getSession();
   if(session){
     try { await _supa.from("sessions").delete().eq("user_id", session.user.id); } catch {}
-    localStorage.removeItem("pipsily_session_token");
   }
   return _supa.auth.signOut();
 }
@@ -101,9 +125,16 @@ async function getProfile(userId){
 }
 
 async function checkSubscription(userId){
+  // Mode dev : admin illimité
+  if(!_configured || !_supa){
+    const sess = await getSession();
+    if(sess?.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase())
+      return { ok: true, unlimited: true, plan: "admin", devices_allowed: 99,
+               email: sess.user.email, id: sess.user.id };
+    return { ok: false, plan: "pending" };
+  }
   const prof = await getProfile(userId);
   if(!prof) return { ok: false, plan: null };
-  // Admin et comptes illimités → toujours actif
   if(prof.plan === "admin" || prof.plan === "unlimited")
     return { ok: true, unlimited: true, ...prof };
   const expires = prof.subscription_expires_at ? new Date(prof.subscription_expires_at) : null;

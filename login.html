@@ -191,7 +191,7 @@
 
     async function forgotPw(e){
       e.preventDefault();
-      if(!_A || !_A.supabase){ showMsg("error","Service non disponible."); return; }
+      if(!_A || !_A.supabase){ showMsg("info","⚙️ Réinitialisation disponible une fois Supabase configuré. Contactez l'admin."); return; }
       const email = document.getElementById("emailInput").value.trim();
       if(!email){ showMsg("error","Entrez votre e-mail d'abord."); return; }
       try {
