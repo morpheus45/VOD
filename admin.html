@@ -231,7 +231,7 @@
           <div class="card-title">Créer un compte</div>
           <div class="form-inline">
             <input type="email" id="newEmail" placeholder="email@exemple.com" />
-            <input type="password" id="newPw" placeholder="Mot de passe" />
+            <input type="password" id="newPw" placeholder="Mot de passe provisoire" />
             <select id="newPlan">
               <option value="active">Standard (4,99 €/mois)</option>
               <option value="unlimited">Illimité</option>
@@ -322,9 +322,10 @@
       btn.disabled = true; btn.textContent = "Création…";
 
       try {
-        // Créer l'auth user via admin (Supabase Admin API pas disponible côté client — on utilise signUp + mise à jour profil)
-        const { data, error } = await A.supabase.auth.admin.createUser({ email, password: pw, email_confirm: true });
+        // Utilise signUp (pas auth.admin qui nécessite service_role non sûr côté client)
+        const { data, error } = await A.supabase.auth.signUp({ email, password: pw });
         if(error) throw error;
+        if(!data.user) throw new Error("Utilisateur non créé — vérifiez si l'email est déjà utilisé.");
 
         const expAt = plan==="test"
           ? new Date(Date.now()+7*24*3600*1000).toISOString()
@@ -337,7 +338,7 @@
           devices_allowed: (plan==="admin"||plan==="unlimited") ? 999 : 1
         });
 
-        showMsg(msg,"success","✓ Compte créé : " + email);
+        showMsg(msg,"success","✓ Compte créé : " + email + " — un e-mail de confirmation lui a été envoyé.");
         loadAdmin();
       } catch(err){
         showMsg(msg,"error", err.message);
