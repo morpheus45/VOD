@@ -69,16 +69,21 @@
       content:''; width:3px; height:14px; border-radius:2px;
       background:linear-gradient(180deg,#e8334a,#f5a623); display:block;
     }
-    table{ width:100%; border-collapse:collapse; font-size:13px }
-    th{ text-align:left; padding:8px 12px; color:#7a9cc0; font-weight:700;
-      border-bottom:1px solid rgba(255,255,255,.06); white-space:nowrap }
-    td{ padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.04);
-      vertical-align:middle }
-    tr:last-child td{ border-bottom:none }
-    tr:hover td{ background:rgba(255,255,255,.02) }
+    /* ── Formulaire création compte ── */
+    .form-create{ display:flex; flex-direction:column; gap:10px }
+    .form-create input, .form-create select{
+      width:100%; padding:12px 14px; border-radius:10px;
+      border:1px solid rgba(255,255,255,.1);
+      background:rgba(255,255,255,.06); color:#eef4ff; font-size:14px; outline:none;
+      box-sizing:border-box;
+    }
+    .form-create input:focus, .form-create select:focus{
+      border-color:#e8334a; box-shadow:0 0 0 3px rgba(232,51,74,.2)
+    }
+    /* ── Badges ── */
     .badge{
       display:inline-flex; align-items:center; gap:4px;
-      padding:3px 9px; border-radius:999px; font-size:11px; font-weight:700;
+      padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700;
       white-space:nowrap;
     }
     .badge--active   { background:rgba(100,220,140,.15); color:#6ef7b0; border:1px solid rgba(100,220,140,.25) }
@@ -86,9 +91,31 @@
     .badge--pending  { background:rgba(245,166,35,.12);  color:#f5a623; border:1px solid rgba(245,166,35,.25) }
     .badge--admin    { background:rgba(59,124,244,.15);  color:#82b4ff; border:1px solid rgba(59,124,244,.25) }
     .badge--unlimited{ background:rgba(100,220,140,.15); color:#6ef7b0; border:1px solid rgba(100,220,140,.25) }
+    /* ── Carte utilisateur ── */
+    .user-card{
+      background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07);
+      border-radius:14px; padding:14px 16px; margin-bottom:10px;
+      transition:background .15s;
+    }
+    .user-card:hover{ background:rgba(255,255,255,.055) }
+    .user-card__top{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .user-card__email{
+      font-size:13px; font-weight:700; color:#eef4ff; flex:1; min-width:0;
+      word-break:break-all;
+    }
+    .user-card__meta{
+      display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+      font-size:12px; color:#7a9cc0; margin-bottom:10px;
+    }
+    .user-card__meta span{ display:flex; align-items:center; gap:3px }
+    .user-card__actions{ display:flex; flex-wrap:wrap; gap:8px }
     .action-btn{
-      padding:5px 12px; border-radius:8px; border:none; cursor:pointer;
-      font-size:12px; font-weight:700; transition:all .15s; white-space:nowrap;
+      flex:1; min-width:70px; padding:9px 10px; border-radius:9px; border:none;
+      cursor:pointer; font-size:12px; font-weight:700; transition:opacity .15s;
+      white-space:nowrap; text-align:center;
     }
     .action-btn--green{ background:rgba(100,220,140,.15); color:#6ef7b0; border:1px solid rgba(100,220,140,.3) }
     .action-btn--red  { background:rgba(232,51,74,.15);   color:#ff8899; border:1px solid rgba(232,51,74,.3) }
@@ -96,29 +123,24 @@
     .action-btn--gold { background:rgba(245,166,35,.15);  color:#f5a623; border:1px solid rgba(245,166,35,.3) }
     .action-btn:hover{ opacity:.75 }
     .action-btn:disabled{ opacity:.3; cursor:default }
-    .actions-cell{ display:flex; gap:6px; flex-wrap:wrap; align-items:center }
-    .form-inline{ display:flex; gap:8px; flex-wrap:wrap; align-items:center }
-    input[type=email], input[type=password], input[type=date], select{
-      padding:10px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.1);
-      background:rgba(255,255,255,.06); color:#eef4ff; font-size:13px; outline:none;
+    /* ── Barre de recherche ── */
+    .search-bar{
+      width:100%; padding:11px 14px; border-radius:10px; box-sizing:border-box;
+      border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.06);
+      color:#eef4ff; font-size:13px; outline:none; margin-bottom:12px;
     }
-    input:focus, select:focus{ border-color:#e8334a; box-shadow:0 0 0 3px rgba(232,51,74,.2) }
-    .btn{ padding:10px 18px; border-radius:10px; border:none; cursor:pointer;
-      font-size:13px; font-weight:700 }
+    .search-bar:focus{ border-color:#e8334a }
+    /* ── Boutons généraux ── */
+    .btn{ padding:12px 18px; border-radius:10px; border:none; cursor:pointer;
+      font-size:14px; font-weight:700; width:100%; box-sizing:border-box }
     .btn-primary{ background:linear-gradient(135deg,#e8334a,#f5a623); color:#fff }
     .btn:disabled{ opacity:.5; cursor:default }
     .msg{ padding:10px 14px; border-radius:10px; font-size:13px; margin-top:12px; display:none }
     .msg--success{ background:rgba(100,220,140,.1); border:1px solid rgba(100,220,140,.3); color:#7ef7b0 }
     .msg--error{ background:rgba(232,51,74,.12); border:1px solid rgba(232,51,74,.3); color:#ff8899 }
     .loading{ text-align:center; padding:40px; color:#7a9cc0 }
-    .email-cell{ max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-    .search-bar{
-      padding:9px 14px; border-radius:10px; border:1px solid rgba(255,255,255,.1);
-      background:rgba(255,255,255,.06); color:#eef4ff; font-size:13px; outline:none;
-      width:200px;
-    }
-    .search-bar:focus{ border-color:#e8334a }
-    .date-input{ min-width:140px }
+    /* ── Stats grid ── */
+    .stats-grid{ grid-template-columns:repeat(auto-fill,minmax(140px,1fr)) }
   </style>
 </head>
 <body>
@@ -247,16 +269,16 @@
         <!-- Créer un compte -->
         <div class="card">
           <div class="card-title">Créer un compte</div>
-          <div class="form-inline">
-            <input type="email" id="newEmail" placeholder="email@exemple.com" />
-            <input type="password" id="newPw" placeholder="Mot de passe provisoire" />
+          <div class="form-create">
+            <input type="email" id="newEmail" placeholder="email@exemple.com" autocomplete="off" />
+            <input type="password" id="newPw" placeholder="Mot de passe provisoire" autocomplete="new-password" />
             <select id="newPlan">
               <option value="active">Standard (4,99 €/mois)</option>
               <option value="unlimited">Illimité</option>
               <option value="admin">Admin</option>
               <option value="test">Test (7 jours)</option>
             </select>
-            <input type="date" id="newExpiry" class="date-input" title="Date d'expiration" />
+            <input type="date" id="newExpiry" title="Date d'expiration" />
             <button class="btn btn-primary" onclick="createAccount()">Créer</button>
           </div>
           <div class="msg" id="createMsg"></div>
@@ -264,25 +286,11 @@
 
         <!-- Abonnés -->
         <div class="card">
-          <div class="card-header">
-            <div class="card-title">Abonnés (${users.length})</div>
-            <input type="text" class="search-bar" id="userSearch" placeholder="Rechercher…" oninput="filterUsers()" />
+          <div class="card-title">Abonnés (${users.length})</div>
+          <input type="text" class="search-bar" id="userSearch" placeholder="Rechercher un e-mail…" oninput="filterUsers()" />
+          <div id="userCardList">
+            ${renderUserCards(users, devices)}
           </div>
-          <table>
-            <thead>
-              <tr>
-                <th>E-mail</th>
-                <th>Statut</th>
-                <th>Expiration</th>
-                <th>Appareils</th>
-                <th>Mensuel</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="userTableBody">
-              ${renderUserRows(users, devices)}
-            </tbody>
-          </table>
         </div>
       `;
 
@@ -291,40 +299,45 @@
       document.getElementById("newExpiry").value = d30.toISOString().slice(0,10);
     }
 
-    function renderUserRows(users, devices){
-      if(!users.length) return '<tr><td colspan="6" style="text-align:center;color:#7a9cc0;padding:20px">Aucun utilisateur</td></tr>';
+    function renderUserCards(users, devices){
+      if(!users.length) return '<p style="text-align:center;color:#7a9cc0;padding:20px">Aucun utilisateur</p>';
       return users.map(u => {
-        const exp   = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
+        const exp      = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
         const userDevs = (window._allDevices || devices || []).filter(d=>d.user_id===u.id);
         const devFees  = userDevs.reduce((s,d)=>s+(d.monthly_fee||0),0);
-        const monthly  = (u.plan==="admin"||u.plan==="unlimited"||u.plan==="pending") ? "—" :
-          (exp && exp > new Date() ? fmtMoney(4.99+devFees) : "—");
-        const isMe = u.email === A.ADMIN_EMAIL;
+        const monthly  = (u.plan==="admin"||u.plan==="unlimited"||u.plan==="pending") ? null :
+          (exp && exp > new Date() ? fmtMoney(4.99+devFees) : null);
+        const isMe     = u.email === A.ADMIN_EMAIL;
+        const devLimit = u.plan==="admin"||u.plan==="unlimited" ? "∞" : (u.devices_allowed||1);
+
         return `
-          <tr data-email="${(u.email||"").toLowerCase()}">
-            <td class="email-cell" title="${u.email||""}">${u.email||"?"}</td>
-            <td>${statusBadge(u)}</td>
-            <td>${fmtDate(u.subscription_expires_at)}</td>
-            <td style="text-align:center">${userDevs.length}/${u.plan==="admin"||u.plan==="unlimited"?"∞":(u.devices_allowed||1)}</td>
-            <td>${monthly}</td>
-            <td>
-              <div class="actions-cell">
-                ${isMe ? '<span style="font-size:12px;color:#7a9cc0">(vous)</span>' : `
-                <button class="action-btn action-btn--green"  onclick="activateUser('${u.id}',30)">+30j</button>
-                <button class="action-btn action-btn--blue"   onclick="setUnlimited('${u.id}')">Illimité</button>
-                <button class="action-btn action-btn--gold"   onclick="setTest('${u.id}')">Test 7j</button>
-                <button class="action-btn action-btn--red"    onclick="deactivate('${u.id}')">Bloquer</button>
-                `}
-              </div>
-            </td>
-          </tr>`;
+          <div class="user-card" data-email="${(u.email||"").toLowerCase()}">
+            <div class="user-card__top">
+              <div class="user-card__email">${u.email||"?"}</div>
+              ${statusBadge(u)}
+            </div>
+            <div class="user-card__meta">
+              ${exp ? `<span>📅 ${fmtDate(u.subscription_expires_at)}</span>` : ""}
+              <span>📱 ${userDevs.length}/${devLimit} appareils</span>
+              ${monthly ? `<span>💳 ${monthly}/mois</span>` : ""}
+            </div>
+            ${isMe
+              ? `<div style="font-size:12px;color:#7a9cc0;padding:4px 0">Votre compte administrateur</div>`
+              : `<div class="user-card__actions">
+                  <button class="action-btn action-btn--green"  onclick="activateUser('${u.id}',30)">+30 jours</button>
+                  <button class="action-btn action-btn--blue"   onclick="setUnlimited('${u.id}')">Illimité</button>
+                  <button class="action-btn action-btn--gold"   onclick="setTest('${u.id}')">Test 7j</button>
+                  <button class="action-btn action-btn--red"    onclick="deactivate('${u.id}')">Bloquer</button>
+                </div>`
+            }
+          </div>`;
       }).join("");
     }
 
     function filterUsers(){
       const q = document.getElementById("userSearch").value.toLowerCase();
-      document.querySelectorAll("#userTableBody tr[data-email]").forEach(tr => {
-        tr.style.display = tr.dataset.email.includes(q) ? "" : "none";
+      document.querySelectorAll("#userCardList .user-card[data-email]").forEach(card => {
+        card.style.display = card.dataset.email.includes(q) ? "" : "none";
       });
     }
 
