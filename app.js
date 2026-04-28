@@ -827,8 +827,10 @@ function playEpisode(series, ep, season){
     current_ep_index : curIdx
   };
 
-  // APK Android v4+ : lecteur VLC embarqué pour les épisodes aussi
-  if(typeof window.AndroidBridge !== "undefined"
+  // APK Android v4+ : lecteur VLC embarqué pour les épisodes (sauf TV → player.html)
+  const _isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
+                (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
+  if(!_isTV && typeof window.AndroidBridge !== "undefined"
      && typeof window.AndroidBridge.openInVlc === "function"){
     const epTitle = `${series.title} — ${code}${ep.title ? " " + ep.title : ""}`;
     try {
