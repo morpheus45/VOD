@@ -1061,6 +1061,23 @@ function renderNouveautes(){
   });
   row.appendChild(frag);
 
+  // ── Navigation D-pad TV : flèches gauche/droite dans la rangée ──
+  row.addEventListener("keydown", e => {
+    const cards = [...row.querySelectorAll(".nou-card")];
+    const idx   = cards.indexOf(document.activeElement);
+    if(idx < 0) return;
+    if(e.key === "ArrowRight"){
+      e.preventDefault();
+      const next = cards[idx + 1];
+      if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+    } else if(e.key === "ArrowLeft"){
+      e.preventDefault();
+      const prev = cards[idx - 1];
+      if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+    }
+    // ArrowUp / ArrowDown : navigation spatiale naturelle du navigateur
+  });
+
   // Hero : mettre en avant le 1er item avec une belle image
   renderHero(recent[0]);
 }
