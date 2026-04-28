@@ -1,28 +1,39 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 52" width="230" height="52">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 248 52" width="248" height="52">
   <defs>
     <linearGradient id="tvGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#7B6FE8"/>
-      <stop offset="100%" stop-color="#4A8FD9"/>
+      <stop offset="100%" stop-color="#3B9CE8"/>
     </linearGradient>
   </defs>
 
-  <!-- Antenne gauche : ligne + dot -->
-  <line x1="12" y1="16" x2="7"  y2="5" stroke="#7B6FE8" stroke-width="2.4" stroke-linecap="round"/>
-  <circle cx="7"  cy="4.5" r="3" fill="#7B6FE8"/>
+  <!-- PIPSILY — gras blanc, aligné à gauche -->
+  <text x="0" y="39"
+        font-family="'Segoe UI Black','Arial Black',Impact,sans-serif"
+        font-weight="900"
+        font-size="30"
+        fill="#FFFFFF"
+        letter-spacing="-0.5">PIPSILY</text>
 
-  <!-- Antenne droite : ligne + dot -->
-  <line x1="30" y1="16" x2="35" y2="5" stroke="#4A8FD9" stroke-width="2.4" stroke-linecap="round"/>
-  <circle cx="35" cy="4.5" r="3" fill="#4A8FD9"/>
+  <!-- TV icon centré -->
+  <!-- Antenne gauche -->
+  <line x1="147" y1="16" x2="142" y2="5"
+        stroke="#7B6FE8" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="141" cy="4" r="2.8" fill="#7B6FE8"/>
 
-  <!-- Corps TV — outline dégradé, coins arrondis -->
-  <rect x="2" y="15" width="38" height="29" rx="7" ry="7"
+  <!-- Antenne droite -->
+  <line x1="165" y1="16" x2="170" y2="5"
+        stroke="#3B9CE8" stroke-width="2.4" stroke-linecap="round"/>
+  <circle cx="171" cy="4" r="2.8" fill="#3B9CE8"/>
+
+  <!-- Corps TV : outline dégradé, coins arrondis -->
+  <rect x="137" y="15" width="38" height="29" rx="6" ry="6"
         fill="none" stroke="url(#tvGrad)" stroke-width="2.6"/>
 
-  <!-- PIPSILY — gras blanc -->
-  <text x="50" y="38"
-        font-family="'Segoe UI Black','Arial Black','Impact',sans-serif"
+  <!-- PRO — gras blanc -->
+  <text x="182" y="38"
+        font-family="'Segoe UI Black','Arial Black',Impact,sans-serif"
         font-weight="900"
-        font-size="28"
+        font-size="23"
         fill="#FFFFFF"
-        letter-spacing="-0.4">PIPSILY</text>
+        letter-spacing="0.5">PRO</text>
 </svg>
