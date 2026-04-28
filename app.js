@@ -1351,7 +1351,10 @@ async function boot(){
     });
   }
 
-  // ── Vérification auto-update APK (non bloquant) ──
+  // ── Bannière installation APK pour Android (navigateur, hors APK) ──
+  checkApkInstallBanner();
+
+  // ── Vérification auto-update APK (non bloquant, inside APK only) ──
   checkApkUpdate();
 }
 
@@ -1396,6 +1399,61 @@ function showUpdateBanner(){
 // ─────────────────────────────────────────────────────────────────
 //  APK AUTO-UPDATE — vérifie version.json et propose le téléchargement
 // ─────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────
+//  BANNIÈRE INSTALLATION APK — pour les visiteurs Android (hors APK)
+// ─────────────────────────────────────────────────────────────────
+async function checkApkInstallBanner(){
+  // Seulement si : Android + pas encore dans l'APK + pas ignoré récemment
+  const isAndroid   = /Android/i.test(navigator.userAgent);
+  const isNativeApk = typeof window.AndroidBridge !== "undefined";
+  if(!isAndroid || isNativeApk) return;
+
+  const dismissed = Number(localStorage.getItem("pf_apk_install_dismiss") || 0);
+  if(Date.now() < dismissed) return; // ignoré pour 7 jours
+
+  const vinfo = await fetchJson("version.json").catch(() => null);
+  const url   = vinfo?.apk_url || "https://github.com/morpheus45/VOD/releases/latest";
+
+  if($("apkInstallBanner")) return;
+  const banner = document.createElement("div");
+  banner.id = "apkInstallBanner";
+  banner.style.cssText = [
+    "position:fixed;top:0;left:0;right:0;z-index:9998",
+    "display:flex;align-items:center;gap:12px;padding:12px 16px",
+    "background:linear-gradient(135deg,#1a1060,#0e0a30)",
+    "border-bottom:2px solid rgba(107,63,224,.6)",
+    "color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6)",
+    "font-family:'Segoe UI',system-ui,sans-serif"
+  ].join(";");
+  banner.innerHTML = `
+    <img src="./logo.svg" alt="" style="height:32px;width:auto;flex-shrink:0">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:800;color:#eef4ff">Installer l'application</div>
+      <div style="font-size:11px;color:#a89be0;margin-top:1px">
+        Meilleure expérience · Lecture VLC · Hors ligne
+      </div>
+    </div>
+    <a id="apkInstallBtn" href="${url}" target="_blank" rel="noopener"
+      style="flex-shrink:0;padding:9px 16px;border-radius:10px;border:none;
+             background:linear-gradient(135deg,#6B3FE0,#38A8E8);color:#fff;
+             font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap">
+      📥 Installer
+    </a>
+    <button id="apkInstallDismiss" aria-label="Fermer"
+      style="flex-shrink:0;background:rgba(255,255,255,.1);border:none;color:#fff;
+             border-radius:8px;padding:8px 10px;font-size:14px;cursor:pointer">✕</button>`;
+  document.body.appendChild(banner);
+
+  // Décaler le contenu vers le bas pour ne pas cacher la topbar
+  document.body.style.paddingTop = (banner.offsetHeight || 64) + "px";
+
+  $("apkInstallDismiss").onclick = () => {
+    banner.remove();
+    document.body.style.paddingTop = "";
+    localStorage.setItem("pf_apk_install_dismiss", String(Date.now() + 7 * 86400000)); // 7 jours
+  };
+}
 
 async function checkApkUpdate(){
   const isNativeApk = typeof window.AndroidBridge !== "undefined";

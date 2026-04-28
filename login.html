@@ -148,6 +148,49 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./auth.js"></script>
   <script>
+    // ── Bannière APK pour visiteurs Android ──
+    (async () => {
+      const isAndroid   = /Android/i.test(navigator.userAgent);
+      const isNativeApk = typeof window.AndroidBridge !== "undefined";
+      if(!isAndroid || isNativeApk) return;
+      const dismissed = Number(localStorage.getItem("pf_apk_install_dismiss") || 0);
+      if(Date.now() < dismissed) return;
+      const vinfo = await fetch("./version.json").then(r=>r.ok?r.json():null).catch(()=>null);
+      const url   = vinfo?.apk_url || "https://github.com/morpheus45/VOD/releases/latest";
+      const banner = document.createElement("div");
+      banner.style.cssText = [
+        "position:fixed;top:0;left:0;right:0;z-index:9998",
+        "display:flex;align-items:center;gap:12px;padding:12px 16px",
+        "background:linear-gradient(135deg,#1a1060,#0e0a30)",
+        "border-bottom:2px solid rgba(107,63,224,.6)",
+        "color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6)",
+        "font-family:'Segoe UI',system-ui,sans-serif"
+      ].join(";");
+      banner.innerHTML = `
+        <img src="./logo.svg" alt="" style="height:30px;width:auto;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:800;color:#eef4ff">Installer l'application</div>
+          <div style="font-size:11px;color:#a89be0">Lecture VLC · Meilleure expérience</div>
+        </div>
+        <a href="${url}" target="_blank" rel="noopener"
+          style="flex-shrink:0;padding:9px 16px;border-radius:10px;
+                 background:linear-gradient(135deg,#6B3FE0,#38A8E8);color:#fff;
+                 font-size:13px;font-weight:700;text-decoration:none">
+          📥 Installer
+        </a>
+        <button id="loginApkDismiss" aria-label="Fermer"
+          style="flex-shrink:0;background:rgba(255,255,255,.1);border:none;color:#fff;
+                 border-radius:8px;padding:8px 10px;font-size:14px;cursor:pointer">✕</button>`;
+      document.body.prepend(banner);
+      document.body.style.paddingTop = (banner.offsetHeight||60) + "px";
+      document.getElementById("loginApkDismiss").onclick = () => {
+        banner.remove();
+        document.body.style.paddingTop = "";
+        localStorage.setItem("pf_apk_install_dismiss", String(Date.now() + 7*86400000));
+      };
+    })();
+  </script>
+  <script>
     // ── Accès sécurisé à PIPSILY_AUTH (CDN peut échouer) ──
     const _A = window.PIPSILY_AUTH || null;
     let mode = "login";
