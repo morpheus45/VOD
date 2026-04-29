@@ -1390,11 +1390,25 @@ async function boot(){
     btn.textContent = "⏳ Mise à jour…";
     if(date) date.textContent = "Actualisation en cours…";
 
-    // APK Android : clearCache() vide le cache WebView natif + reload
+    // APK Android : activer le nouveau SW s'il est en attente, puis vider le cache WebView
     const isNativeApk = typeof window.AndroidBridge !== "undefined";
-    if(isNativeApk && window.AndroidBridge?.clearCache){
-      try { window.AndroidBridge.clearCache(); } catch(e){}
-      return; // Java gère le reload
+    if(isNativeApk){
+      try {
+        const reg = await navigator.serviceWorker?.ready;
+        if(reg?.waiting){
+          // Nouveau SW disponible → l'activer. Il enverra RELOAD à toutes les fenêtres.
+          reg.waiting.postMessage({ type:"SKIP_WAITING" });
+          // Laisser le RELOAD du SW s'en charger (évite race condition avec clearCache)
+          return;
+        }
+      } catch {}
+      // Pas de SW en attente → juste vider le cache WebView (données fraîches)
+      if(window.AndroidBridge?.clearCache){
+        try { window.AndroidBridge.clearCache(); } catch(e){}
+      } else {
+        window.location.reload();
+      }
+      return;
     }
 
     // PWA / navigateur : vider le cache Service Worker
@@ -1493,6 +1507,11 @@ async function boot(){
     navigator.serviceWorker.addEventListener("message", e => {
       if(e.data?.type === "UPDATE_AVAILABLE") showUpdateBanner();
     });
+    // Cas APK : SW déjà en "waiting" depuis une session précédente
+    // → updatefound ne se re-déclenche pas, il faut le détecter manuellement
+    navigator.serviceWorker.ready.then(reg => {
+      if(reg.waiting) showUpdateBanner();
+    }).catch(() => {});
   }
 
   // ── Bannière installation APK pour Android (navigateur, hors APK) ──
