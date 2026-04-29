@@ -986,6 +986,140 @@ function loadMore(){
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  RANGÉES NETFLIX — browse par catégorie (sans filtre actif)
+// ─────────────────────────────────────────────────────────────────
+
+const NROW_MAX = 24; // éléments max par rangée
+
+function makeNrowCard(item){
+  const card = document.createElement("div");
+  card.className   = "nrow-card";
+  card.tabIndex    = 0;
+  card.dataset.key = itemKey(item);
+  const poster   = item.stream_icon || "";
+  const isSeries = item.type === "series";
+
+  card.innerHTML = `
+    <div class="nrow-media">
+      ${poster
+        ? `<img src="${esc(poster)}" alt="" loading="lazy">`
+        : `<div class="nrow-placeholder">${isSeries ? "📺" : "🎬"}</div>`}
+      ${item.quality ? `<span class="nrow-qual">${esc(item.quality)}</span>` : ""}
+      <div class="nrow-overlay"><span class="nrow-play">▶</span></div>
+      <button class="nrow-fav ${isFav(item) ? "is-fav" : ""}" type="button" aria-label="Favori">♥</button>
+    </div>
+    <div class="nrow-info">
+      <div class="nrow-name">${esc(item.title)}</div>
+    </div>`;
+
+  card.querySelector(".nrow-fav").addEventListener("click", e => {
+    e.stopPropagation();
+    toggleFav(item);
+    e.currentTarget.classList.toggle("is-fav", isFav(item));
+  });
+
+  const activate = () => {
+    if(item.type === "series") openPanel(item);
+    else if(item.type === "live") playItem(item);
+    else openVodPanel(item);
+  };
+  card.addEventListener("click", e => { if(!e.target.closest(".nrow-fav")) activate(); });
+  card.addEventListener("keydown", e => {
+    if(e.key === "Enter" || e.key === " "){ e.preventDefault(); activate(); }
+  });
+  card.addEventListener("focus", () => card.classList.add("is-tv-focused"));
+  card.addEventListener("blur",  () => card.classList.remove("is-tv-focused"));
+  return card;
+}
+
+function renderNetflixRows(){
+  const grid  = $("grid");
+  const empty = $("emptyState");
+  if(!grid) return;
+
+  const all = S.type === "vod" ? S.vod : S.series;
+
+  // Grouper par catégorie (ordre d'apparition original)
+  const catMap = new Map();
+  for(const item of all){
+    const cat = item.category_name || "Autre";
+    if(!catMap.has(cat)) catMap.set(cat, []);
+    catMap.get(cat).push(item);
+  }
+
+  if(!catMap.size){ grid.innerHTML = ""; empty.hidden = false; return; }
+  empty.hidden = true;
+  grid.innerHTML = "";
+
+  const frag = document.createDocumentFragment();
+  let total = 0;
+
+  catMap.forEach((items, catName) => {
+    total += items.length;
+
+    const section = document.createElement("div");
+    section.className = "nrow";
+
+    // En-tête de rangée
+    const hdr = document.createElement("div");
+    hdr.className = "nrow-hdr";
+
+    const titleEl = document.createElement("h3");
+    titleEl.className = "nrow-title";
+    titleEl.textContent = catName;
+
+    const allBtn = document.createElement("button");
+    allBtn.className = "nrow-all";
+    allBtn.type      = "button";
+    allBtn.textContent = `Voir tout (${items.length}) →`;
+    allBtn.addEventListener("click", () => {
+      S.cat = catName;
+      const sel = $("categorySelect");
+      if(sel) sel.value = catName;
+      $("catPills")?.querySelectorAll(".cat-pill").forEach(b =>
+        b.classList.toggle("cat-pill--active", b.dataset.cat === catName)
+      );
+      const g = $("grid");
+      if(g) g.className = "grid";
+      S.shown[S.type] = PER_PAGE;
+      renderGrid(true);
+    });
+
+    hdr.appendChild(titleEl);
+    hdr.appendChild(allBtn);
+    section.appendChild(hdr);
+
+    // Bande horizontale
+    const strip = document.createElement("div");
+    strip.className = "nrow-strip";
+
+    items.slice(0, NROW_MAX).forEach(item => strip.appendChild(makeNrowCard(item)));
+
+    // Navigation clavier gauche/droite dans la bande
+    strip.addEventListener("keydown", e => {
+      const cards = [...strip.querySelectorAll(".nrow-card")];
+      const idx   = cards.indexOf(document.activeElement);
+      if(idx < 0) return;
+      if(e.key === "ArrowRight"){
+        e.preventDefault();
+        const next = cards[idx + 1];
+        if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+      } else if(e.key === "ArrowLeft"){
+        e.preventDefault();
+        const prev = cards[idx - 1];
+        if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+      }
+    });
+
+    section.appendChild(strip);
+    frag.appendChild(section);
+  });
+
+  grid.appendChild(frag);
+  $("catalogCount").textContent = `${total} éléments · ${catMap.size} catégories`;
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  RENDU PRINCIPAL
 // ─────────────────────────────────────────────────────────────────
 
@@ -1020,12 +1154,17 @@ function render(){
   // Pills catégories (Films / Séries)
   renderCatPills(cats);
 
+  // Mode Netflix : rangées par catégorie si aucun filtre actif (Films / Séries)
+  const useNetflix = S.type !== "live" && !S.search && !S.quality && !S.cat;
+
   // Grille adaptée au type
   const grid = $("grid");
-  if(grid) grid.className = S.type === "live" ? "grid grid--live" : "grid";
+  if(grid) grid.className = useNetflix ? "netflix-rows"
+                          : S.type === "live" ? "grid grid--live" : "grid";
 
   S.shown[S.type] = PER_PAGE;
-  renderGrid(true);
+  if(useNetflix) renderNetflixRows();
+  else           renderGrid(true);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1051,7 +1190,12 @@ function renderCatPills(cats){
       pills.querySelectorAll(".cat-pill").forEach(b =>
         b.classList.toggle("cat-pill--active", b.dataset.cat === S.cat)
       );
-      renderGrid(true);
+      // Revenir aux rangées Netflix si "Tout" est sélectionné et aucun filtre actif
+      const useNetflix = !S.cat && !S.search && !S.quality;
+      const g = $("grid");
+      if(g) g.className = useNetflix ? "netflix-rows" : "grid";
+      if(useNetflix) renderNetflixRows();
+      else           renderGrid(true);
     });
   });
 }
@@ -1367,7 +1511,7 @@ function showUpdateBanner(){
   banner.innerHTML = `
     <span>🔄 Mise à jour disponible !</span>
     <button id="updateNowBtn" type="button" tabindex="0"
-      style="background:linear-gradient(135deg,#e8334a,#f5a623);color:#fff;border:none;
+      style="background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;border:none;
              border-radius:10px;padding:10px 20px;font-weight:700;font-size:14px;cursor:pointer">
       Mettre à jour
     </button>

@@ -1,49 +1,101 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -12 300 86" width="300" height="74">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80">
   <defs>
-    <linearGradient id="tvG" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6B3FE0"/>
+
+    <!-- Violet-to-blue gradient for TV body fill -->
+    <linearGradient id="tvGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7B5FE8"/>
       <stop offset="100%" stop-color="#38A8E8"/>
     </linearGradient>
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+
+    <!-- Gradient for antenna lines -->
+    <linearGradient id="antennaGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7B5FE8"/>
+      <stop offset="100%" stop-color="#38A8E8"/>
+    </linearGradient>
+
+    <!-- Glow filter for TV body and tips -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
       <feMerge>
         <feMergeNode in="blur"/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
+
+    <!-- Softer glow for badge border glow effect -->
+    <filter id="badgeGlow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
   </defs>
 
-  <!-- Badge sombre derrière PIPSILY -->
-  <rect x="0" y="2" width="178" height="68" rx="10" ry="10"
-        fill="#07070F" stroke="rgba(255,255,255,0.10)" stroke-width="1.2"/>
+  <!-- ═══════════════════════════════ -->
+  <!-- PIPSILY BADGE                  -->
+  <!-- ═══════════════════════════════ -->
 
-  <!-- PIPSILY — Impact blanc dans le badge -->
-  <text x="11" y="56"
+  <!-- Outer glow ring for badge border -->
+  <rect x="1" y="6" width="152" height="68" rx="12" ry="12"
+        fill="none"
+        stroke="rgba(123,95,232,0.25)"
+        stroke-width="3"
+        filter="url(#badgeGlow)"/>
+
+  <!-- Badge dark background -->
+  <rect x="2" y="7" width="150" height="66" rx="11" ry="11"
+        fill="#08080F"
+        stroke="rgba(123,95,232,0.4)"
+        stroke-width="1.5"/>
+
+  <!-- PIPSILY text -->
+  <text x="10" y="56"
         font-family="Impact,'Arial Narrow Bold','Arial Black',sans-serif"
-        font-weight="900"
-        font-size="44"
+        font-size="42"
         fill="#FFFFFF"
-        letter-spacing="1.5">PIPSILY</text>
+        letter-spacing="2">PIPSILY</text>
 
-  <!-- TV icon — antenne gauche -->
-  <line x1="181" y1="8" x2="172" y2="-8"
-        stroke="url(#tvG)" stroke-width="2.8" stroke-linecap="round"/>
-  <circle cx="171" cy="-9" r="3.5" fill="#6B3FE0" filter="url(#glow)"/>
+  <!-- ═══════════════════════════════ -->
+  <!-- TV ICON  (centered ~x=190)     -->
+  <!-- ═══════════════════════════════ -->
 
-  <!-- TV icon — antenne droite -->
-  <line x1="219" y1="8" x2="228" y2="-8"
-        stroke="url(#tvG)" stroke-width="2.8" stroke-linecap="round"/>
-  <circle cx="229" cy="-9" r="3.5" fill="#38A8E8" filter="url(#glow)"/>
+  <!-- Left antenna line: from top-left of TV body to upper-left -->
+  <line x1="176" y1="14" x2="163" y2="2"
+        stroke="url(#antennaGrad)" stroke-width="2.8" stroke-linecap="round"/>
+  <!-- Left antenna glowing tip: violet -->
+  <circle cx="162" cy="1" r="4" fill="#7B5FE8" filter="url(#glow)"/>
 
-  <!-- TV body — outline dégradé, coins très arrondis -->
-  <rect x="168" y="6" width="66" height="64" rx="16" ry="16"
-        fill="none" stroke="url(#tvG)" stroke-width="3.8" filter="url(#glow)"/>
+  <!-- Right antenna line: from top-right of TV body to upper-right -->
+  <line x1="204" y1="14" x2="217" y2="2"
+        stroke="url(#antennaGrad)" stroke-width="2.8" stroke-linecap="round"/>
+  <!-- Right antenna glowing tip: blue -->
+  <circle cx="218" cy="1" r="4" fill="#38A8E8" filter="url(#glow)"/>
 
-  <!-- PRO — Impact blanc -->
-  <text x="242" y="56"
+  <!-- TV body: FILLED with gradient, rounded rect, with glow -->
+  <rect x="163" y="13" width="54" height="54" rx="10" ry="10"
+        fill="url(#tvGrad)"
+        filter="url(#glow)"/>
+
+  <!-- Inner screen: dark rounded rect inside TV -->
+  <rect x="170" y="20" width="40" height="38" rx="6" ry="6"
+        fill="#0D0D1A"/>
+
+  <!-- Play triangle (▶) centered on screen -->
+  <!-- Screen center x=190, y=39. Triangle pointing right. -->
+  <polygon points="183,30 183,48 200,39"
+           fill="#FFFFFF"/>
+
+  <!-- ═══════════════════════════════ -->
+  <!-- PRO TEXT                       -->
+  <!-- ═══════════════════════════════ -->
+
+  <!-- PRO text -->
+  <text x="226" y="56"
         font-family="Impact,'Arial Narrow Bold','Arial Black',sans-serif"
-        font-weight="900"
-        font-size="38"
+        font-size="36"
         fill="#FFFFFF"
         letter-spacing="1">PRO</text>
+
 </svg>

@@ -167,22 +167,21 @@ async function getGeoInfo(){
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  SESSION UNIQUE — 1 connexion par compte (Standard/Test)
-//  Illimité/Admin : sessions multiples autorisées
+//  SESSIONS MULTIPLES — plusieurs appareils simultanés autorisés
+//  Purge automatique des sessions inactives (> 5 min sans heartbeat)
 // ─────────────────────────────────────────────────────────────────
+
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes d'inactivité = session expirée
+
 async function registerSession(userId){
   const token = crypto.randomUUID?.() || ("tok" + Date.now());
   localStorage.setItem("pipsily_session_token", token);
   if(!_supa) return token;
   try {
-    // Plan du compte
-    const { data: prof } = await _supa.from("profiles").select("plan").eq("id", userId).single();
-    const isUnlimited = prof?.plan === "admin" || prof?.plan === "unlimited";
-
-    // Standard/Test → forcer la déconnexion de tous les autres appareils
-    if(!isUnlimited){
-      await _supa.from("sessions").delete().eq("user_id", userId);
-    }
+    // Purger les sessions inactives (last_seen > 5 min) de cet utilisateur
+    const cutoff = new Date(Date.now() - SESSION_TIMEOUT_MS).toISOString();
+    await _supa.from("sessions").delete()
+      .eq("user_id", userId).lt("last_seen", cutoff);
 
     // Géolocalisation silencieuse (parallèle)
     const geo = await getGeoInfo();
@@ -216,76 +215,35 @@ async function validateSession(userId){
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  SURVEILLANCE SESSION — heartbeat 30s + Realtime
-//  Déconnexion forcée si un autre appareil prend la session
+//  SURVEILLANCE SESSION — heartbeat 30s (mise à jour last_seen)
+//  Purge silencieuse des sessions inactives — pas de déconnexion forcée
 // ─────────────────────────────────────────────────────────────────
 let _watchInterval = null;
-let _watchChannel  = null;
-
-function _showForcedLogout(){
-  // Nettoyer
-  clearInterval(_watchInterval);
-  try { if(_watchChannel) _supa?.removeChannel(_watchChannel); } catch {}
-  localStorage.removeItem(_DEV_SESSION_KEY);
-  localStorage.removeItem("pipsily_session_token");
-
-  // Écran de déconnexion forcée
-  const overlay = document.createElement("div");
-  overlay.style.cssText = [
-    "position:fixed;inset:0;z-index:99999",
-    "background:rgba(5,8,15,.97)",
-    "display:flex;align-items:center;justify-content:center",
-    "flex-direction:column;gap:16px;color:#fff",
-    "font-family:'Segoe UI',system-ui,sans-serif;text-align:center;padding:32px"
-  ].join(";");
-  overlay.innerHTML = `
-    <div style="font-size:52px">📵</div>
-    <div style="font-size:20px;font-weight:800;color:#eef4ff">Session terminée</div>
-    <div style="font-size:14px;color:#7a9cc0;line-height:1.65;max-width:300px">
-      Ce compte vient de se connecter sur un autre appareil.<br>
-      Une seule connexion simultanée est autorisée.
-    </div>
-    <button onclick="window.location.href='./login.html'"
-      style="margin-top:8px;padding:14px 32px;border-radius:14px;border:none;
-             background:linear-gradient(135deg,#e8334a,#f5a623);color:#fff;
-             font-size:15px;font-weight:700;cursor:pointer">
-      Se reconnecter
-    </button>`;
-  document.body.appendChild(overlay);
-  setTimeout(() => { window.location.href = "./login.html"; }, 6000);
-}
 
 async function _heartbeat(userId){
   if(!_supa) return;
   const localToken = localStorage.getItem("pipsily_session_token");
-  if(!localToken){ _showForcedLogout(); return; }
+  if(!localToken) return; // token absent : ne rien faire, pas de déconnexion forcée
   try {
+    // Mettre à jour last_seen de cette session
     const { data } = await _supa.from("sessions").select("id")
       .eq("user_id", userId).eq("token", localToken).maybeSingle();
-    if(!data){ _showForcedLogout(); return; }
-    // Mettre à jour last_seen
-    await _supa.from("sessions").update({ last_seen: new Date().toISOString() }).eq("id", data.id);
+    if(data){
+      await _supa.from("sessions").update({ last_seen: new Date().toISOString() }).eq("id", data.id);
+    }
+
+    // Purge silencieuse des sessions inactives (autres appareils déconnectés)
+    const cutoff = new Date(Date.now() - SESSION_TIMEOUT_MS).toISOString();
+    await _supa.from("sessions").delete()
+      .eq("user_id", userId).lt("last_seen", cutoff);
   } catch { /* erreur réseau : ne pas déconnecter */ }
 }
 
 async function startSessionWatcher(userId){
   if(!_supa || !userId) return;
 
-  // Heartbeat toutes les 30 secondes
+  // Heartbeat toutes les 30 secondes — mise à jour last_seen + purge des inactifs
   _watchInterval = setInterval(() => _heartbeat(userId), 30_000);
-
-  // Realtime : déconnexion instantanée si session supprimée/modifiée
-  try {
-    _watchChannel = _supa
-      .channel(`sw_${userId}`)
-      .on("postgres_changes", {
-        event  : "*",
-        schema : "public",
-        table  : "sessions",
-        filter : `user_id=eq.${userId}`
-      }, () => _heartbeat(userId))
-      .subscribe();
-  } catch {}
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -389,11 +347,11 @@ function promptParentalPin(storedPin){
             style="width:100%;padding:12px 16px;border-radius:12px;
             border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);
             color:#fff;font-size:18px;text-align:center;letter-spacing:6px;margin-bottom:12px" />
-          <div id="pinError" style="color:#e8334a;font-size:12px;margin-bottom:12px;display:none">
+          <div id="pinError" style="color:#a084f0;font-size:12px;margin-bottom:12px;display:none">
             Code incorrect — 3 tentatives max
           </div>
           <button id="pinOkBtn" style="width:100%;padding:13px;border-radius:12px;border:none;
-            background:linear-gradient(135deg,#e8334a,#f5a623);color:#fff;
+            background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;
             font-weight:700;font-size:15px;cursor:pointer;margin-bottom:8px">
             Confirmer
           </button>
@@ -488,12 +446,12 @@ function _showPaywall(sub){
   const expired = !!(sub.subscription_expires_at);
   document.body.innerHTML = `
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;
-      background:radial-gradient(ellipse at 50% 0%,rgba(232,51,74,.15),transparent 60%),#05080f;
+      background:radial-gradient(ellipse at 50% 0%,rgba(123,95,232,.15),transparent 60%),#05080f;
       color:#eef4ff;font-family:'Segoe UI',system-ui,sans-serif;padding:20px;box-sizing:border-box">
       <div style="max-width:380px;width:100%;text-align:center">
         <div style="font-size:56px;margin-bottom:16px">${expired ? "⏳" : "🔒"}</div>
         <div style="font-size:13px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
-          color:#e8334a;margin-bottom:10px">PIPSILY</div>
+          color:#7B5FE8;margin-bottom:10px">PIPSILY</div>
         <h2 style="margin:0 0 12px;font-size:22px;font-weight:800">
           ${expired ? "Abonnement expiré" : "Compte en attente"}
         </h2>
@@ -504,14 +462,14 @@ function _showPaywall(sub){
         </p>
         <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
           border-radius:16px;padding:20px;margin-bottom:20px">
-          <div style="font-size:32px;font-weight:900;color:#f5a623;margin-bottom:4px">4,99 €</div>
+          <div style="font-size:32px;font-weight:900;color:#38A8E8;margin-bottom:4px">4,99 €</div>
           <div style="font-size:13px;color:#7a9cc0">/mois · accès illimité</div>
           <div style="margin-top:12px;font-size:12px;color:#7a9cc0">
             Appareils supplémentaires : <strong style="color:#eef4ff">+1,50 €/mois chacun</strong>
           </div>
         </div>
         <a href="account.html" style="display:block;padding:14px 24px;border-radius:13px;
-          background:linear-gradient(135deg,#e8334a,#f5a623);color:#fff;
+          background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;
           text-decoration:none;font-weight:700;font-size:15px;margin-bottom:10px">
           Mon compte &amp; renouvellement
         </a>
@@ -532,14 +490,14 @@ function _showDeviceLimit(userId, extra_cost){
       <div style="max-width:380px;width:100%;text-align:center">
         <div style="font-size:56px;margin-bottom:16px">📱</div>
         <div style="font-size:13px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
-          color:#e8334a;margin-bottom:10px">PIPSILY</div>
+          color:#7B5FE8;margin-bottom:10px">PIPSILY</div>
         <h2 style="margin:0 0 12px;font-size:22px;font-weight:800">Nouvel appareil détecté</h2>
         <p style="color:#7a9cc0;margin:0 0 16px;line-height:1.65;font-size:14px">
           Vous avez atteint la limite d'appareils inclus dans votre abonnement.
         </p>
-        <div style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.25);
+        <div style="background:rgba(56,168,232,.08);border:1px solid rgba(56,168,232,.25);
           border-radius:14px;padding:16px;margin-bottom:20px">
-          <div style="font-size:22px;font-weight:900;color:#f5a623">
+          <div style="font-size:22px;font-weight:900;color:#38A8E8">
             +${extra_cost.toFixed(2).replace(".", ",")} €/mois
           </div>
           <div style="font-size:13px;color:#7a9cc0;margin-top:4px">par appareil supplémentaire</div>
@@ -549,7 +507,7 @@ function _showDeviceLimit(userId, extra_cost){
           </div>
         </div>
         <button id="addDevBtn" style="display:block;width:100%;padding:14px;border-radius:13px;
-          background:linear-gradient(135deg,#e8334a,#f5a623);color:#fff;border:none;
+          background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;border:none;
           font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px">
           ✓ Ajouter cet appareil (+${extra_cost.toFixed(2).replace(".", ",")} €/mois)
         </button>
@@ -580,7 +538,7 @@ function _showSessionExpired(){
           Une seule connexion simultanée est autorisée par compte.
         </p>
         <a href="login.html" style="display:block;padding:14px;border-radius:12px;
-          background:linear-gradient(135deg,#e8334a,#f5a623);color:#fff;
+          background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;
           text-decoration:none;font-weight:700;font-size:15px">
           Se reconnecter
         </a>
