@@ -723,10 +723,16 @@ button,select,input{ font:inherit }
      La navigation se fait via : nav-btns → cat-pills → cartes ──*/
   .sticky-controls{ display:none }
 
+  /* Topbar plus compacte sur TV (logo plus petit + paddings serrés) */
+  .topbar{ padding:8px 48px }
+  .brand-logo{ height:38px }
+  .nav-btn{ padding:10px 22px; font-size:14px; min-height:44px }
+  .topbar-brand-row{ margin-bottom:4px }
+
   /* Pills catégories FIXES juste sous le topbar — accessibles au D-pad */
   .cat-pills{
-    position:fixed; top:96px; left:0; right:0; z-index:40;
-    padding:12px 48px 14px; gap:10px;
+    position:fixed; top:118px; left:0; right:0; z-index:40;
+    padding:10px 48px 12px; gap:10px;
     background:rgba(5,8,15,.96);
     backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
     border-bottom:1px solid rgba(255,255,255,.06);
@@ -734,7 +740,7 @@ button,select,input{ font:inherit }
   }
   .cat-pills::-webkit-scrollbar{ display:none }
   .cat-pill{
-    padding:11px 22px; font-size:15px; min-height:48px;
+    padding:9px 18px; font-size:14px; min-height:42px;
     border:1px solid rgba(255,255,255,.12);
   }
   .cat-pill:focus{
@@ -750,12 +756,19 @@ button,select,input{ font:inherit }
     border-color:transparent !important;
   }
 
-  /* Décalage du contenu : topbar ~78px + cat-pills ~70px = ~150px */
-  .content{ padding-top:160px }
+  /* Décalage du contenu : topbar ~118px + cat-pills ~64px = ~182px */
+  .content{ padding-top:188px }
+
+  /* Titre "Catalogue" redondant en mode Netflix rows : chaque rangée a son titre */
+  .netflix-rows ~ * #catalogTitle,
+  body:has(.netflix-rows) #catalogTitle{ display:none }
+  /* Section block sans marge-top pour gagner de la place */
+  .section-block:first-of-type{ margin-top:0 }
 
   /* ── Boutons favoris sur cartes : masqués sur TV ──
      Les favoris sont accessibles via le panneau (Lire / Favoris) ── */
   .card .fav-btn,
+  .nrow-card .nrow-fav,
   .nrow-card .fav-btn,
   .nou-card .fav-btn{ display:none !important }
 
@@ -909,21 +922,24 @@ html.is-tv .nrow-strip   { gap:10px }
 html.is-tv .netflix-rows { gap:36px; padding:0 48px }
 html.is-tv .grid         { grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:16px; padding:0 48px }
 
-/* Topbar fixe */
+/* Topbar fixe + compacte */
 html.is-tv .topbar{
   position:fixed; top:0; left:0; right:0; z-index:50;
-  padding:12px 48px;
+  padding:8px 48px;
   background:rgba(5,8,15,.96);
   backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
 }
+html.is-tv .brand-logo{ height:38px }
+html.is-tv .nav-btn{ padding:10px 22px; font-size:14px; min-height:44px }
+html.is-tv .topbar-brand-row{ margin-bottom:4px }
 
 /* Filtres dropdown masqués sur TV */
 html.is-tv .sticky-controls{ display:none !important }
 
 /* Cat-pills fixes sous topbar */
 html.is-tv .cat-pills{
-  position:fixed; top:96px; left:0; right:0; z-index:40;
-  padding:12px 48px 14px; gap:10px;
+  position:fixed; top:118px; left:0; right:0; z-index:40;
+  padding:10px 48px 12px; gap:10px;
   background:rgba(5,8,15,.96);
   backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
   border-bottom:1px solid rgba(255,255,255,.06);
@@ -931,7 +947,7 @@ html.is-tv .cat-pills{
 }
 html.is-tv .cat-pills::-webkit-scrollbar{ display:none }
 html.is-tv .cat-pill{
-  padding:11px 22px; font-size:15px; min-height:48px;
+  padding:9px 18px; font-size:14px; min-height:42px;
   border:1px solid rgba(255,255,255,.12);
 }
 html.is-tv .cat-pill:focus{
@@ -948,7 +964,9 @@ html.is-tv .cat-pill--active{
 }
 
 /* Décalage du contenu */
-html.is-tv .content{ padding-top:160px }
+html.is-tv .content{ padding-top:188px }
+html.is-tv #catalogTitle{ display:none }
+html.is-tv .section-block:first-of-type{ margin-top:0 }
 
 /* Bouton "Voir tout" */
 html.is-tv .nrow-all {
@@ -965,6 +983,7 @@ html.is-tv .nrow-all:focus{
 
 /* Boutons favoris cachés sur cartes en TV */
 html.is-tv .card .fav-btn,
+html.is-tv .nrow-card .nrow-fav,
 html.is-tv .nrow-card .fav-btn,
 html.is-tv .nou-card .fav-btn{ display:none !important }
 
