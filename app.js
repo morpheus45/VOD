@@ -1220,8 +1220,44 @@ function initTV(){
     if(!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)) return;
     e.preventDefault();
 
-    const panelOpen = !$("seriesPanel")?.hidden;
-    // Inclure les boutons des banners de mise à jour dans les focusables
+    const panelOpen  = !$("seriesPanel")?.hidden;
+    const useNetflix = $("grid")?.className === "netflix-rows";
+
+    // ── Mode Netflix rows : navigation spéciale ──
+    if(!panelOpen && useNetflix){
+      const active = document.activeElement;
+
+      if(k === "ArrowRight" || k === "ArrowLeft"){
+        // Géré par le keydown du strip — laisser passer
+        return;
+      }
+
+      if(k === "ArrowDown" || k === "ArrowUp"){
+        // Trouver la rangée courante et sauter à la suivante/précédente
+        const currentRow = active?.closest(".nrow");
+        const allRows    = [...document.querySelectorAll(".nrow")];
+        const rowIdx     = allRows.indexOf(currentRow);
+
+        let targetRow;
+        if(k === "ArrowDown") targetRow = allRows[rowIdx + 1] || allRows[rowIdx];
+        else                  targetRow = rowIdx > 0 ? allRows[rowIdx - 1] : null;
+
+        if(targetRow){
+          const firstCard = targetRow.querySelector(".nrow-card");
+          if(firstCard){
+            firstCard.focus();
+            firstCard.scrollIntoView({ behavior:"smooth", block:"nearest" });
+          }
+        } else if(rowIdx < 0){
+          // Rien de focalisé → aller au premier
+          document.querySelector(".nrow-card, .nav-btn")?.focus();
+        }
+        return;
+      }
+      return;
+    }
+
+    // ── Mode grille normale ──
     const bannerBtns = [...document.querySelectorAll(
       "#updateNowBtn, #updateDismissBtn, #apkDownloadBtn, #apkDismissBtn"
     )].filter(b => b.offsetParent !== null);
@@ -1230,12 +1266,11 @@ function initTV(){
       ? [...$("seriesPanel").querySelectorAll(".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct")]
       : [
           ...bannerBtns,
-          ...document.querySelectorAll(".card, .nav-btn, .controls-grid select, .controls-grid input")
+          ...document.querySelectorAll(".card, .nrow-card, .nav-btn, .controls-grid select, .controls-grid input")
         ];
 
     let idx = focusables.indexOf(document.activeElement);
 
-    // Aucun élément focalisé → focaliser le premier automatiquement
     if(idx < 0){
       focusables[0]?.focus();
       return;

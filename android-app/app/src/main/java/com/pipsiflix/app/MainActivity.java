@@ -8,7 +8,6 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
-import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -19,22 +18,21 @@ import android.widget.ProgressBar;
 import androidx.appcompat.app.AppCompatActivity;
 
 /**
- * PIPSIFLIX — Activité principale (phone & tablet)
- * Charge l'app web sur GitHub Pages dans un WebView plein écran.
+ * PIPSILY — Activité principale (phone & tablet)  v5
  *
- * Fonctionnalités :
- *  - Plein écran immersif (pas de barre de navigation)
- *  - Lecture vidéo HTML5 (autoplay, fullscreen, inline)
- *  - Autorisation du trafic HTTP vers goldenlink.live
- *  - Gestion des intents vidéo (ouvrir dans VLC / player système)
- *  - Interface JavaScript pour communiquer avec l'app web
+ * Corrections v5 :
+ *  - MIXED_CONTENT_ALWAYS_ALLOW  → flux HTTP lisibles depuis page HTTPS
+ *  - openInVlc()  ajouté (requis par app.js pour lecture directe)
+ *  - clearCache() / getApkVersion() / downloadAndInstall() ajoutés
+ *  - PIPSILY_NATIVE injecté (corrige détection TV/native dans le JS)
  */
 public class MainActivity extends AppCompatActivity {
 
-    private static final String APP_URL = "https://morpheus45.github.io/VOD/";
+    private static final String APP_URL      = "https://morpheus45.github.io/VOD/";
+    private static final String APK_VERSION  = "5";
 
-    private WebView webView;
-    private ProgressBar progressBar;
+    WebView     webView;      // package-private pour le bridge
+    ProgressBar progressBar;
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
@@ -52,64 +50,64 @@ public class MainActivity extends AppCompatActivity {
         );
 
         setContentView(R.layout.activity_main);
-
         webView     = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
 
         configureWebView();
 
-        // Charger l'app (ou reprendre la dernière page après rotation)
-        if(savedInstanceState != null) {
+        if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
         } else {
             webView.loadUrl(APP_URL);
         }
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint({"SetJavaScriptEnabled", "SetJavaScriptInterface"})
     private void configureWebView() {
         WebSettings ws = webView.getSettings();
 
-        // ── Fonctionnalités essentielles ──
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
         ws.setDatabaseEnabled(true);
         ws.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-        // ── Médias ──
+        // ── CRITIQUE : autoriser les flux HTTP depuis une page HTTPS ──
+        //    Sans cette ligne, les vidéos HTTP sont bloquées (mixed content)
+        ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
         ws.setMediaPlaybackRequiresUserGesture(false);
         ws.setAllowFileAccess(false);
         ws.setAllowContentAccess(true);
         ws.setLoadWithOverviewMode(true);
         ws.setUseWideViewPort(true);
 
-        // ── User-Agent : se présenter comme Android (important pour la détection) ──
-        ws.setUserAgentString(ws.getUserAgentString() + " PIPSIFLIX/1.0");
+        // User-Agent : PIPSILY/5
+        ws.setUserAgentString(ws.getUserAgentString() + " PIPSILY/5.0");
 
-        // ── Cookies ──
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
-        // ── Interface JavaScript native ──
-        webView.addJavascriptInterface(new PipsifixBridge(this), "AndroidBridge");
+        // Bridge JavaScript ↔ Java
+        webView.addJavascriptInterface(new PipsilyBridge(), "AndroidBridge");
 
-        // ── Client WebView : intercepter les navigations ──
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
 
-                // URLs vidéo HTTP → ouvrir avec lecteur système (pas de restriction mixed-content)
-                if(isVideoUrl(url)){
+                // Intent vidéo intercepté (goldenlink ou extension vidéo connue)
+                if (isVideoUrl(url)) {
                     openVideoIntent(url);
                     return true;
                 }
 
-                // Rester dans notre domaine (GitHub Pages)
-                if(url.startsWith("https://morpheus45.github.io")) return false;
+                // Rester dans notre domaine
+                if (url.startsWith("https://morpheus45.github.io")) return false;
 
-                // Autres URLs → navigateur externe
-                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                // Tout le reste → navigateur externe
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                } catch (Exception ignored) {}
                 return true;
             }
 
@@ -117,16 +115,17 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 progressBar.setVisibility(View.GONE);
-                // Injecter un flag pour que le JS sache qu'on est dans l'app native
-                view.evaluateJavascript("window.PIPSIFLIX_NATIVE = 'android';", null);
+                // Injecter les flags natifs (PIPSILY_NATIVE pour le JS renommé)
+                view.evaluateJavascript(
+                    "window.PIPSILY_NATIVE='android';" +
+                    "window.PIPSIFLIX_NATIVE='android';", null);  // compat legacy
             }
         });
 
-        // ── Chrome client : progress + fullscreen vidéo ──
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int progress) {
-                if(progress < 100) {
+                if (progress < 100) {
                     progressBar.setVisibility(View.VISIBLE);
                     progressBar.setProgress(progress);
                 } else {
@@ -134,14 +133,15 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            // Vidéo plein écran inline (HTML5 fullscreen API)
             private View customView;
+
             @Override
             public void onShowCustomView(View view, CustomViewCallback callback) {
                 customView = view;
                 webView.setVisibility(View.GONE);
                 setContentView(view);
             }
+
             @Override
             public void onHideCustomView() {
                 setContentView(R.layout.activity_main);
@@ -152,76 +152,122 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /** Ouvre une URL vidéo dans le lecteur système (VLC, MX Player, etc.) */
-    private void openVideoIntent(String url) {
+    /** Ouvre une URL vidéo dans le lecteur système (VLC, MX Player…) */
+    void openVideoIntent(String url) {
         try {
+            // Forcer HTTP (les serveurs IPTV sont souvent HTTP uniquement)
+            String httpUrl = url.replaceAll("(?i)^https://", "http://");
             Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(Uri.parse(url), "video/*");
+            intent.setDataAndType(Uri.parse(httpUrl), "video/*");
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
-        } catch(Exception e) {
-            // Aucun lecteur vidéo → ouvrir dans le navigateur
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception e) {
+            // Aucun lecteur → navigateur
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
+            catch (Exception ignored) {}
         }
     }
 
     private boolean isVideoUrl(String url) {
-        if(url == null) return false;
-        String lower = url.toLowerCase();
-        return lower.contains("goldenlink.live/") ||
-               lower.endsWith(".mkv") || lower.endsWith(".mp4") ||
-               lower.endsWith(".avi") || lower.endsWith(".mov") ||
-               lower.endsWith(".m3u8") || lower.endsWith(".ts");
+        if (url == null) return false;
+        String lo = url.toLowerCase();
+        return lo.contains("goldenlink.live/") ||
+               lo.endsWith(".mkv") || lo.endsWith(".mp4") ||
+               lo.endsWith(".avi") || lo.endsWith(".mov") ||
+               lo.endsWith(".m3u8") || lo.endsWith(".ts") ||
+               lo.contains("/movie/") || lo.contains("/series/") ||
+               lo.contains("/live/");
     }
 
     // ── Touche Retour ──
     @Override
     public void onBackPressed() {
-        if(webView.canGoBack()) webView.goBack();
+        if (webView.canGoBack()) webView.goBack();
         else super.onBackPressed();
     }
 
-    // ── Sauvegarder l'état WebView sur rotation ──
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         webView.saveState(outState);
     }
 
-    // ── Touches media (télécommande BT) ──
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if(keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
-           keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
-           keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE) {
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+            keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
+            keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE) {
             webView.evaluateJavascript(
                 "var v=document.querySelector('video');if(v)v.paused?v.play():v.pause();", null);
             return true;
         }
-        if(keyCode == KeyEvent.KEYCODE_MEDIA_NEXT) {
-            webView.evaluateJavascript(
-                "if(typeof goNext==='function')goNext();", null);
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_NEXT) {
+            webView.evaluateJavascript("if(typeof goNext==='function')goNext();", null);
             return true;
         }
-        if(keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
-            webView.evaluateJavascript(
-                "if(typeof goPrev==='function')goPrev();", null);
+        if (keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+            webView.evaluateJavascript("if(typeof goPrev==='function')goPrev();", null);
             return true;
         }
         return super.onKeyDown(keyCode, event);
     }
 
-    // ── Bridge JavaScript ↔ Java ──
-    static class PipsifixBridge {
-        private final MainActivity activity;
-        PipsifixBridge(MainActivity a) { this.activity = a; }
+    // ══════════════════════════════════════════════════════════════════════
+    //  Bridge JavaScript ↔ Java  (window.AndroidBridge)
+    // ══════════════════════════════════════════════════════════════════════
+    class PipsilyBridge {
 
+        /** Lecture directe dans VLC/lecteur système (appelé par app.js) */
         @JavascriptInterface
-        public void openVideo(String url, String title) {
-            activity.runOnUiThread(() -> activity.openVideoIntent(url));
+        public void openInVlc(String url, String title, boolean isLive) {
+            runOnUiThread(() -> openVideoIntent(url));
         }
 
+        /** Lecture (appelé par player.js) */
         @JavascriptInterface
-        public String getDeviceType() { return "android_phone"; }
+        public void openVideo(String url, String title) {
+            runOnUiThread(() -> openVideoIntent(url));
+        }
+
+        /** Télécharge et installe une nouvelle version de l'APK */
+        @JavascriptInterface
+        public void downloadAndInstall(String apkUrl) {
+            runOnUiThread(() -> {
+                try {
+                    // Ouvrir dans le navigateur → Android gère le téléchargement + install
+                    Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl));
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(i);
+                } catch (Exception ignored) {}
+            });
+        }
+
+        /** Ouvre une URL (fallback téléchargement APK ancien) */
+        @JavascriptInterface
+        public void openDownloadUrl(String url) {
+            downloadAndInstall(url);
+        }
+
+        /** Vide le cache WebView et recharge */
+        @JavascriptInterface
+        public void clearCache() {
+            runOnUiThread(() -> {
+                webView.clearCache(true);
+                webView.clearHistory();
+                webView.loadUrl(APP_URL);
+            });
+        }
+
+        /** Retourne la version de l'APK (pour la vérification de mise à jour) */
+        @JavascriptInterface
+        public String getApkVersion() {
+            return APK_VERSION;
+        }
+
+        /** Type d'appareil */
+        @JavascriptInterface
+        public String getDeviceType() {
+            return "android_phone";
+        }
     }
 }

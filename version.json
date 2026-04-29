@@ -1,5 +1,5 @@
 {
-  "apk_version": 4,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v4/PIPSIFLIX.apk",
-  "changes": "Lecteur VLC intégré : meilleure compatibilité H265, HEVC, HLS, flux live"
+  "apk_version": 5,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v5/PIPSILY.apk",
+  "changes": "Lecture vidéo directe (plus besoin de VLC installé) · Navigation TV corrigée · Mise à jour automatique"
 }
