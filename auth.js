@@ -599,14 +599,30 @@ create table devices (
   unique(user_id, device_id)
 );
 
--- ③ Sessions (1 connexion simultanée)
+-- ③ Sessions (multi-appareils — heartbeat 30s)
 create table sessions (
-  id         uuid primary key default gen_random_uuid(),
-  user_id    uuid references profiles(id) on delete cascade,
-  device_id  text,
-  token      text,
-  created_at timestamptz default now()
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid references profiles(id) on delete cascade,
+  device_id   text,
+  device_name text,
+  token       text,
+  ip          text,
+  country     text,
+  city        text,
+  region      text,
+  isp         text,
+  last_seen   timestamptz default now(),
+  created_at  timestamptz default now()
 );
+
+-- Migration si table sessions existe déjà (coller séparément si besoin) :
+-- alter table sessions add column if not exists device_name text;
+-- alter table sessions add column if not exists ip          text;
+-- alter table sessions add column if not exists country     text;
+-- alter table sessions add column if not exists city        text;
+-- alter table sessions add column if not exists region      text;
+-- alter table sessions add column if not exists isp         text;
+-- alter table sessions add column if not exists last_seen   timestamptz default now();
 
 -- ④ Paiements (suivi manuel Wero)
 create table payments (
