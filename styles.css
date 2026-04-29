@@ -715,26 +715,49 @@ button,select,input{ font:inherit }
   .topbar{
     position:fixed; top:0; left:0; right:0; z-index:50;
     padding:12px 48px;
+    background:rgba(5,8,15,.96);
+    backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
   }
 
-  /* Barre de recherche/filtres FIXE sous le topbar — toujours accessible */
-  .sticky-controls{
-    position:fixed; top:80px; left:0; right:0; z-index:40;
+  /* ── Filtres dropdown : MASQUÉS sur TV (impraticables au D-pad) ──
+     La navigation se fait via : nav-btns → cat-pills → cartes ──*/
+  .sticky-controls{ display:none }
+
+  /* Pills catégories FIXES juste sous le topbar — accessibles au D-pad */
+  .cat-pills{
+    position:fixed; top:96px; left:0; right:0; z-index:40;
+    padding:12px 48px 14px; gap:10px;
     background:rgba(5,8,15,.96);
     backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
     border-bottom:1px solid rgba(255,255,255,.06);
-    padding:10px 48px 12px;
+    overflow-x:auto; scrollbar-width:none;
   }
-  .controls-grid--four{ grid-template-columns:1.6fr 2fr .8fr .8fr; gap:12px }
-  .controls-grid--four select,
-  .controls-grid--four input{ padding:14px 18px; font-size:15px; border-radius:14px }
+  .cat-pills::-webkit-scrollbar{ display:none }
+  .cat-pill{
+    padding:11px 22px; font-size:15px; min-height:48px;
+    border:1px solid rgba(255,255,255,.12);
+  }
+  .cat-pill:focus{
+    outline:3px solid var(--accent) !important;
+    outline-offset:2px !important;
+    background:rgba(123,95,232,.22) !important;
+    color:#fff !important;
+    box-shadow:0 0 0 6px rgba(123,95,232,.18) !important;
+  }
+  .cat-pill--active{
+    background:linear-gradient(135deg,#7B5FE8,#38A8E8) !important;
+    color:#fff !important;
+    border-color:transparent !important;
+  }
 
-  /* Décalage du contenu pour compenser les barres fixes (topbar ~80px + controls ~72px) */
-  .content{ padding-top:168px }
+  /* Décalage du contenu : topbar ~78px + cat-pills ~70px = ~150px */
+  .content{ padding-top:160px }
 
-  /* Pills catégories sur TV */
-  .cat-pills{ padding:10px 48px 12px; gap:10px; border-bottom:none }
-  .cat-pill{ padding:9px 20px; font-size:14px; min-height:42px }
+  /* ── Boutons favoris sur cartes : masqués sur TV ──
+     Les favoris sont accessibles via le panneau (Lire / Favoris) ── */
+  .card .fav-btn,
+  .nrow-card .fav-btn,
+  .nou-card .fav-btn{ display:none !important }
 
   /* ── Typographie TV ── */
   .topbar-brand-row{ margin-bottom:0 }
@@ -879,18 +902,71 @@ button,select,input{ font:inherit }
 
 /* ── Failsafe TV : classe html.is-tv injectée par JS dès la détection AndroidTV ──
    S'applique même quand le media query ne se déclenche pas (DPR élevé, VP étroit) */
-html.is-tv .nrow-card { flex:0 0 130px }
-html.is-tv .nrow-media { width:130px; height:195px; border-radius:12px }
-html.is-tv .nrow-strip { gap:10px }
+html.is-tv .app-shell    { max-width:100%; padding:0 0 100px }
+html.is-tv .nrow-card    { flex:0 0 130px }
+html.is-tv .nrow-media   { width:130px; height:195px; border-radius:12px }
+html.is-tv .nrow-strip   { gap:10px }
 html.is-tv .netflix-rows { gap:36px; padding:0 48px }
-html.is-tv .app-shell  { max-width:100%; padding:0 0 100px }
-html.is-tv .grid       { grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:16px }
+html.is-tv .grid         { grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:16px; padding:0 48px }
+
+/* Topbar fixe */
+html.is-tv .topbar{
+  position:fixed; top:0; left:0; right:0; z-index:50;
+  padding:12px 48px;
+  background:rgba(5,8,15,.96);
+  backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+}
+
+/* Filtres dropdown masqués sur TV */
+html.is-tv .sticky-controls{ display:none !important }
+
+/* Cat-pills fixes sous topbar */
+html.is-tv .cat-pills{
+  position:fixed; top:96px; left:0; right:0; z-index:40;
+  padding:12px 48px 14px; gap:10px;
+  background:rgba(5,8,15,.96);
+  backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  overflow-x:auto;
+}
+html.is-tv .cat-pills::-webkit-scrollbar{ display:none }
+html.is-tv .cat-pill{
+  padding:11px 22px; font-size:15px; min-height:48px;
+  border:1px solid rgba(255,255,255,.12);
+}
+html.is-tv .cat-pill:focus{
+  outline:3px solid var(--accent) !important;
+  outline-offset:2px !important;
+  background:rgba(123,95,232,.22) !important;
+  color:#fff !important;
+  box-shadow:0 0 0 6px rgba(123,95,232,.18) !important;
+}
+html.is-tv .cat-pill--active{
+  background:linear-gradient(135deg,#7B5FE8,#38A8E8) !important;
+  color:#fff !important;
+  border-color:transparent !important;
+}
+
+/* Décalage du contenu */
+html.is-tv .content{ padding-top:160px }
+
+/* Bouton "Voir tout" */
 html.is-tv .nrow-all {
   font-size:13px; font-weight:700; min-height:34px;
   border:1px solid rgba(255,255,255,.15);
   background:rgba(255,255,255,.06);
   padding:6px 14px; border-radius:8px;
 }
+html.is-tv .nrow-all:focus{
+  outline:3px solid var(--accent) !important;
+  outline-offset:3px !important;
+  background:rgba(123,95,232,.22) !important;
+}
+
+/* Boutons favoris cachés sur cartes en TV */
+html.is-tv .card .fav-btn,
+html.is-tv .nrow-card .fav-btn,
+html.is-tv .nou-card .fav-btn{ display:none !important }
 
 button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:transparent }
 @media (hover:none){

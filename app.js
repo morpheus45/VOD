@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v5.2 — epDb statique                     ║
+// ║  PIPSILY — app.js v5.4 — TV layout + nav pills              ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -1088,16 +1088,6 @@ function renderNetflixRows(){
       renderGrid(true);
     });
 
-    // ── D-pad TV : ArrowRight depuis "Voir tout" → première carte ──
-    allBtn.addEventListener("keydown", e => {
-      if(e.key === "ArrowRight"){
-        e.preventDefault();
-        const firstCard = strip.querySelector(".nrow-card");
-        if(firstCard){ firstCard.focus(); firstCard.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"start" }); }
-      }
-      // ArrowUp/Down délégués à initTV()
-    });
-
     hdr.appendChild(titleEl);
     hdr.appendChild(allBtn);
     section.appendChild(hdr);
@@ -1107,28 +1097,6 @@ function renderNetflixRows(){
     strip.className = "nrow-strip";
 
     items.slice(0, NROW_MAX).forEach(item => strip.appendChild(makeNrowCard(item)));
-
-    // Navigation clavier gauche/droite dans la bande
-    strip.addEventListener("keydown", e => {
-      const cards = [...strip.querySelectorAll(".nrow-card")];
-      const idx   = cards.indexOf(document.activeElement);
-      if(idx < 0) return;
-      if(e.key === "ArrowRight"){
-        e.preventDefault();
-        const next = cards[idx + 1];
-        if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
-      } else if(e.key === "ArrowLeft"){
-        e.preventDefault();
-        if(idx > 0){
-          const prev = cards[idx - 1];
-          prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
-        } else {
-          // Première carte → aller sur le bouton "Voir tout"
-          const allBtn = section.querySelector(".nrow-all");
-          if(allBtn) allBtn.focus();
-        }
-      }
-    });
 
     section.appendChild(strip);
     frag.appendChild(section);
@@ -1224,10 +1192,11 @@ function renderCatPills(cats){
 // ─────────────────────────────────────────────────────────────────
 
 function initTV(){
-  // ── Navigation D-pad TV ──
+  // ── Navigation D-pad TV unifiée — un seul handler, 3 modes clairs ──
   document.addEventListener("keydown", e => {
     const k = e.key;
 
+    // Retour / Fermeture panneau
     if(["Escape","GoBack","Back","BrowserBack"].includes(k)){
       if(!$("seriesPanel")?.hidden){
         e.preventDefault();
@@ -1242,77 +1211,210 @@ function initTV(){
     const panelOpen  = !$("seriesPanel")?.hidden;
     const useNetflix = $("grid")?.className === "netflix-rows";
 
-    // ── Mode Netflix rows : navigation spéciale ──
-    if(!panelOpen && useNetflix){
-      const active = document.activeElement;
+    if(panelOpen)  { _navPanel(k);   return; }
+    if(useNetflix) { _navNetflix(k); return; }
+    _navGrid(k);
+  });
 
-      if(k === "ArrowRight" || k === "ArrowLeft"){
-        // Géré par le keydown du strip — laisser passer
+  // ── Mode panneau séries / VOD ──
+  function _navPanel(k){
+    const panel = $("seriesPanel");
+    if(!panel) return;
+    const items = [...panel.querySelectorAll(
+      ".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct, .vod-play-btn, .fav-btn-large"
+    )];
+    const idx = items.indexOf(document.activeElement);
+    if(idx < 0){ items[0]?.focus(); return; }
+    if(k === "ArrowDown" || k === "ArrowRight"){
+      items[Math.min(idx + 1, items.length - 1)]?.focus();
+    } else if(k === "ArrowUp" || k === "ArrowLeft"){
+      items[Math.max(idx - 1, 0)]?.focus();
+    }
+  }
+
+  // ── Helper : focus sur le 1er pill catégorie (ou pill actif) ──
+  function _focusFirstPill(){
+    const pills = $("catPills");
+    if(!pills || pills.hidden) return false;
+    const target = pills.querySelector(".cat-pill--active") || pills.querySelector(".cat-pill");
+    if(target){ target.focus(); target.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); return true; }
+    return false;
+  }
+
+  // ── Mode Netflix rows ──
+  function _navNetflix(k){
+    const active     = document.activeElement;
+    const isPill     = active?.classList.contains("cat-pill");
+    const isNavBtn   = active?.classList.contains("nav-btn");
+    const currentRow = active?.closest(".nrow");
+    const allRows    = [...document.querySelectorAll(".nrow")];
+    const rowIdx     = allRows.indexOf(currentRow);
+    const isAllBtn   = active?.classList.contains("nrow-all");
+
+    // ── Sur les nav-btns (top) : Films/Séries/TV ──
+    if(isNavBtn){
+      const navBtns = [...document.querySelectorAll(".nav-btn[data-type]")];
+      const ni = navBtns.indexOf(active);
+      if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
+      if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
+      if(k === "ArrowDown"){
+        if(_focusFirstPill()) return;
+        allRows[0]?.querySelector(".nrow-card")?.focus();
+      }
+      return;
+    }
+
+    // ── Sur les cat-pills (filtres catégorie) ──
+    if(isPill){
+      const pills = [...document.querySelectorAll(".cat-pill")];
+      const pi = pills.indexOf(active);
+      if(k === "ArrowRight" && pi < pills.length - 1){
+        pills[pi + 1].focus();
+        pills[pi + 1].scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
         return;
       }
+      if(k === "ArrowLeft" && pi > 0){
+        pills[pi - 1].focus();
+        pills[pi - 1].scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+        return;
+      }
+      if(k === "ArrowUp"){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        return;
+      }
+      if(k === "ArrowDown"){
+        const firstCard = allRows[0]?.querySelector(".nrow-card");
+        if(firstCard){ firstCard.focus(); firstCard.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
+        return;
+      }
+      return;
+    }
 
-      if(k === "ArrowDown" || k === "ArrowUp"){
-        // Trouver la rangée courante et sauter à la suivante/précédente
-        const currentRow = active?.closest(".nrow");
-        const allRows    = [...document.querySelectorAll(".nrow")];
-        const rowIdx     = allRows.indexOf(currentRow);
-        const isOnAllBtn = active?.classList.contains("nrow-all");
+    // ── Gauche / Droite : navigation dans la bande horizontale ──
+    if(k === "ArrowRight"){
+      if(isAllBtn){
+        // "Voir tout" → première carte de cette rangée
+        const firstCard = currentRow?.querySelector(".nrow-card");
+        if(firstCard){ firstCard.focus(); firstCard.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"start" }); }
+      } else if(currentRow){
+        const cards = [...currentRow.querySelectorAll(".nrow-card")];
+        const ci    = cards.indexOf(active);
+        const next  = cards[ci + 1];
+        if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+      }
+      return;
+    }
 
-        let targetRow;
-        if(k === "ArrowDown") targetRow = allRows[rowIdx + 1] || allRows[rowIdx];
-        else                  targetRow = rowIdx > 0 ? allRows[rowIdx - 1] : null;
-
-        if(targetRow){
-          // Si on était sur "Voir tout" → rester sur "Voir tout" de la rangée cible
-          const target = isOnAllBtn
-            ? (targetRow.querySelector(".nrow-all") || targetRow.querySelector(".nrow-card"))
-            : targetRow.querySelector(".nrow-card");
-          if(target){
-            target.focus();
-            target.scrollIntoView({ behavior:"smooth", block:"nearest" });
-          }
-        } else if(rowIdx < 0 || (rowIdx === 0 && k === "ArrowUp")){
-          // En haut → aller aux boutons de navigation
-          document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+    if(k === "ArrowLeft"){
+      if(!isAllBtn && currentRow){
+        const cards = [...currentRow.querySelectorAll(".nrow-card")];
+        const ci    = cards.indexOf(active);
+        if(ci > 0){
+          const prev = cards[ci - 1];
+          prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+        } else {
+          // Première carte → bouton "Voir tout" de cette rangée
+          currentRow.querySelector(".nrow-all")?.focus();
         }
+      }
+      return;
+    }
+
+    // ── Haut / Bas : sauter entre les rangées ──
+    if(rowIdx < 0){
+      // Actif hors d'une rangée → aller à la première rangée
+      if(k === "ArrowDown"){
+        const first = allRows[0]?.querySelector(".nrow-card");
+        if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
+      }
+      return;
+    }
+
+    let targetRow;
+    if(k === "ArrowDown"){
+      targetRow = allRows[rowIdx + 1];
+      if(!targetRow) return; // déjà à la dernière rangée
+    } else {
+      targetRow = rowIdx > 0 ? allRows[rowIdx - 1] : null;
+    }
+
+    if(targetRow){
+      const target = isAllBtn
+        ? (targetRow.querySelector(".nrow-all") || targetRow.querySelector(".nrow-card"))
+        : targetRow.querySelector(".nrow-card");
+      if(target){ target.focus(); target.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
+    } else {
+      // En haut de la première rangée → cat-pills, sinon nav-btns
+      if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+    }
+  }
+
+  // ── Mode grille normale (Live ou catégorie filtrée) ──
+  function _navGrid(k){
+    const active   = document.activeElement;
+    const isPill   = active?.classList.contains("cat-pill");
+    const isNavBtn = active?.classList.contains("nav-btn");
+
+    // ── Sur les nav-btns ──
+    if(isNavBtn){
+      const navBtns = [...document.querySelectorAll(".nav-btn[data-type]")];
+      const ni = navBtns.indexOf(active);
+      if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
+      if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
+      if(k === "ArrowDown"){
+        if(_focusFirstPill()) return;
+        document.querySelector(".card")?.focus();
+      }
+      return;
+    }
+
+    // ── Sur les cat-pills ──
+    if(isPill){
+      const pills = [...document.querySelectorAll(".cat-pill")];
+      const pi = pills.indexOf(active);
+      if(k === "ArrowRight" && pi < pills.length - 1){
+        pills[pi + 1].focus();
+        pills[pi + 1].scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+        return;
+      }
+      if(k === "ArrowLeft" && pi > 0){
+        pills[pi - 1].focus();
+        pills[pi - 1].scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+        return;
+      }
+      if(k === "ArrowUp"){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        return;
+      }
+      if(k === "ArrowDown"){
+        document.querySelector(".card")?.focus();
         return;
       }
       return;
     }
 
-    // ── Mode grille normale ──
-    const bannerBtns = [...document.querySelectorAll(
-      "#updateNowBtn, #updateDismissBtn, #apkDownloadBtn, #apkDismissBtn"
-    )].filter(b => b.offsetParent !== null);
+    // ── Sur une carte de la grille : navigation cols ──
+    const cards = [...document.querySelectorAll(".card")];
+    let idx = cards.indexOf(active);
+    if(idx < 0){ cards[0]?.focus(); return; }
 
-    const focusables = panelOpen
-      ? [...$("seriesPanel").querySelectorAll(".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct, .vod-play-btn, .fav-btn-large")]
-      : [
-          ...bannerBtns,
-          ...document.querySelectorAll(".card, .nrow-card, .nav-btn, .controls-grid select, .controls-grid input")
-        ];
-
-    let idx = focusables.indexOf(document.activeElement);
-
-    if(idx < 0){
-      focusables[0]?.focus();
-      return;
-    }
-
-    let cols = 1;
-    if(!panelOpen){
-      const g = $("grid");
-      if(g) cols = Math.max(1, Math.round(g.offsetWidth / 165));
-    }
+    const g    = $("grid");
+    const cols = g ? Math.max(1, Math.round(g.offsetWidth / 200)) : 1;
 
     let next = idx;
-    if(k === "ArrowRight") next = idx + 1;
+    if(k === "ArrowRight")     next = Math.min(idx + 1, cards.length - 1);
     else if(k === "ArrowLeft") next = Math.max(0, idx - 1);
-    else if(k === "ArrowDown") next = idx + cols;
+    else if(k === "ArrowDown") next = Math.min(idx + cols, cards.length - 1);
     else if(k === "ArrowUp")   next = idx - cols;
 
-    focusables[Math.min(Math.max(0, next), focusables.length - 1)]?.focus();
-  });
+    if(next < 0){
+      // Au-dessus de la 1ère ligne → cat-pills, sinon nav-btns
+      if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+      return;
+    }
+    cards[next]?.focus();
+    cards[next]?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1574,6 +1676,14 @@ async function boot(){
 
   renderNouveautes();
   render();
+
+  // ── TV : focus initial sur le bouton actif (Films) après 1er render ──
+  if(document.documentElement.classList.contains("is-tv")){
+    setTimeout(() => {
+      const btn = document.querySelector(".nav-btn.active") || document.querySelector(".nav-btn");
+      btn?.focus();
+    }, 200);
+  }
 
   // ── Écoute des mises à jour Service Worker ──
   if("serviceWorker" in navigator){
