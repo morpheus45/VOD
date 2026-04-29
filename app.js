@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v5.1 — epDb statique                     ║
+// ║  PIPSILY — app.js v5.2 — epDb statique                     ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -1088,6 +1088,16 @@ function renderNetflixRows(){
       renderGrid(true);
     });
 
+    // ── D-pad TV : ArrowRight depuis "Voir tout" → première carte ──
+    allBtn.addEventListener("keydown", e => {
+      if(e.key === "ArrowRight"){
+        e.preventDefault();
+        const firstCard = strip.querySelector(".nrow-card");
+        if(firstCard){ firstCard.focus(); firstCard.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"start" }); }
+      }
+      // ArrowUp/Down délégués à initTV()
+    });
+
     hdr.appendChild(titleEl);
     hdr.appendChild(allBtn);
     section.appendChild(hdr);
@@ -1109,8 +1119,14 @@ function renderNetflixRows(){
         if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
       } else if(e.key === "ArrowLeft"){
         e.preventDefault();
-        const prev = cards[idx - 1];
-        if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+        if(idx > 0){
+          const prev = cards[idx - 1];
+          prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+        } else {
+          // Première carte → aller sur le bouton "Voir tout"
+          const allBtn = section.querySelector(".nrow-all");
+          if(allBtn) allBtn.focus();
+        }
       }
     });
 
@@ -1240,20 +1256,24 @@ function initTV(){
         const currentRow = active?.closest(".nrow");
         const allRows    = [...document.querySelectorAll(".nrow")];
         const rowIdx     = allRows.indexOf(currentRow);
+        const isOnAllBtn = active?.classList.contains("nrow-all");
 
         let targetRow;
         if(k === "ArrowDown") targetRow = allRows[rowIdx + 1] || allRows[rowIdx];
         else                  targetRow = rowIdx > 0 ? allRows[rowIdx - 1] : null;
 
         if(targetRow){
-          const firstCard = targetRow.querySelector(".nrow-card");
-          if(firstCard){
-            firstCard.focus();
-            firstCard.scrollIntoView({ behavior:"smooth", block:"nearest" });
+          // Si on était sur "Voir tout" → rester sur "Voir tout" de la rangée cible
+          const target = isOnAllBtn
+            ? (targetRow.querySelector(".nrow-all") || targetRow.querySelector(".nrow-card"))
+            : targetRow.querySelector(".nrow-card");
+          if(target){
+            target.focus();
+            target.scrollIntoView({ behavior:"smooth", block:"nearest" });
           }
-        } else if(rowIdx < 0){
-          // Rien de focalisé → aller au premier
-          document.querySelector(".nrow-card, .nav-btn")?.focus();
+        } else if(rowIdx < 0 || (rowIdx === 0 && k === "ArrowUp")){
+          // En haut → aller aux boutons de navigation
+          document.querySelector(".nav-btn.active, .nav-btn")?.focus();
         }
         return;
       }
@@ -1388,9 +1408,24 @@ function renderHero(item){
 
 async function boot(){
 
+  // ── Classe CSS TV (failsafe si le media query ne se déclenche pas) ──
+  if(window.PIPSILY_NATIVE === "android_tv" || window.PIPSIFLIX_NATIVE === "android_tv" ||
+     /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent)){
+    document.documentElement.classList.add("is-tv");
+  }
+
   // ── Auth gate (APK + PWA) ──
+  // Wrapped dans try-catch : une exception dans authGate() (ex: tables Supabase manquantes)
+  // ne doit JAMAIS empêcher l'application de démarrer.
   if(window.PIPSILY_AUTH){
-    const auth = await window.PIPSILY_AUTH.authGate();
+    let auth;
+    try {
+      auth = await window.PIPSILY_AUTH.authGate();
+    } catch(e) {
+      console.error("[PIPSILY] authGate crash (tables manquantes ?):", e.message);
+      // Ne pas bloquer → démarrer en mode dégradé
+      auth = { session: { user: { id: "err" } }, sub: { ok: true, plan: "active", unlimited: false } };
+    }
     if(!auth) return; // redirigé vers login.html ou paywall
 
     S._userId  = auth.session.user.id;

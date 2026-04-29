@@ -393,48 +393,71 @@ function promptParentalPin(storedPin){
 
 // ─────────────────────────────────────────────────────────────────
 //  AUTH GATE — appelé au démarrage de l'app (index.html)
+//  Conçu pour être robuste même si les tables Supabase ne sont pas
+//  encore créées (erreurs DB catchées, jamais de crash silencieux).
 // ─────────────────────────────────────────────────────────────────
+function _devAuth(){
+  // Mode dégradé : Supabase non configuré ou inaccessible
+  return {
+    session : { user: { id: "dev", email: ADMIN_EMAIL } },
+    sub     : { ok: true, plan: "admin", unlimited: true }
+  };
+}
+
 async function authGate(){
-  // Supabase pas encore configuré → mode développement, tout passe
+  // ── Supabase non configuré → mode dev (tout passe) ──
   if(!_configured || !_supa){
     console.warn("[PIPSILY] Supabase non configuré — auth désactivée (mode dev)");
-    return { session: { user: { id: "dev", email: ADMIN_EMAIL } }, sub: { ok: true, plan: "admin", unlimited: true } };
+    return _devAuth();
   }
 
-  const session = await getSession();
+  // ── Lecture session locale (localStorage, pas d'appel réseau) ──
+  let session = null;
+  try { session = await getSession(); }
+  catch(e){ console.warn("[PIPSILY] getSession:", e.message); }
+
   if(!session){
     window.location.href = "./login.html";
     return null;
   }
 
-  const sub = await checkSubscription(session.user.id);
+  // ── Abonnement (erreur table = on laisse passer plutôt que de bloquer) ──
+  let sub = { ok: false, plan: null };
+  try {
+    sub = await checkSubscription(session.user.id);
+  } catch(e) {
+    console.warn("[PIPSILY] checkSubscription:", e.message);
+    // Tables probablement absentes → accès gracieux selon l'e-mail
+    sub = session.user.email === ADMIN_EMAIL
+      ? { ok: true, plan: "admin",  unlimited: true  }
+      : { ok: true, plan: "active", unlimited: false };
+  }
 
-  // Admin (cedric.lago@gmail.com) → accès illimité sans vérification
+  // ── Admin → accès illimité ──
   if(session.user.email === ADMIN_EMAIL || sub.plan === "admin" || sub.plan === "unlimited"){
-    // S'assurer que le profil admin existe
+    // Créer/mettre à jour le profil admin (fire-and-forget — ne bloque pas)
     if(_supa && (!sub.plan || sub.plan === "free")){
-      await _supa.from("profiles")
-        .upsert({ id: session.user.id, email: session.user.email, plan: "admin", devices_allowed: 999 });
+      _supa.from("profiles")
+        .upsert({ id: session.user.id, email: session.user.email,
+                  plan: "admin", devices_allowed: 999 })
+        .catch(e => console.warn("[PIPSILY] upsert admin profile:", e.message));
     }
-    await registerSession(session.user.id).catch(() => {});
+    registerSession(session.user.id).catch(() => {});
     return { session, sub: { ...sub, ok: true, unlimited: true, plan: "admin" } };
   }
 
-  // Abonnement inactif → paywall
+  // ── Abonnement inactif → paywall ──
   if(!sub.ok){
     _showPaywall(sub);
     return null;
   }
 
-  // Vérification session unique
-  const sessOk = await validateSession(session.user.id);
-  if(!sessOk){
-    // Regénérer la session (peut avoir expiré ou nouvel appareil)
-    await registerSession(session.user.id);
-  }
+  // ── Session + device (tous deux avec fallback si table absente) ──
+  const sessOk = await validateSession(session.user.id).catch(() => true);
+  if(!sessOk) await registerSession(session.user.id).catch(() => {});
 
-  // Vérification device
-  const devResult = await ensureDevice(session.user.id);
+  const devResult = await ensureDevice(session.user.id)
+    .catch(() => ({ newDevice: false, blocked: false }));
   if(devResult.blocked){
     _showDeviceLimit(session.user.id, devResult.extra_cost);
     return null;

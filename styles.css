@@ -1,5 +1,5 @@
 /* ================================================================
-   PIPSILY — styles.css v5.0 — Dark Cinema
+   PIPSILY — styles.css v5.1 — Dark Cinema
    ================================================================ */
 
 @keyframes slideUp{
@@ -701,9 +701,12 @@ button,select,input{ font:inherit }
 }
 
 /* ================================================================
-   GOOGLE TV / ANDROID TV (>= 1280px landscape)
+   GOOGLE TV / ANDROID TV
+   Déclenché par :
+     • écrans >= 960px landscape (couvre aussi TV avec DPR=2 à 1920px)
+     • classe html.is-tv injectée par JS (failsafe Android TV)
    ================================================================ */
-@media (min-width:1280px) and (orientation:landscape){
+@media (min-width:960px) and (orientation:landscape){
 
   /* ── Layout global TV ── */
   .app-shell{ max-width:100%; padding:0 0 100px }
@@ -768,13 +771,25 @@ button,select,input{ font:inherit }
   .nou-media{ width:160px; height:240px }
 
   /* ── Rangées Netflix TV ── */
-  .netflix-rows{ gap:44px; padding:0 48px }
-  .nrow-card{ flex:0 0 175px }
-  .nrow-media{ width:175px; height:263px; border-radius:14px }
-  .nrow-name{ font-size:13px }
+  .netflix-rows{ gap:36px; padding:0 48px }
+  .nrow-card{ flex:0 0 130px }          /* ~12 cartes visibles sur 1920px */
+  .nrow-media{ width:130px; height:195px; border-radius:12px }
+  .nrow-name{ font-size:12px }
   .nrow-title{ font-size:20px }
-  .nrow-strip{ gap:14px; padding-bottom:14px }
-  .nrow-all{ font-size:14px }
+  .nrow-strip{ gap:10px; padding-bottom:14px }
+  /* Bouton "Voir tout" TV : bien visible + focusable D-pad */
+  .nrow-all{
+    font-size:13px; font-weight:700;
+    border:1px solid rgba(255,255,255,.15);
+    background:rgba(255,255,255,.06);
+    padding:6px 14px; border-radius:8px;
+    min-height:34px; line-height:1;
+  }
+  .nrow-all:focus{
+    outline:3px solid var(--accent) !important;
+    outline-offset:3px !important;
+    background:rgba(123,95,232,.18) !important;
+  }
   .nou-title{ font-size:13px }
   .nou-date { display:none }   /* date masquée = plus épuré */
 
@@ -805,7 +820,7 @@ button,select,input{ font:inherit }
 }
 
 /* Focus TOUJOURS visible sur TV (D-pad Android TV) */
-@media (min-width:1280px){
+@media (min-width:960px){
   /* Indicateur global TV — box-shadow non clippé par overflow */
   :focus{
     outline:none !important;
@@ -860,6 +875,21 @@ button,select,input{ font:inherit }
     outline-offset:3px !important;
     box-shadow:0 0 0 8px rgba(123,95,232,.3) !important;
   }
+}
+
+/* ── Failsafe TV : classe html.is-tv injectée par JS dès la détection AndroidTV ──
+   S'applique même quand le media query ne se déclenche pas (DPR élevé, VP étroit) */
+html.is-tv .nrow-card { flex:0 0 130px }
+html.is-tv .nrow-media { width:130px; height:195px; border-radius:12px }
+html.is-tv .nrow-strip { gap:10px }
+html.is-tv .netflix-rows { gap:36px; padding:0 48px }
+html.is-tv .app-shell  { max-width:100%; padding:0 0 100px }
+html.is-tv .grid       { grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:16px }
+html.is-tv .nrow-all {
+  font-size:13px; font-weight:700; min-height:34px;
+  border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.06);
+  padding:6px 14px; border-radius:8px;
 }
 
 button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:transparent }
