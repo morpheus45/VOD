@@ -14,13 +14,37 @@ android {
         versionName "5.0"
     }
 
+    // Signing config release (utilisé par GitHub Actions ou Android Studio)
+    signingConfigs {
+        release {
+            // Défini par variables d'env (CI) ou local.properties (Android Studio)
+            def ksFile = System.getenv("KS_FILE") ?: project.findProperty("ks.file")
+            def ksPass = System.getenv("KS_PASS") ?: project.findProperty("ks.pass") ?: ""
+            def ksAlias = System.getenv("KS_ALIAS") ?: project.findProperty("ks.alias") ?: ""
+            def ksKeyPass = System.getenv("KS_KEY_PASS") ?: project.findProperty("ks.keypass") ?: ""
+            if (ksFile) {
+                storeFile file(ksFile)
+                storePassword ksPass
+                keyAlias ksAlias
+                keyPassword ksKeyPass
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Utiliser la signing config release si disponible
+            def ksFile = System.getenv("KS_FILE") ?: project.findProperty("ks.file")
+            if (ksFile) {
+                signingConfig signingConfigs.release
+            }
         }
         debug {
-            applicationIdSuffix ".debug"
+            // Pas de suffixe debug — même applicationId que release pour faciliter l'update
+            // (décommenter si tu veux séparer debug / release sur l'appareil)
+            // applicationIdSuffix ".debug"
             debuggable true
         }
     }

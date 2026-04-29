@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v5.0 — epDb statique                     ║
+// ║  PIPSILY — app.js v5.1 — epDb statique                     ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -501,6 +501,9 @@ function openVodPanel(item){
     const lbl = $("vodFavLabel");
     if(lbl) lbl.textContent = fav ? "Favori" : "Ajouter aux favoris";
   });
+
+  // ── Focus initial (TV / D-pad) — Entrée joue directement ──
+  setTimeout(() => $("vodPlayBtn")?.focus(), 80);
 
   // ── Lazy-load synopsis depuis l'API si absent ──
   if(!plot){
@@ -1263,7 +1266,7 @@ function initTV(){
     )].filter(b => b.offsetParent !== null);
 
     const focusables = panelOpen
-      ? [...$("seriesPanel").querySelectorAll(".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct")]
+      ? [...$("seriesPanel").querySelectorAll(".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct, .vod-play-btn, .fav-btn-large")]
       : [
           ...bannerBtns,
           ...document.querySelectorAll(".card, .nrow-card, .nav-btn, .controls-grid select, .controls-grid input")
