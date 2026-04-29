@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v5.5 — TV compact + cœurs cachés          ║
+// ║  PIPSILY — app.js v5.6 — Voir tout tuile + recherche TV     ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -1071,11 +1071,28 @@ function renderNetflixRows(){
     titleEl.className = "nrow-title";
     titleEl.textContent = catName;
 
-    const allBtn = document.createElement("button");
-    allBtn.className = "nrow-all";
-    allBtn.type      = "button";
-    allBtn.textContent = `Voir tout (${items.length}) →`;
-    allBtn.addEventListener("click", () => {
+    hdr.appendChild(titleEl);
+    section.appendChild(hdr);
+
+    // Bande horizontale
+    const strip = document.createElement("div");
+    strip.className = "nrow-strip";
+
+    items.slice(0, NROW_MAX).forEach(item => strip.appendChild(makeNrowCard(item)));
+
+    // ── Tuile "Voir tout" en fin de rangée (style poster, focusable D-pad) ──
+    const allTile = document.createElement("button");
+    allTile.className = "nrow-card nrow-all-tile";
+    allTile.type     = "button";
+    allTile.tabIndex = 0;
+    allTile.setAttribute("aria-label", `Voir tout ${catName} (${items.length})`);
+    allTile.innerHTML = `
+      <div class="nrow-media nrow-all-media">
+        <span class="nrow-all-arrow">→</span>
+        <span class="nrow-all-label">Voir tout</span>
+        <span class="nrow-all-count">(${items.length})</span>
+      </div>`;
+    allTile.addEventListener("click", () => {
       S.cat = catName;
       const sel = $("categorySelect");
       if(sel) sel.value = catName;
@@ -1087,16 +1104,7 @@ function renderNetflixRows(){
       S.shown[S.type] = PER_PAGE;
       renderGrid(true);
     });
-
-    hdr.appendChild(titleEl);
-    hdr.appendChild(allBtn);
-    section.appendChild(hdr);
-
-    // Bande horizontale
-    const strip = document.createElement("div");
-    strip.className = "nrow-strip";
-
-    items.slice(0, NROW_MAX).forEach(item => strip.appendChild(makeNrowCard(item)));
+    strip.appendChild(allTile);
 
     section.appendChild(strip);
     frag.appendChild(section);
@@ -1164,17 +1172,22 @@ function renderCatPills(cats){
   if(S.type === "live"){ pills.hidden = true; return; }
   pills.hidden = false;
   pills.innerHTML =
+    `<button class="cat-pill cat-pill--search" data-search="1" aria-label="Rechercher">🔍</button>` +
     `<button class="cat-pill ${!S.cat ? "cat-pill--active" : ""}" data-cat="">Tout</button>` +
     cats.map(c =>
       `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`
     ).join("");
-  pills.querySelectorAll(".cat-pill").forEach(btn => {
+
+  // ── Bouton recherche : ouvre un overlay plein écran ──
+  pills.querySelector(".cat-pill--search")?.addEventListener("click", () => openSearchOverlay());
+
+  pills.querySelectorAll(".cat-pill[data-cat]").forEach(btn => {
     btn.addEventListener("click", () => {
       S.cat = btn.dataset.cat;
       const sel = $("categorySelect");
       if(sel) sel.value = S.cat;
       S.shown[S.type] = PER_PAGE;
-      pills.querySelectorAll(".cat-pill").forEach(b =>
+      pills.querySelectorAll(".cat-pill[data-cat]").forEach(b =>
         b.classList.toggle("cat-pill--active", b.dataset.cat === S.cat)
       );
       // Revenir aux rangées Netflix si "Tout" est sélectionné et aucun filtre actif
@@ -1185,6 +1198,41 @@ function renderCatPills(cats){
       else           renderGrid(true);
     });
   });
+}
+
+// ── Overlay de recherche plein écran (TV-friendly) ──
+function openSearchOverlay(){
+  if($("searchOverlay")) return;
+  const ov = document.createElement("div");
+  ov.id = "searchOverlay";
+  ov.className = "search-overlay";
+  ov.innerHTML = `
+    <div class="search-overlay__box">
+      <h2 class="search-overlay__title">🔍 Rechercher</h2>
+      <input id="searchOverlayInput" type="search" autocomplete="off"
+             placeholder="Tapez un titre…" />
+      <div class="search-overlay__hint">Entrée : valider · Échap : fermer</div>
+    </div>`;
+  document.body.appendChild(ov);
+  const inp = $("searchOverlayInput");
+  inp.value = S.search || "";
+  setTimeout(() => inp.focus(), 50);
+  const close = () => { ov.remove(); document.querySelector(".cat-pill--search")?.focus(); };
+  inp.addEventListener("keydown", e => {
+    if(e.key === "Escape"){ e.preventDefault(); close(); }
+    else if(e.key === "Enter"){
+      e.preventDefault();
+      S.search = inp.value.trim();
+      $("searchInput").value = S.search;
+      S.shown[S.type] = PER_PAGE;
+      const useNetflix = !S.cat && !S.search && !S.quality;
+      const g = $("grid");
+      if(g) g.className = useNetflix ? "netflix-rows" : "grid";
+      if(useNetflix) renderNetflixRows(); else renderGrid(true);
+      close();
+    }
+  });
+  ov.addEventListener("click", e => { if(e.target === ov) close(); });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1249,7 +1297,6 @@ function initTV(){
     const currentRow = active?.closest(".nrow");
     const allRows    = [...document.querySelectorAll(".nrow")];
     const rowIdx     = allRows.indexOf(currentRow);
-    const isAllBtn   = active?.classList.contains("nrow-all");
 
     // ── Sur les nav-btns (top) : Films/Séries/TV ──
     if(isNavBtn){
@@ -1290,39 +1337,19 @@ function initTV(){
       return;
     }
 
-    // ── Gauche / Droite : navigation dans la bande horizontale ──
-    if(k === "ArrowRight"){
-      if(isAllBtn){
-        // "Voir tout" → première carte de cette rangée
-        const firstCard = currentRow?.querySelector(".nrow-card");
-        if(firstCard){ firstCard.focus(); firstCard.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"start" }); }
-      } else if(currentRow){
-        const cards = [...currentRow.querySelectorAll(".nrow-card")];
-        const ci    = cards.indexOf(active);
-        const next  = cards[ci + 1];
-        if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
-      }
-      return;
-    }
-
-    if(k === "ArrowLeft"){
-      if(!isAllBtn && currentRow){
-        const cards = [...currentRow.querySelectorAll(".nrow-card")];
-        const ci    = cards.indexOf(active);
-        if(ci > 0){
-          const prev = cards[ci - 1];
-          prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
-        } else {
-          // Première carte → bouton "Voir tout" de cette rangée
-          currentRow.querySelector(".nrow-all")?.focus();
-        }
-      }
+    // ── Gauche / Droite : navigation dans la bande (cartes + tuile Voir tout) ──
+    if(k === "ArrowRight" || k === "ArrowLeft"){
+      if(!currentRow) return;
+      const cards = [...currentRow.querySelectorAll(".nrow-card")];
+      const ci    = cards.indexOf(active);
+      if(ci < 0) return;
+      const next  = k === "ArrowRight" ? cards[ci + 1] : cards[ci - 1];
+      if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
       return;
     }
 
     // ── Haut / Bas : sauter entre les rangées ──
     if(rowIdx < 0){
-      // Actif hors d'une rangée → aller à la première rangée
       if(k === "ArrowDown"){
         const first = allRows[0]?.querySelector(".nrow-card");
         if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
@@ -1333,18 +1360,19 @@ function initTV(){
     let targetRow;
     if(k === "ArrowDown"){
       targetRow = allRows[rowIdx + 1];
-      if(!targetRow) return; // déjà à la dernière rangée
+      if(!targetRow) return;
     } else {
       targetRow = rowIdx > 0 ? allRows[rowIdx - 1] : null;
     }
 
     if(targetRow){
-      const target = isAllBtn
-        ? (targetRow.querySelector(".nrow-all") || targetRow.querySelector(".nrow-card"))
-        : targetRow.querySelector(".nrow-card");
+      // Garder la même position approximative dans la rangée cible
+      const cards   = [...currentRow.querySelectorAll(".nrow-card")];
+      const ci      = Math.max(0, cards.indexOf(active));
+      const tCards  = [...targetRow.querySelectorAll(".nrow-card")];
+      const target  = tCards[Math.min(ci, tCards.length - 1)] || tCards[0];
       if(target){ target.focus(); target.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
     } else {
-      // En haut de la première rangée → cat-pills, sinon nav-btns
       if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
     }
   }
