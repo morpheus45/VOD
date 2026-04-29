@@ -186,24 +186,6 @@ function openExternalPlayer(rawUrl){
   const old = document.getElementById("intentScreen");
   if(old) old.remove();
   const shell = document.querySelector(".player-shell");
-  if(shell){
-    shell.insertAdjacentHTML("beforeend", `
-      <div id="intentScreen" style="
-        position:fixed;inset:0;z-index:999;
-        background:linear-gradient(160deg,#05101f,#08182e);
-        display:flex;flex-direction:column;align-items:center;justify-content:center;
-        gap:20px;color:#fff;padding:32px;text-align:center;">
-        <div style="font-size:56px">▶</div>
-        <div style="font-size:20px;font-weight:700;max-width:320px">${escapeHtml(title)}</div>
-        <div style="font-size:14px;color:#8ca8cc">Ouverture dans le lecteur vidéo…</div>
-        <button onclick="history.back()" style="
-          margin-top:8px;padding:14px 32px;border-radius:14px;border:none;
-          background:linear-gradient(135deg,#ff3d5e,#ff9f2c);
-          color:#fff;font-size:16px;font-weight:700;cursor:pointer;">
-          ← Retour au catalogue
-        </button>
-      </div>`);
-  }
 
   // ── APK Android : appel direct via JavascriptInterface ──
   if(isNative && window.AndroidBridge?.openVideo){
@@ -212,13 +194,43 @@ function openExternalPlayer(rawUrl){
     return;
   }
 
-  // ── Chrome / PWA : intent: scheme ──
+  // ── Chrome / navigateur sans APK : intent: VLC + écran d'aide ──
   const encodedTitle = encodeURIComponent(title);
+  // Cibler VLC directement (package=org.videolan.vlc) pour éviter le sélecteur d'app
   window.location.href =
-    `intent:${httpUrl}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodedTitle};end`;
+    `intent:${httpUrl}#Intent;action=android.intent.action.VIEW;type=video/*;` +
+    `S.title=${encodedTitle};package=org.videolan.vlc;` +
+    `S.browser_fallback_url=https%3A%2F%2Fgithub.com%2Fmorpheus45%2FVOD%2Freleases%2Flatest;end`;
 
-  // Retour auto au catalogue si l'utilisateur revient dans Chrome
-  setTimeout(() => history.back(), 3000);
+  if(shell){
+    shell.insertAdjacentHTML("beforeend", `
+      <div id="intentScreen" style="
+        position:fixed;inset:0;z-index:999;
+        background:linear-gradient(160deg,#05101f,#08182e);
+        display:flex;flex-direction:column;align-items:center;justify-content:center;
+        gap:16px;color:#fff;padding:32px;text-align:center;">
+        <div style="font-size:52px">📺</div>
+        <div style="font-size:18px;font-weight:700;max-width:320px">${escapeHtml(title)}</div>
+        <div style="font-size:13px;color:#8ca8cc;max-width:300px;line-height:1.5">
+          Ouverture dans VLC…<br>
+          <span style="opacity:.7">Si rien ne s'ouvre, utilisez l'application PIPSILY :</span>
+        </div>
+        <a href="https://github.com/morpheus45/VOD/releases/latest" target="_blank"
+          style="display:inline-block;margin-top:4px;padding:13px 28px;border-radius:13px;border:none;
+          background:linear-gradient(135deg,#7B5FE8,#38A8E8);
+          color:#fff;font-size:15px;font-weight:700;text-decoration:none">
+          📥 Installer PIPSILY
+        </a>
+        <button onclick="history.back()" style="
+          padding:11px 28px;border-radius:12px;border:1px solid rgba(255,255,255,.15);
+          background:transparent;color:#8ca8cc;font-size:14px;cursor:pointer">
+          ← Retour au catalogue
+        </button>
+      </div>`);
+  }
+
+  // Retour auto si l'utilisateur revient dans Chrome après VLC
+  setTimeout(() => { if(document.getElementById("intentScreen")) history.back(); }, 4000);
 }
 
 // ─── Gestion d'erreur vidéo ────────────────────────────────────────────────────

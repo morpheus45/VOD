@@ -251,44 +251,48 @@ async function startSessionWatcher(userId){
 // ─────────────────────────────────────────────────────────────────
 async function ensureDevice(userId){
   if(!_supa) return { newDevice: false, blocked: false };
-  const deviceId   = getDeviceId();
-  const deviceName = getDeviceName();
+  try {
+    const deviceId   = getDeviceId();
+    const deviceName = getDeviceName();
 
-  const { data: existing } = await _supa
-    .from("devices")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("device_id", deviceId)
-    .single();
+    const { data: existing } = await _supa
+      .from("devices")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("device_id", deviceId)
+      .maybeSingle();  // maybeSingle ne throw pas si 0 ligne (contrairement à single)
 
-  if(existing){
-    // Mise à jour last_seen
-    await _supa.from("devices")
-      .update({ last_seen: new Date().toISOString() })
-      .eq("user_id", userId).eq("device_id", deviceId);
-    return { newDevice: false, blocked: false };
-  }
+    if(existing){
+      // Mise à jour last_seen
+      await _supa.from("devices")
+        .update({ last_seen: new Date().toISOString() })
+        .eq("user_id", userId).eq("device_id", deviceId);
+      return { newDevice: false, blocked: false };
+    }
 
-  // Nouvel appareil — vérifier la limite
-  const { data: prof } = await _supa
-    .from("profiles").select("devices_allowed, plan").eq("id", userId).single();
+    // Nouvel appareil — vérifier la limite
+    const { data: prof } = await _supa
+      .from("profiles").select("devices_allowed, plan").eq("id", userId).maybeSingle();
 
-  if(prof?.plan === "admin" || prof?.plan === "unlimited"){
-    // Pas de limite pour admin/illimité
+    if(prof?.plan === "admin" || prof?.plan === "unlimited"){
+      await _supa.from("devices").insert({ user_id: userId, device_id: deviceId, device_name: deviceName, monthly_fee: 0 });
+      return { newDevice: false, blocked: false };
+    }
+
+    const { count } = await _supa
+      .from("devices").select("*", { count: "exact" }).eq("user_id", userId);
+    const allowed = prof?.devices_allowed ?? 1;
+
+    if((count ?? 0) >= allowed){
+      return { newDevice: true, blocked: true, extra_cost: 1.50, current: count, allowed };
+    }
+
     await _supa.from("devices").insert({ user_id: userId, device_id: deviceId, device_name: deviceName, monthly_fee: 0 });
     return { newDevice: false, blocked: false };
+  } catch(e){
+    console.warn("[PIPSILY] ensureDevice:", e.message);
+    return { newDevice: false, blocked: false }; // en cas d'erreur → laisser passer
   }
-
-  const { count } = await _supa
-    .from("devices").select("*", { count: "exact" }).eq("user_id", userId);
-  const allowed = prof?.devices_allowed ?? 1;
-
-  if(count >= allowed){
-    return { newDevice: true, blocked: true, extra_cost: 1.50, current: count, allowed };
-  }
-
-  await _supa.from("devices").insert({ user_id: userId, device_id: deviceId, device_name: deviceName, monthly_fee: 0 });
-  return { newDevice: false, blocked: false };
 }
 
 async function addExtraDevice(userId){
