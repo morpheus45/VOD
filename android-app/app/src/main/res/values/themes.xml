@@ -10,9 +10,13 @@
         <item name="android:windowContentOverlay">@null</item>
     </style>
 
-    <!-- Thème Android TV : Leanback -->
-    <style name="Theme.Pipsiflix.TV" parent="Theme.AppCompat.Leanback">
+    <!-- Thème Android TV — on hérite simplement de NoActionBar
+         (le vrai Leanback theme nécessite des deps + ressources que
+         nous n'utilisons pas — TvActivity est juste une WebView). -->
+    <style name="Theme.Pipsiflix.TV" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowBackground">#060b16</item>
+        <item name="android:statusBarColor">#060b16</item>
+        <item name="android:navigationBarColor">#060b16</item>
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowContentOverlay">@null</item>
     </style>
