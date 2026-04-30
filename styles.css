@@ -781,43 +781,44 @@ button,select,input{ font:inherit }
   .section-title-row h2::before,.section-h2::before{ width:4px; height:16px }
   #catalogTitle{ display:none }   /* redondant en mode Netflix rows */
 
-  /* ── Grille catalogue (Live ou catégorie filtrée) ── */
-  .grid{ grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; padding:0 36px }
+  /* ── Grille catalogue (Live ou catégorie filtrée) — taille photo ── */
+  .grid{ grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:18px; padding:0 36px }
   .card{ border-radius:14px }
-  .card-title{ font-size:12px }
+  .card-title{ font-size:14px }
   .card-cat{ display:none }
-  .card-info{ padding:8px 10px 10px }
+  .card-info{ padding:10px 12px 12px }
 
-  /* ── Rangées Netflix ── */
-  .netflix-rows{ gap:18px; padding:0 36px }
-  .nrow-card{ flex:0 0 95px }
-  .nrow-media{ width:95px; height:142px; border-radius:8px }
-  .nrow-name{ font-size:10px }
-  .nrow-title{ font-size:14px; margin-bottom:4px }
-  .nrow-strip{ gap:6px; padding-bottom:6px }
+  /* ── Rangées Netflix — taille photo (180×270) ── */
+  .netflix-rows{ gap:24px; padding:0 36px }
+  .nrow-card{ flex:0 0 180px }
+  .nrow-media{ width:180px; height:270px; border-radius:10px }
+  .nrow-name{ font-size:13px }
+  .nrow-title{ font-size:18px; margin-bottom:8px }
+  .nrow-strip{ gap:10px; padding-bottom:10px }
+  .nrow-info{ padding:8px 4px 0; height:44px }
 
   /* ── Tuile "Voir tout" en fin de rangée ── */
   .nrow-all-tile{
     background:none; border:none; padding:0; cursor:pointer;
-    flex:0 0 95px;
+    flex:0 0 180px;
     display:flex; flex-direction:column;
   }
   .nrow-all-media{
-    width:95px; height:142px; border-radius:8px;
+    width:180px; height:270px; border-radius:10px;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:3px;
+    gap:6px;
     background:linear-gradient(135deg,rgba(123,95,232,.22),rgba(56,168,232,.18));
     border:2px dashed rgba(123,95,232,.5);
     transition:transform .2s, border-color .2s, background .2s;
   }
-  .nrow-all-arrow{ font-size:26px; color:#7B5FE8; line-height:1 }
-  .nrow-all-label{ font-size:11px; font-weight:800; color:#eef4ff }
-  .nrow-all-count{ font-size:10px; color:#7a9cc0; font-weight:600 }
+  .nrow-all-arrow{ font-size:42px; color:#7B5FE8; line-height:1 }
+  .nrow-all-label{ font-size:14px; font-weight:800; color:#eef4ff }
+  .nrow-all-count{ font-size:12px; color:#7a9cc0; font-weight:600 }
 
-  /* ── Nouveautés (rare) ── */
-  .nou-card{ flex:0 0 130px }
-  .nou-media{ width:130px; height:195px }
-  .nou-title{ font-size:11px }
+  /* ── Nouveautés ── */
+  .nou-card{ flex:0 0 180px }
+  .nou-media{ width:180px; height:270px }
+  .nou-title{ font-size:13px }
   .nou-date{ display:none }
 
   /* ── Panneau séries ── */
@@ -914,23 +915,25 @@ html.is-tv .content      { padding-top:130px }
 html.is-tv .section-block{ margin:0 36px 12px }
 html.is-tv .section-block:first-of-type{ margin-top:0 }
 html.is-tv #catalogTitle { display:none }
-html.is-tv .grid         { grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; padding:0 36px }
-html.is-tv .netflix-rows { gap:18px; padding:0 36px }
-html.is-tv .nrow-card    { flex:0 0 95px }
-html.is-tv .nrow-media   { width:95px; height:142px; border-radius:8px }
-html.is-tv .nrow-strip   { gap:6px; padding-bottom:6px }
-html.is-tv .nrow-title   { font-size:14px; margin-bottom:4px }
-html.is-tv .nrow-all-tile{ flex:0 0 95px }
+html.is-tv .grid         { grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:18px; padding:0 36px }
+html.is-tv .netflix-rows { gap:24px; padding:0 36px }
+html.is-tv .nrow-card    { flex:0 0 180px }
+html.is-tv .nrow-media   { width:180px; height:270px; border-radius:10px }
+html.is-tv .nrow-strip   { gap:10px; padding-bottom:10px }
+html.is-tv .nrow-info    { padding:8px 4px 0; height:44px }
+html.is-tv .nrow-name    { font-size:13px }
+html.is-tv .nrow-title   { font-size:18px; margin-bottom:8px }
+html.is-tv .nrow-all-tile{ flex:0 0 180px }
 html.is-tv .nrow-all-media{
-  width:95px; height:142px; border-radius:8px;
+  width:180px; height:270px; border-radius:10px;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:3px;
+  gap:6px;
   background:linear-gradient(135deg,rgba(123,95,232,.22),rgba(56,168,232,.18));
   border:2px dashed rgba(123,95,232,.5);
 }
-html.is-tv .nrow-all-arrow{ font-size:26px; color:#7B5FE8; line-height:1 }
-html.is-tv .nrow-all-label{ font-size:11px; font-weight:800; color:#eef4ff }
-html.is-tv .nrow-all-count{ font-size:10px; color:#7a9cc0; font-weight:600 }
+html.is-tv .nrow-all-arrow{ font-size:42px; color:#7B5FE8; line-height:1 }
+html.is-tv .nrow-all-label{ font-size:14px; font-weight:800; color:#eef4ff }
+html.is-tv .nrow-all-count{ font-size:12px; color:#7a9cc0; font-weight:600 }
 html.is-tv .card .fav-btn,
 html.is-tv .nrow-card .nrow-fav,
 html.is-tv .nrow-card .fav-btn,

@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v5.8 — pills collées, no update-bar, fluid play ║
+// ║  PIPSILY — app.js v5.9 — cards 180×270 + pills Live          ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -1190,7 +1190,7 @@ function render(){
 function renderCatPills(cats){
   const pills = $("catPills");
   if(!pills) return;
-  if(S.type === "live"){ pills.hidden = true; return; }
+  // Pills affichées dans tous les modes (Films / Séries / Live)
   pills.hidden = false;
   pills.innerHTML =
     `<button class="cat-pill cat-pill--search" data-search="1" aria-label="Rechercher">🔍</button>` +
