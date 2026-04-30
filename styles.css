@@ -781,53 +781,54 @@ button,select,input{ font:inherit }
   .section-title-row h2::before,.section-h2::before{ width:4px; height:16px }
   #catalogTitle{ display:none }   /* redondant en mode Netflix rows */
 
-  /* ── TAILLE UNIFORME 130×195 PARTOUT (photo de référence) ── */
-  /* Grille catalogue : colonnes FIXES 130px (pas de stretching 1fr) */
-  .grid{ grid-template-columns:repeat(auto-fill,130px); justify-content:flex-start;
-         gap:16px 12px; padding:0 36px }
-  .card{ border-radius:10px; max-width:130px }
-  .card-title{ font-size:12px; line-height:1.3 }
+  /* ── TAILLE UNIFORME 110×165 PARTOUT (plus compact, ~8 cards/rangée) ── */
+  .grid{ grid-template-columns:repeat(auto-fill,110px); justify-content:flex-start;
+         gap:14px 10px; padding:0 36px }
+  .card{ border-radius:8px; max-width:110px }
+  .card-title{ font-size:11px; line-height:1.3 }
   .card-cat{ display:none }
-  .card-info{ padding:8px 4px 0 }
-  .card-media{ height:195px }
+  .card-info{ padding:6px 3px 0 }
+  .card-media{ height:165px }
 
-  /* Rangées Netflix : cards 130×195 (alignées sur la photo) */
-  .netflix-rows{ gap:18px; padding:0 36px }
-  .nrow-card{ flex:0 0 130px }
-  .nrow-media{ width:130px; height:195px; border-radius:10px }
-  .nrow-name{ font-size:12px }
-  .nrow-title{ font-size:16px; margin-bottom:6px }
-  .nrow-strip{ gap:8px; padding-bottom:8px }
-  .nrow-info{ padding:6px 2px 0; height:38px }
+  /* Rangées Netflix : 110×165 */
+  .netflix-rows{ gap:16px; padding:0 36px }
+  .nrow-card{ flex:0 0 110px }
+  .nrow-media{ width:110px; height:165px; border-radius:8px }
+  .nrow-name{ font-size:11px }
+  .nrow-title{ font-size:15px; margin-bottom:5px }
+  .nrow-strip{ gap:7px; padding-bottom:7px }
+  .nrow-info{ padding:5px 2px 0; height:34px }
 
-  /* Tuile "Voir tout" : même taille */
+  /* Tuile "Voir tout" */
   .nrow-all-tile{
     background:none; border:none; padding:0; cursor:pointer;
-    flex:0 0 130px;
+    flex:0 0 110px;
     display:flex; flex-direction:column;
   }
   .nrow-all-media{
-    width:130px; height:195px; border-radius:10px;
+    width:110px; height:165px; border-radius:8px;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:4px;
+    gap:3px;
     background:linear-gradient(135deg,rgba(123,95,232,.22),rgba(56,168,232,.18));
     border:2px dashed rgba(123,95,232,.5);
     transition:transform .2s, border-color .2s, background .2s;
   }
-  .nrow-all-arrow{ font-size:34px; color:#7B5FE8; line-height:1 }
-  .nrow-all-label{ font-size:12px; font-weight:800; color:#eef4ff }
-  .nrow-all-count{ font-size:11px; color:#7a9cc0; font-weight:600 }
+  .nrow-all-arrow{ font-size:28px; color:#7B5FE8; line-height:1 }
+  .nrow-all-label{ font-size:11px; font-weight:800; color:#eef4ff }
+  .nrow-all-count{ font-size:10px; color:#7a9cc0; font-weight:600 }
 
-  /* Nouveautés : même taille */
-  .nou-card{ flex:0 0 130px }
-  .nou-media{ width:130px; height:195px }
-  .nou-title{ font-size:12px }
+  /* Nouveautés */
+  .nou-card{ flex:0 0 110px }
+  .nou-media{ width:110px; height:165px }
+  .nou-title{ font-size:11px }
   .nou-date{ display:none }
 
-  /* Grid Live : MÊME taille — pas de différence avec les Films */
-  .grid--live{ grid-template-columns:repeat(auto-fill,130px) !important; gap:16px 12px !important }
-  .grid--live .card{ max-width:130px }
-  .grid--live .card-media{ height:195px }
+  /* Grid Live : MÊME taille */
+  .grid--live{ grid-template-columns:repeat(auto-fill,110px) !important; gap:14px 10px !important }
+  .grid--live .card{ max-width:110px }
+  .grid--live .card-media{ height:165px }
+  /* Logos chaînes Live : padding pour éviter les coupures */
+  .grid--live .card-media img{ object-fit:contain !important; padding:10px !important; background:#0a1422 }
 
   /* ── Panneau séries ── */
   .series-panel{ width:min(560px,94vw) }
@@ -923,33 +924,34 @@ html.is-tv .content      { padding-top:130px }
 html.is-tv .section-block{ margin:0 36px 12px }
 html.is-tv .section-block:first-of-type{ margin-top:0 }
 html.is-tv #catalogTitle { display:none }
-html.is-tv .grid         { grid-template-columns:repeat(auto-fill,130px); justify-content:flex-start;
-                           gap:16px 12px; padding:0 36px }
-html.is-tv .grid--live   { grid-template-columns:repeat(auto-fill,130px) !important; gap:16px 12px !important }
-html.is-tv .grid--live .card{ max-width:130px }
-html.is-tv .grid--live .card-media{ height:195px }
-html.is-tv .card        { max-width:130px; border-radius:10px }
-html.is-tv .card-media  { height:195px }
-html.is-tv .card-title  { font-size:12px; line-height:1.3 }
-html.is-tv .card-info   { padding:8px 4px 0 }
-html.is-tv .netflix-rows { gap:18px; padding:0 36px }
-html.is-tv .nrow-card    { flex:0 0 130px }
-html.is-tv .nrow-media   { width:130px; height:195px; border-radius:10px }
-html.is-tv .nrow-strip   { gap:8px; padding-bottom:8px }
-html.is-tv .nrow-info    { padding:6px 2px 0; height:38px }
-html.is-tv .nrow-name    { font-size:12px }
-html.is-tv .nrow-title   { font-size:16px; margin-bottom:6px }
-html.is-tv .nrow-all-tile{ flex:0 0 130px }
+html.is-tv .grid         { grid-template-columns:repeat(auto-fill,110px); justify-content:flex-start;
+                           gap:14px 10px; padding:0 36px }
+html.is-tv .grid--live   { grid-template-columns:repeat(auto-fill,110px) !important; gap:14px 10px !important }
+html.is-tv .grid--live .card{ max-width:110px }
+html.is-tv .grid--live .card-media{ height:165px }
+html.is-tv .grid--live .card-media img{ object-fit:contain !important; padding:10px !important; background:#0a1422 }
+html.is-tv .card        { max-width:110px; border-radius:8px }
+html.is-tv .card-media  { height:165px }
+html.is-tv .card-title  { font-size:11px; line-height:1.3 }
+html.is-tv .card-info   { padding:6px 3px 0 }
+html.is-tv .netflix-rows { gap:16px; padding:0 36px }
+html.is-tv .nrow-card    { flex:0 0 110px }
+html.is-tv .nrow-media   { width:110px; height:165px; border-radius:8px }
+html.is-tv .nrow-strip   { gap:7px; padding-bottom:7px }
+html.is-tv .nrow-info    { padding:5px 2px 0; height:34px }
+html.is-tv .nrow-name    { font-size:11px }
+html.is-tv .nrow-title   { font-size:15px; margin-bottom:5px }
+html.is-tv .nrow-all-tile{ flex:0 0 110px }
 html.is-tv .nrow-all-media{
-  width:130px; height:195px; border-radius:10px;
+  width:110px; height:165px; border-radius:8px;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:4px;
+  gap:3px;
   background:linear-gradient(135deg,rgba(123,95,232,.22),rgba(56,168,232,.18));
   border:2px dashed rgba(123,95,232,.5);
 }
-html.is-tv .nrow-all-arrow{ font-size:34px; color:#7B5FE8; line-height:1 }
-html.is-tv .nrow-all-label{ font-size:12px; font-weight:800; color:#eef4ff }
-html.is-tv .nrow-all-count{ font-size:11px; color:#7a9cc0; font-weight:600 }
+html.is-tv .nrow-all-arrow{ font-size:28px; color:#7B5FE8; line-height:1 }
+html.is-tv .nrow-all-label{ font-size:11px; font-weight:800; color:#eef4ff }
+html.is-tv .nrow-all-count{ font-size:10px; color:#7a9cc0; font-weight:600 }
 html.is-tv .card .fav-btn,
 html.is-tv .nrow-card .nrow-fav,
 html.is-tv .nrow-card .fav-btn,
@@ -994,6 +996,57 @@ html.is-tv .update-bar__date{ display:none }
 }
 #searchOverlayInput:focus{ border-color:#7B5FE8; box-shadow:0 0 0 4px rgba(123,95,232,.2) }
 .search-overlay__hint{ margin-top:14px; color:#7a9cc0; font-size:13px; text-align:center }
+
+/* ── Picker qualité Live (SD / FHD / HEVC etc.) ── */
+.live-picker{
+  position:fixed; inset:0; z-index:9999;
+  background:rgba(5,8,15,.92); backdrop-filter:blur(20px);
+  display:flex; align-items:center; justify-content:center; padding:20px;
+  animation:fadeIn .15s ease;
+}
+.live-picker__box{
+  width:min(560px,94vw); padding:28px 28px 22px;
+  background:linear-gradient(135deg,#0c1422,#0a1828);
+  border:1px solid rgba(123,95,232,.3);
+  border-radius:22px; box-shadow:0 30px 80px rgba(0,0,0,.8);
+  text-align:center;
+}
+.live-picker__title{
+  margin:0 0 6px; color:#eef4ff;
+  font-size:22px; font-weight:800; letter-spacing:-.3px;
+}
+.live-picker__sub{
+  color:#7a9cc0; font-size:13px; margin-bottom:20px;
+}
+.live-picker__grid{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px;
+  margin-bottom:18px;
+}
+.live-picker__btn{
+  display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:18px 12px; border-radius:14px;
+  border:2px solid rgba(123,95,232,.35);
+  background:rgba(123,95,232,.10);
+  color:#eef4ff; font-family:inherit; cursor:pointer;
+  transition:transform .15s, background .2s, border-color .2s;
+}
+.live-picker__btn:hover{ background:rgba(123,95,232,.22) }
+.live-picker__btn:focus{
+  outline:none;
+  border-color:#7B5FE8;
+  background:linear-gradient(135deg,rgba(123,95,232,.4),rgba(56,168,232,.3));
+  box-shadow:0 0 0 4px rgba(123,95,232,.25);
+  transform:scale(1.04);
+}
+.live-picker__qual{ font-size:18px; font-weight:900; letter-spacing:.04em; color:#fff }
+.live-picker__hint{ font-size:10px; color:#7a9cc0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.live-picker__close{
+  width:100%; padding:11px; border-radius:11px;
+  border:1px solid rgba(255,255,255,.12);
+  background:transparent; color:#7a9cc0; font-size:13px; cursor:pointer;
+}
+.live-picker__close:hover{ color:#eef4ff; border-color:rgba(255,255,255,.25) }
+.live-picker__close:focus{ outline:none; border-color:#7B5FE8; color:#fff }
 
 /* Focus visible générique (mobile/desktop) */
 :focus-visible{

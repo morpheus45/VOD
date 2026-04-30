@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.0 — cards 130×195 partout (photo réf)   ║
+// ║  PIPSILY — app.js v6.1 — cards 110×165 + groupage Live      ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -928,7 +928,99 @@ function filtered(){
     items.sort((a,b) => a.category_name.localeCompare(b.category_name)||a.title.localeCompare(b.title));
   else if(S.sort !== "recent")
     items.sort((a,b) => a.title.localeCompare(b.title));
+
+  // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
+  if(S.type === "live") items = groupLiveItems(items);
+
   return items;
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  GROUPAGE LIVE PAR NOM DE BASE — SD/FHD/HEVC etc. → 1 seule carte
+// ─────────────────────────────────────────────────────────────────
+const _QUAL_ORDER = ["4K","UHD","FHD","HD","HEVC","SD"];
+const _QUAL_RE    = /[\s\[\(]+(SD|HD|FHD|UHD|4K|8K|HEVC|H\.?265|H\.?264|1080p?|720p?|2160p?)\b\]?\)?/gi;
+
+function _parseLiveQuality(title){
+  if(!title) return null;
+  const matches = [...title.matchAll(_QUAL_RE)].map(m => m[1].toUpperCase());
+  for(const q of _QUAL_ORDER) if(matches.includes(q)) return q;
+  return matches[0] || null;
+}
+function _baseLiveName(title){
+  if(!title) return "";
+  return title.replace(_QUAL_RE, "").replace(/\s+/g, " ").trim();
+}
+
+function groupLiveItems(items){
+  const groups = new Map();
+  items.forEach(item => {
+    const base = _baseLiveName(item.title) || item.title;
+    const qual = _parseLiveQuality(item.title);
+    if(!groups.has(base)){
+      groups.set(base, {
+        ...item,
+        title: base,
+        type: "live",
+        _variants: [],
+        _iconRank: 999
+      });
+    }
+    const g = groups.get(base);
+    g._variants.push({ quality: qual || "Auto", item });
+    // Garder l'icône de la meilleure qualité (FHD préférée)
+    const rank = qual ? _QUAL_ORDER.indexOf(qual) : 99;
+    if(rank >= 0 && rank < g._iconRank && item.stream_icon){
+      g.stream_icon = item.stream_icon;
+      g._iconRank = rank;
+    }
+  });
+  // Trier les variantes par préférence de qualité
+  groups.forEach(g => {
+    g._variants.sort((a,b) => {
+      const ra = _QUAL_ORDER.indexOf(a.quality); const rb = _QUAL_ORDER.indexOf(b.quality);
+      return (ra < 0 ? 99 : ra) - (rb < 0 ? 99 : rb);
+    });
+  });
+  return [...groups.values()];
+}
+
+// ── Sélecteur de qualité Live (overlay) ──
+function openLivePicker(group){
+  if(document.getElementById("livePicker")) return;
+  const ov = document.createElement("div");
+  ov.id = "livePicker";
+  ov.className = "live-picker";
+  ov.innerHTML = `
+    <div class="live-picker__box">
+      <h2 class="live-picker__title">${esc(group.title)}</h2>
+      <div class="live-picker__sub">Choisissez la qualité de diffusion</div>
+      <div class="live-picker__grid">
+        ${group._variants.map((v,i) => `
+          <button class="live-picker__btn" data-idx="${i}">
+            <span class="live-picker__qual">${esc(v.quality)}</span>
+            <span class="live-picker__hint">${esc(v.item.title)}</span>
+          </button>`).join("")}
+      </div>
+      <button class="live-picker__close" id="livePickerClose">✕ Fermer</button>
+    </div>`;
+  document.body.appendChild(ov);
+  // Focus auto sur la 1ère qualité (TV/D-pad)
+  setTimeout(() => ov.querySelector(".live-picker__btn")?.focus(), 50);
+
+  const close = () => ov.remove();
+  ov.querySelectorAll(".live-picker__btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.idx);
+      close();
+      playItem(group._variants[idx].item);
+    });
+  });
+  document.getElementById("livePickerClose").addEventListener("click", close);
+  ov.addEventListener("click", e => { if(e.target === ov) close(); });
+  ov.addEventListener("keydown", e => {
+    if(e.key === "Escape" || e.key === "GoBack" || e.key === "Back"){ e.preventDefault(); close(); }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -982,7 +1074,11 @@ function renderGrid(reset = false){
 
     const activate = () => {
       if(item.type === "series") openPanel(item);
-      else if(item.type === "live") playItem(item);   // lecture directe pour live
+      else if(item.type === "live"){
+        // Si plusieurs qualités → picker, sinon lecture directe
+        if(item._variants && item._variants.length > 1) openLivePicker(item);
+        else playItem(item._variants?.[0]?.item || item);
+      }
       else openVodPanel(item);
     };
     card.addEventListener("click", activate);
