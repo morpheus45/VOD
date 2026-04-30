@@ -29,7 +29,7 @@ import androidx.appcompat.app.AppCompatActivity;
 public class MainActivity extends AppCompatActivity {
 
     private static final String APP_URL      = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION  = "6";
+    private static final String APK_VERSION  = "7";
 
     WebView     webView;      // package-private pour le bridge
     ProgressBar progressBar;
@@ -152,20 +152,44 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /** Ouvre une URL vidéo dans le lecteur système (VLC, MX Player…) */
+    /** Ouvre une URL vidéo dans un lecteur système (VLC, MX Player…)
+     *  Si AUCUNE app vidéo n'est installée, fallback sur player.html (WebView). */
     void openVideoIntent(String url) {
         try {
-            // Forcer HTTP (les serveurs IPTV sont souvent HTTP uniquement)
-            String httpUrl = url.replaceAll("(?i)^https://", "http://");
+            // Garder l'URL telle quelle — les serveurs HTTPS DOIVENT rester HTTPS
+            // (sinon mixed-content sur la WebView). Pour HTTP cleartext, configuré
+            // dans network_security_config.xml.
             Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(Uri.parse(httpUrl), "video/*");
+            intent.setDataAndType(Uri.parse(url), "video/*");
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
+
+            // Vérifier qu'au moins une app peut gérer l'intent AVANT de démarrer
+            if (intent.resolveActivity(getPackageManager()) == null) {
+                fallbackToWebPlayer(url);
+                return;
+            }
+
+            // Chooser : laisse l'utilisateur choisir VLC / MX Player / etc.
+            Intent chooser = Intent.createChooser(intent, "Lire avec…");
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(chooser);
         } catch (Exception e) {
-            // Aucun lecteur → navigateur
-            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
-            catch (Exception ignored) {}
+            // Toute erreur → fallback player.html
+            fallbackToWebPlayer(url);
         }
+    }
+
+    /** Fallback : ouvre player.html dans la WebView (lecture HTML5 / HLS.js) */
+    private void fallbackToWebPlayer(String url) {
+        runOnUiThread(() -> {
+            try {
+                if (webView != null) {
+                    // player.html lit l'URL depuis sessionStorage,
+                    // déjà rempli par app.js avant l'appel à openInVlc.
+                    webView.loadUrl(APP_URL + "player.html");
+                }
+            } catch (Exception ignored) {}
+        });
     }
 
     private boolean isVideoUrl(String url) {

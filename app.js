@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v5.6 — Voir tout tuile + recherche TV     ║
+// ║  PIPSILY — app.js v5.7 — TV compact + Wero + admin          ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -864,8 +864,16 @@ async function playItem(item){
   const title  = item.title || "";
   const isLive = item.type === "live";
 
-  // APK Android v4+ : lecteur VLC embarqué
-  // Sur Android TV : on garde le player.html car VLC bridge peut planter
+  // ── Toujours pré-remplir sessionStorage : si le bridge VLC échoue
+  //    et que le natif retombe sur player.html, l'item est déjà prêt ──
+  sessionStorage.setItem("iptv_current_item", JSON.stringify({
+    ...item,
+    stream_url : item.stream_url || item.url,
+    url        : item.url || item.stream_url
+  }));
+
+  // APK Android v4+ : tente le lecteur VLC/MX externe
+  // Sur Android TV : player.html (souvent pas de VLC installé)
   const isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
                (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
 
@@ -873,18 +881,13 @@ async function playItem(item){
      && typeof window.AndroidBridge.openInVlc === "function"){
     try {
       window.AndroidBridge.openInVlc(url, title, isLive);
-      return;
+      return; // si l'APK ne trouve pas de lecteur, il retombera sur player.html
     } catch(e) {
       console.warn("VLC bridge error:", e);
     }
   }
 
-  // Fallback : player.html (TV / navigateur / APK < v4)
-  sessionStorage.setItem("iptv_current_item", JSON.stringify({
-    ...item,
-    stream_url : item.stream_url || item.url,
-    url        : item.url || item.stream_url
-  }));
+  // Fallback direct : player.html (TV / navigateur / APK < v4)
   window.location.href = "player.html";
 }
 

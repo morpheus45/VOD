@@ -15,6 +15,13 @@ const SUPABASE_ANON = "sb_publishable_cNZ37Mjd57b_9nlyCvtkkA_wSIszOMR";
 const ADMIN_EMAIL   = "cedric.lago@gmail.com";
 
 // ─────────────────────────────────────────────────────────────────
+//  PAIEMENT WERO — modifiez ces valeurs avec VOTRE numéro Wero
+//  (l'utilisateur verra ces infos sur la page "Mon compte")
+// ─────────────────────────────────────────────────────────────────
+const WERO_PHONE = "06 12 34 56 78";   // ← REMPLACEZ par votre vrai numéro
+const WERO_NAME  = "PIPSILY";          // ← Nom du bénéficiaire (visible côté payeur)
+
+// ─────────────────────────────────────────────────────────────────
 //  DÉTECTION CONFIG
 // ─────────────────────────────────────────────────────────────────
 const _configured = !SUPABASE_URL.includes("VOTRE_PROJET") && !SUPABASE_ANON.includes("VOTRE_ANON");
@@ -579,6 +586,8 @@ function _showSessionExpired(){
 window.PIPSILY_AUTH = {
   supabase           : _supa,
   ADMIN_EMAIL,
+  WERO_PHONE,
+  WERO_NAME,
   getSession,
   signIn,
   signUp,

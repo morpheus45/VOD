@@ -28,7 +28,7 @@ import androidx.fragment.app.FragmentActivity;
 public class TvActivity extends FragmentActivity {
 
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "6";
+    private static final String APK_VERSION = "7";
 
     WebView webView;
 
@@ -121,15 +121,26 @@ public class TvActivity extends FragmentActivity {
 
     void openVideoIntent(String url) {
         try {
-            String httpUrl = url.replaceAll("(?i)^https://", "http://");
             Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setDataAndType(Uri.parse(httpUrl), "video/*");
+            i.setDataAndType(Uri.parse(url), "video/*");
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
+            if (i.resolveActivity(getPackageManager()) == null) {
+                fallbackToWebPlayer(); return;
+            }
+            Intent chooser = Intent.createChooser(i, "Lire avec…");
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(chooser);
         } catch (Exception e) {
-            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); }
-            catch (Exception ignored) {}
+            fallbackToWebPlayer();
         }
+    }
+
+    private void fallbackToWebPlayer() {
+        runOnUiThread(() -> {
+            try {
+                if (webView != null) webView.loadUrl(APP_URL + "player.html");
+            } catch (Exception ignored) {}
+        });
     }
 
     private boolean isVideoUrl(String url) {

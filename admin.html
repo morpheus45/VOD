@@ -191,7 +191,7 @@
       }
       const [{ data: users }, { data: payments }, { data: devices }, { data: sessions }] = await Promise.all([
         A.supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-        A.supabase.from("payments").select("*"),
+        A.supabase.from("payments").select("*").order("created_at", { ascending: false }),
         A.supabase.from("devices").select("*"),
         A.supabase.from("sessions").select("*").order("last_seen", { ascending: false })
       ]);
@@ -199,6 +199,7 @@
       _allUsers    = users    || [];
       window._allDevices  = devices  || [];
       window._allSessions = sessions || [];
+      window._allPayments = payments || [];
       renderAdmin(users || [], payments || [], devices || [], sessions || []);
     }
 
@@ -239,6 +240,8 @@
       });
       const revenue   = calcMonthlyRevenue(users, devices);
       const connected = (sessions||[]).length;
+      // Paiements en attente de confirmation (Wero déclaré par utilisateur)
+      const pendingPayments = (payments||[]).filter(p => !p.confirmed_at);
 
       document.getElementById("adminContent").innerHTML = `
         <!-- Stats -->
@@ -272,6 +275,44 @@
             <div class="stat-label">Revenus/an (est.)</div>
           </div>
         </div>
+
+        ${pendingPayments.length === 0 ? "" : `
+        <!-- ── Paiements Wero en attente ── -->
+        <div class="card" style="border-color:rgba(56,168,232,.4);background:rgba(56,168,232,.05)">
+          <div class="card-title" style="color:#38A8E8">
+            💰 Paiements en attente de confirmation (${pendingPayments.length})
+          </div>
+          <p style="font-size:13px;color:#7a9cc0;margin-bottom:14px;line-height:1.5">
+            Vérifiez la réception sur votre application Wero, puis cliquez sur
+            <strong style="color:#6ef7b0">Confirmer</strong> pour activer le compte 30 jours.
+          </p>
+          ${pendingPayments.map(p => {
+            const u = users.find(x => x.id === p.user_id);
+            return `
+              <div style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:8px;
+                border-radius:12px;background:rgba(56,168,232,.08);border:1px solid rgba(56,168,232,.25);
+                flex-wrap:wrap">
+                <div style="flex:1;min-width:180px">
+                  <div style="font-size:13px;font-weight:700;color:#eef4ff">${u?.email || p.user_id}</div>
+                  <div style="font-size:11px;color:#7a9cc0;margin-top:3px">
+                    Déclaré ${fmtRelative(p.created_at)} · ${p.notes || ""}
+                  </div>
+                </div>
+                <div style="font-size:18px;font-weight:900;color:#6ef7b0">${fmtMoney(p.amount)}</div>
+                <div style="display:flex;gap:6px">
+                  <button class="action-btn action-btn--green" style="flex:0 0 auto;padding:9px 16px"
+                    onclick="confirmPayment('${p.id}','${p.user_id}',${p.amount})">
+                    ✓ Confirmer
+                  </button>
+                  <button class="action-btn action-btn--red" style="flex:0 0 auto;padding:9px 12px"
+                    onclick="rejectPayment('${p.id}')">
+                    ✕ Rejeter
+                  </button>
+                </div>
+              </div>`;
+          }).join("")}
+        </div>
+        `}
 
         <!-- Créer un compte -->
         <div class="card">
@@ -368,6 +409,8 @@
                   <button class="action-btn action-btn--blue"   onclick="setUnlimited('${u.id}')">Illimité</button>
                   <button class="action-btn action-btn--gold"   onclick="setTest('${u.id}')">Test 7j</button>
                   <button class="action-btn action-btn--red"    onclick="deactivate('${u.id}')">Bloquer</button>
+                  <button class="action-btn" style="background:rgba(232,51,74,.25);color:#ff8899;border:1px solid rgba(232,51,74,.5);font-weight:800"
+                    onclick="deleteUser('${u.id}', ${JSON.stringify(u.email||"").replace(/"/g, '&quot;')})">🗑 Supprimer</button>
                 </div>`
             }
           </div>`;
@@ -451,6 +494,62 @@
       await A.supabase.from("profiles").update({ plan:"pending", subscription_expires_at: null }).eq("id",userId);
       showGlobalMsg("✓ Utilisateur bloqué");
       loadAdmin();
+    }
+
+    // ── Suppression complète d'un compte ──
+    async function deleteUser(userId, email){
+      if(!confirm(`⚠ Supprimer DÉFINITIVEMENT le compte de ${email} ?\n\nCette action :\n• Supprime le profil et l'historique de paiements\n• Déconnecte tous les appareils\n• Est IRRÉVERSIBLE\n\nConfirmer ?`)) return;
+      if(!confirm(`Dernière confirmation : supprimer ${email} ?`)) return;
+      try {
+        // Cascade : supprimer profile → cascade kill devices/sessions/payments grâce aux FK
+        // (on supprime aussi explicitement par sécurité au cas où les FK ne sont pas configurées)
+        await A.supabase.from("sessions").delete().eq("user_id", userId);
+        await A.supabase.from("devices").delete().eq("user_id", userId);
+        await A.supabase.from("payments").delete().eq("user_id", userId);
+        const { error } = await A.supabase.from("profiles").delete().eq("id", userId);
+        if(error) throw error;
+        showGlobalMsg("✓ Compte supprimé : " + email);
+        loadAdmin();
+      } catch(err){
+        alert("Erreur : " + err.message);
+      }
+    }
+
+    // ── Confirmation paiement Wero : marque payé + active le compte 30j ──
+    async function confirmPayment(paymentId, userId, amount){
+      if(!confirm(`Confirmer la réception de ${amount.toFixed(2).replace(".",",")} € via Wero ?\n\nLe compte sera activé pour 30 jours.`)) return;
+      try {
+        const expAt = new Date(Date.now() + 30*24*3600*1000).toISOString();
+        // 1. Marquer le paiement comme confirmé
+        await A.supabase.from("payments").update({
+          confirmed_at: new Date().toISOString(),
+          confirmed_by: _session.user.id,
+          period_start: new Date().toISOString().slice(0,10),
+          period_end:   expAt.slice(0,10)
+        }).eq("id", paymentId);
+        // 2. Activer le profil utilisateur
+        await A.supabase.from("profiles").update({
+          plan: "active",
+          subscription_expires_at: expAt
+        }).eq("id", userId);
+        showGlobalMsg("✓ Paiement confirmé · compte activé 30 jours");
+        loadAdmin();
+      } catch(err){
+        alert("Erreur : " + err.message);
+      }
+    }
+
+    // ── Rejet paiement (utilisateur n'a pas vraiment payé) ──
+    async function rejectPayment(paymentId){
+      if(!confirm("Rejeter ce paiement ? L'utilisateur pourra à nouveau cliquer 'J'ai payé'.")) return;
+      try {
+        const { error } = await A.supabase.from("payments").delete().eq("id", paymentId);
+        if(error) throw error;
+        showGlobalMsg("✓ Paiement rejeté");
+        loadAdmin();
+      } catch(err){
+        alert("Erreur : " + err.message);
+      }
     }
 
     function showMsg(el, type, text){

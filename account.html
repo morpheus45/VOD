@@ -188,12 +188,52 @@
           <div class="info-row">
             <span class="info-label">Total mensuel</span>
             <span class="info-value" style="color:#38A8E8;font-size:15px;font-weight:800">${monthlyTotal.toFixed(2).replace(".",",")} €</span>
-          </div>
-          <div style="margin-top:14px;padding:14px;border-radius:12px;background:rgba(59,124,244,.07);border:1px solid rgba(59,124,244,.15);font-size:13px;color:#82b4ff;line-height:1.6">
-            💳 Pour renouveler votre abonnement, contactez l'administrateur.
-            <br>Le renouvellement sera activé après confirmation du paiement.
           </div>`}
         </div>
+
+        ${prof.plan === "admin" || prof.plan === "unlimited" ? "" : `
+        <!-- ── Paiement Wero ── -->
+        <div class="card" id="weroCard">
+          <div class="card-title">💳 Payer avec Wero</div>
+          <p style="font-size:13px;color:#7a9cc0;line-height:1.6;margin-bottom:14px">
+            Wero est l'appli de paiement instantané intégrée à votre banque
+            (Crédit Agricole, BNP, Société Générale, La Banque Postale, etc.).
+            Le paiement est gratuit et instantané.
+          </p>
+          <div style="background:rgba(56,168,232,.08);border:1px solid rgba(56,168,232,.25);border-radius:12px;padding:16px;margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:12px;color:#7a9cc0">Bénéficiaire</span>
+              <span style="font-size:13px;font-weight:700;color:#eef4ff" id="weroName">${A.WERO_NAME || "PIPSILY"}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:12px;color:#7a9cc0">Numéro de téléphone</span>
+              <span style="font-size:14px;font-weight:800;color:#38A8E8;font-family:monospace" id="weroPhone">${A.WERO_PHONE || "06 12 34 56 78"}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+              <span style="font-size:12px;color:#7a9cc0">Montant à payer</span>
+              <span style="font-size:18px;font-weight:900;color:#6ef7b0">${monthlyTotal.toFixed(2).replace(".",",")} €</span>
+            </div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="font-size:12px;color:#7a9cc0">Référence à indiquer</span>
+              <span style="font-size:12px;font-weight:700;color:#eef4ff;font-family:monospace">${session.user.email}</span>
+            </div>
+          </div>
+          <ol style="font-size:13px;color:#7a9cc0;line-height:1.8;padding-left:18px;margin-bottom:14px">
+            <li>Ouvrez l'appli Wero (ou votre banque)</li>
+            <li>Envoyez <strong style="color:#6ef7b0">${monthlyTotal.toFixed(2).replace(".",",")} €</strong> au numéro <strong style="color:#38A8E8;font-family:monospace">${A.WERO_PHONE || "06 12 34 56 78"}</strong></li>
+            <li>Indiquez votre e-mail en référence : <strong style="color:#eef4ff">${session.user.email}</strong></li>
+            <li>Cliquez sur "J'ai payé" ci-dessous</li>
+          </ol>
+          <button class="btn btn-primary" id="paidBtn" onclick="declarePayment(${monthlyTotal})" style="width:100%">
+            ✅ J'ai payé ${monthlyTotal.toFixed(2).replace(".",",")} €
+          </button>
+          <div class="msg" id="payMsg"></div>
+          <p style="font-size:11px;color:#7a9cc0;margin-top:10px;text-align:center;line-height:1.5">
+            Une fois le paiement reçu et confirmé, votre compte sera activé pour 30 jours.<br>
+            <strong>Activation généralement en moins d'1 heure.</strong>
+          </p>
+        </div>
+        `}
 
         <!-- Appareils -->
         <div class="card">
@@ -278,6 +318,39 @@
     async function logout(){
       await A.signOut();
       window.location.href = "./login.html";
+    }
+
+    // ── Déclaration de paiement Wero (statut "en attente" jusqu'à confirmation admin) ──
+    async function declarePayment(amount){
+      const btn = document.getElementById("paidBtn");
+      const msg = document.getElementById("payMsg");
+      btn.disabled = true; btn.textContent = "Envoi…";
+      try {
+        if(!A.supabase) throw new Error("Supabase non configuré");
+        // Vérifier qu'il n'y a pas déjà un paiement en attente
+        const { data: existing } = await A.supabase.from("payments")
+          .select("id").eq("user_id", window._userId).is("confirmed_at", null);
+        if(existing && existing.length > 0){
+          showMsg(msg, "error", "Un paiement est déjà en attente de confirmation. Patientez ou contactez l'administrateur.");
+          btn.disabled = false; btn.textContent = `✅ J'ai payé ${amount.toFixed(2).replace(".",",")} €`;
+          return;
+        }
+        const { error } = await A.supabase.from("payments").insert({
+          user_id: window._userId,
+          amount: amount,
+          type: "subscription",
+          notes: "Paiement Wero déclaré par l'utilisateur — en attente de confirmation",
+          confirmed_at: null
+        });
+        if(error) throw error;
+        showMsg(msg, "success",
+          "✅ Paiement déclaré ! L'administrateur sera notifié et activera votre compte après vérification (généralement en moins d'1 heure).");
+        btn.textContent = "⏳ En attente de confirmation";
+        // Rester désactivé
+      } catch(err){
+        showMsg(msg, "error", "Erreur : " + (err.message || err));
+        btn.disabled = false; btn.textContent = `✅ J'ai payé ${amount.toFixed(2).replace(".",",")} €`;
+      }
     }
 
     function showMsg(el, type, text){
