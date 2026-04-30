@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v5.7 — TV compact + Wero + admin          ║
+// ║  PIPSILY — app.js v5.8 — pills collées, no update-bar, fluid play ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -872,6 +872,24 @@ async function playItem(item){
     url        : item.url || item.stream_url
   }));
 
+  // ── Transition fluide : overlay noir plein écran AVANT la navigation
+  //    pour masquer le flash blanc du navigateur entre 2 pages ──
+  const blackout = document.createElement("div");
+  blackout.style.cssText =
+    "position:fixed;inset:0;z-index:99999;background:#000;" +
+    "display:flex;align-items:center;justify-content:center;" +
+    "color:#7B5FE8;font-size:14px;font-family:system-ui,sans-serif";
+  blackout.innerHTML = "<div style='display:flex;flex-direction:column;align-items:center;gap:14px'>" +
+    "<div style='width:42px;height:42px;border:3px solid rgba(123,95,232,.2);border-top-color:#7B5FE8;border-radius:50%;animation:pf-spin 1s linear infinite'></div>" +
+    "<div style='letter-spacing:.04em'>Chargement…</div></div>";
+  // Spinner via animation inline
+  const sty = document.createElement("style");
+  sty.textContent = "@keyframes pf-spin{to{transform:rotate(360deg)}}";
+  document.head.appendChild(sty);
+  document.body.appendChild(blackout);
+  document.documentElement.style.background = "#000";
+  document.body.style.background = "#000";
+
   // APK Android v4+ : tente le lecteur VLC/MX externe
   // Sur Android TV : player.html (souvent pas de VLC installé)
   const isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
@@ -1545,6 +1563,18 @@ async function boot(){
   if(window.PIPSILY_NATIVE === "android_tv" || window.PIPSIFLIX_NATIVE === "android_tv" ||
      /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent)){
     document.documentElement.classList.add("is-tv");
+  }
+
+  // ── Auto-refresh catalogue au démarrage : si un nouveau SW est en
+  //    attente, on l'active silencieusement (sans bouton manuel) ──
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.ready.then(reg => {
+      if(reg.waiting){
+        reg.waiting.postMessage({ type:"SKIP_WAITING" });
+      }
+      // Vérifier les MAJ à chaque démarrage
+      reg.update?.().catch(() => {});
+    }).catch(() => {});
   }
 
   // ── Auth gate (APK + PWA) ──

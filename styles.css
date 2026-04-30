@@ -738,15 +738,21 @@ button,select,input{ font:inherit }
   /* ── Filtres dropdown : masqués sur TV ── */
   .sticky-controls{ display:none }
 
-  /* ── Pills catégories : fixes, compactes, juste sous topbar ── */
+  /* ── Pills catégories : COLLÉES au topbar (aucun jour) ── */
   .cat-pills{
-    position:fixed; top:90px; left:0; right:0; z-index:40;
+    position:fixed; top:80px; left:0; right:0; z-index:40;
     padding:6px 36px 8px; gap:6px;
     background:rgba(5,8,15,.96);
     backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
     border-bottom:1px solid rgba(255,255,255,.05);
     overflow-x:auto; scrollbar-width:none;
   }
+  /* Topbar : pas de border-bottom car les pills s'en chargent */
+  .topbar{ border-bottom:none }
+
+  /* ── Update bar : SUPPRIMÉE sur TV (auto-refresh au démarrage) ── */
+  .update-bar{ display:none !important }
+  .app-shell{ padding-bottom:0 !important }
   .cat-pills::-webkit-scrollbar{ display:none }
   .cat-pill{
     padding:5px 12px; font-size:11px; min-height:28px;
@@ -888,12 +894,15 @@ html.is-tv .brand-logo   { height:32px }
 html.is-tv .nav-row      { gap:8px }
 html.is-tv .nav-btn      { padding:8px 18px; font-size:13px; min-height:36px; border-radius:10px }
 html.is-tv .sticky-controls{ display:none !important }
-html.is-tv .cat-pills    { position:fixed; top:90px; left:0; right:0; z-index:40;
+html.is-tv .cat-pills    { position:fixed; top:80px; left:0; right:0; z-index:40;
                            padding:6px 36px 8px; gap:6px;
                            background:rgba(5,8,15,.96);
                            backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px);
                            border-bottom:1px solid rgba(255,255,255,.05);
                            overflow-x:auto }
+html.is-tv .topbar       { border-bottom:none }
+html.is-tv .update-bar   { display:none !important }
+html.is-tv .app-shell    { padding-bottom:0 !important }
 html.is-tv .cat-pills::-webkit-scrollbar{ display:none }
 html.is-tv .cat-pill     { padding:5px 12px; font-size:11px; min-height:28px;
                            border:1px solid rgba(255,255,255,.10); border-radius:999px }

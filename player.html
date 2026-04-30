@@ -1,17 +1,19 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" style="background:#000">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Lecteur PIPSILY</title>
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="theme-color" content="#000000" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" type="image/png" />
+  <!-- Fond noir IMMÉDIAT avant chargement CSS — évite le flash blanc -->
+  <style>html,body{background:#000 !important;margin:0;padding:0}</style>
   <link rel="stylesheet" href="player.css" />
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" async onerror="console.warn('HLS.js CDN indisponible')"></script>
   <script src="https://cdn.jsdelivr.net/npm/mpegts.js@latest" async onerror="console.warn('MPEG-TS.js CDN indisponible')"></script>
 </head>
-<body>
+<body style="background:#000">
   <div class="player-shell">
 
     <!-- Barre supérieure -->
