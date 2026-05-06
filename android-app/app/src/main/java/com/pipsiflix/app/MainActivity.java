@@ -39,7 +39,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG         = "PipsilyMain";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "10";
+    private static final String APK_VERSION = "11";
 
     WebView     webView;
     ProgressBar progressBar;

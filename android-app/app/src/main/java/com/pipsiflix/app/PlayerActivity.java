@@ -19,6 +19,7 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.source.MediaSource;
@@ -45,6 +46,10 @@ import java.util.List;
 public class PlayerActivity extends FragmentActivity {
 
     private static final String TAG = "PipsilyPlayer";
+
+    // User-Agent universellement accepté par les serveurs IPTV / Xtream Codes
+    // (les serveurs rejettent souvent les UA inconnus avec 403)
+    private static final String IPTV_UA = "okhttp/4.11.0";
 
     private ExoPlayer    player;
     private PlayerView   playerView;
@@ -139,14 +144,21 @@ public class PlayerActivity extends FragmentActivity {
 
     // ─── Initialiser ExoPlayer et lancer la lecture ───────────────────
     private void playUrl(String url, String epLabel) {
+        // ── Garde URL vide ──
+        if (url == null || url.trim().isEmpty()) {
+            Log.e(TAG, "playUrl: URL vide !");
+            Toast.makeText(this, "Erreur : URL de lecture manquante", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Log.d(TAG, "playUrl: " + url);
+
         // Afficher le bon sous-titre
         if (epUrls.length > 1 && epLabel != null && !epLabel.isEmpty()) {
             subtitleView.setText(epLabel);
             subtitleView.setVisibility(View.VISIBLE);
         }
 
-        // Créer ou réinitialiser le player
-        hlsRetried = false;   // reset à chaque nouvelle URL
+        hlsRetried = false;
 
         if (player == null) {
             player = new ExoPlayer.Builder(this).build();
@@ -156,7 +168,6 @@ public class PlayerActivity extends FragmentActivity {
             player.addListener(new Player.Listener() {
                 @Override
                 public void onPlaybackStateChanged(int state) {
-                    // Auto-passer à l'épisode suivant à la fin
                     if (state == Player.STATE_ENDED && currentIdx < epUrls.length - 1) {
                         goEp(currentIdx + 1);
                     }
@@ -164,57 +175,34 @@ public class PlayerActivity extends FragmentActivity {
 
                 @Override
                 public void onPlayerError(PlaybackException error) {
-                    String msg = error.getMessage();
-                    Log.e(TAG, "ExoPlayer error [" + error.errorCode + "] " + msg, error);
+                    Log.e(TAG, "ExoPlayer error [" + error.errorCode + "]", error);
 
-                    // ── Retry : si ProgressiveMedia échoue sur une URL HLS déguisée ──
+                    // ── Retry automatique : ProgressiveMedia → HLS ──
                     String curUrl = epUrls[currentIdx];
                     String lo     = curUrl.toLowerCase();
-                    boolean wasProgressive = !lo.contains(".m3u8") && !lo.contains("/live/") && !lo.contains("get_series_info");
+                    boolean wasProgressive = !lo.contains(".m3u8")
+                            && !lo.contains("/live/")
+                            && !lo.contains("get_series_info");
+
                     if (wasProgressive && !hlsRetried) {
                         hlsRetried = true;
-                        Log.i(TAG, "Retry en HLS pour: " + curUrl);
+                        Log.i(TAG, "Retry HLS: " + curUrl);
                         runOnUiThread(() -> {
                             player.stop();
                             player.clearMediaItems();
-                            DefaultHttpDataSource.Factory ds = new DefaultHttpDataSource.Factory()
-                                    .setAllowCrossProtocolRedirects(true)
-                                    .setConnectTimeoutMs(20_000)
-                                    .setReadTimeoutMs(30_000)
-                                    .setUserAgent("PIPSILY/9.0 (Android)");
-                            MediaSource hlsSrc = new HlsMediaSource.Factory(ds)
+                            MediaSource src = new HlsMediaSource.Factory(buildDsFactory())
                                     .createMediaSource(MediaItem.fromUri(curUrl));
-                            player.setMediaSource(hlsSrc);
+                            player.setMediaSource(src);
                             player.setPlayWhenReady(true);
                             player.prepare();
                         });
                         return;
                     }
 
-                    // ── Afficher l'erreur à l'utilisateur ──
-                    String label;
-                    switch (error.errorCode) {
-                        case PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED:
-                            label = "Connexion réseau impossible — vérifiez l'URL et votre réseau.";
-                            break;
-                        case PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT:
-                            label = "Délai d'attente dépassé — serveur trop lent.";
-                            break;
-                        case PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS:
-                            label = "Erreur HTTP serveur (403/404/500).";
-                            break;
-                        case PlaybackException.ERROR_CODE_DECODER_INIT_FAILED:
-                            label = "Codec non supporté par cet appareil.";
-                            break;
-                        case PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED:
-                            label = "Format vidéo non reconnu.";
-                            break;
-                        default:
-                            label = "Erreur lecture (" + error.errorCode + ")";
-                    }
-                    final String toastMsg = label;
+                    // ── Lire le code HTTP exact depuis la cause ──
+                    String label = buildErrorLabel(error);
                     runOnUiThread(() ->
-                        Toast.makeText(PlayerActivity.this, toastMsg, Toast.LENGTH_LONG).show()
+                        Toast.makeText(PlayerActivity.this, label, Toast.LENGTH_LONG).show()
                     );
                 }
             });
@@ -223,29 +211,66 @@ public class PlayerActivity extends FragmentActivity {
             player.clearMediaItems();
         }
 
-        // Fabrique HTTP — autorisé par network_security_config (cleartextTrafficPermitted=true)
-        DefaultHttpDataSource.Factory dsFactory = new DefaultHttpDataSource.Factory()
-                .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(20_000)
-                .setReadTimeoutMs(30_000)
-                .setUserAgent("PIPSILY/9.0 (Android)");
-
+        String lUrl = url.toLowerCase();
         MediaSource source;
-        String      lUrl = url.toLowerCase();
 
         if (lUrl.contains(".m3u8") || lUrl.contains("/live/") || lUrl.contains("get_series_info")) {
-            // ── HLS (TV Live, séries Xtream) ──
-            source = new HlsMediaSource.Factory(dsFactory)
+            // ── HLS : TV Live, séries, playlists Xtream ──
+            source = new HlsMediaSource.Factory(buildDsFactory())
                     .createMediaSource(MediaItem.fromUri(url));
         } else {
-            // ── Fichier direct (MP4, MKV…) — Xtream VOD ──
-            source = new ProgressiveMediaSource.Factory(dsFactory)
+            // ── Progressive : VOD mp4/mkv/ts Xtream ──
+            source = new ProgressiveMediaSource.Factory(buildDsFactory())
                     .createMediaSource(MediaItem.fromUri(url));
         }
 
         player.setMediaSource(source);
         player.setPlayWhenReady(true);
         player.prepare();
+    }
+
+    /** Fabrique HTTP partagée — User-Agent compatible Xtream Codes */
+    private DefaultHttpDataSource.Factory buildDsFactory() {
+        return new DefaultHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(20_000)
+                .setReadTimeoutMs(30_000)
+                // okhttp/4.11.0 : accepté par tous les serveurs IPTV / Xtream Codes
+                // Les serveurs rejettent souvent les UA inconnus avec 403
+                .setUserAgent(IPTV_UA);
+    }
+
+    /** Traduit PlaybackException en message lisible avec le code HTTP exact */
+    private String buildErrorLabel(PlaybackException error) {
+        // Chercher le code HTTP réel dans la chaîne des causes
+        Throwable cause = error.getCause();
+        while (cause != null) {
+            if (cause instanceof HttpDataSource.InvalidResponseCodeException) {
+                int code = ((HttpDataSource.InvalidResponseCodeException) cause).responseCode;
+                switch (code) {
+                    case 403: return "Accès refusé (403) — abonnement expiré ou flux restreint.";
+                    case 404: return "Flux introuvable (404) — ce contenu n'est plus disponible.";
+                    case 500:
+                    case 502:
+                    case 503: return "Erreur serveur (" + code + ") — réessayez dans quelques instants.";
+                    default:  return "Erreur HTTP " + code + " — serveur inaccessible.";
+                }
+            }
+            cause = cause.getCause();
+        }
+        // Erreurs non-HTTP
+        switch (error.errorCode) {
+            case PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED:
+                return "Connexion impossible — vérifiez votre réseau.";
+            case PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT:
+                return "Délai dépassé — serveur trop lent.";
+            case PlaybackException.ERROR_CODE_DECODER_INIT_FAILED:
+                return "Codec non supporté par cet appareil.";
+            case PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED:
+                return "Format vidéo non reconnu.";
+            default:
+                return "Erreur lecture [" + error.errorCode + "] — " + error.getMessage();
+        }
     }
 
     // ─── Navigation épisodes ──────────────────────────────────────────

@@ -1,5 +1,5 @@
 {
-  "apk_version": 10,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v10/PIPSILY.apk",
-  "changes": "Fix critique : lecture vidéo HTTP débloquée (VOD, séries, TV) · Diagnostic erreur ExoPlayer affiché · Retry HLS automatique"
+  "apk_version": 11,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v11/PIPSILY.apk",
+  "changes": "Fix 403/404/500 : User-Agent IPTV compatible · Code erreur HTTP exact · Garde URL vide"
 }
