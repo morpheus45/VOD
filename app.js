@@ -763,7 +763,7 @@ async function fetchVodPlot(item){
     const u     = new URL(streamUrl);
     const parts = u.pathname.split("/").filter(Boolean);
     let base = u.origin, username = "", password = "";
-    if(parts[0] === "movie" && parts.length >= 3){
+    if(parts[0] === "movie" && parts.length >= 4){
       username = parts[1]; password = parts[2];
     } else {
       username = u.searchParams.get("username") || "";
@@ -772,30 +772,19 @@ async function fetchVodPlot(item){
     if(!username || !password) return null;
     const vodId = item.id || item.stream_id || String(item.num || "");
     if(!vodId) return null;
-    // Toujours HTTP (goldenlink.live n'a pas HTTPS)
-    const apiUrl = `http://${new URL(base).hostname}/player_api.php?username=${username}&password=${password}&action=get_vod_info&vod_id=${vodId}`;
+    // HTTP (le serveur IPTV ne supporte généralement pas HTTPS)
+    const host   = new URL(base).hostname;
+    const port   = new URL(base).port ? `:${new URL(base).port}` : "";
+    const apiUrl = `http://${host}${port}/player_api.php?username=${username}&password=${password}&action=get_vod_info&vod_id=${vodId}`;
 
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 8000);
     let json = null;
-
-    // APK : utiliser AndroidBridge.fetchJson() qui fait la requête depuis Java
-    // (pas de restriction mixed-content côté Java)
-    if(typeof window.AndroidBridge?.fetchJson === "function"){
-      try {
-        const raw = window.AndroidBridge.fetchJson(apiUrl);
-        if(raw) json = JSON.parse(raw);
-      } catch {}
-    }
-
-    // Fallback : fetch() navigateur (fonctionne si MIXED_CONTENT_ALWAYS_ALLOW ou HTTP page)
-    if(!json){
-      const ctrl = new AbortController();
-      const tid  = setTimeout(() => ctrl.abort(), 8000);
-      try {
-        const r = await fetch(apiUrl, { signal: ctrl.signal });
-        clearTimeout(tid);
-        if(r.ok) json = await r.json();
-      } catch { clearTimeout(tid); }
-    }
+    try {
+      const r = await fetch(apiUrl, { signal: ctrl.signal });
+      clearTimeout(tid);
+      if(r.ok) json = await r.json();
+    } catch { clearTimeout(tid); }
 
     if(!json) return null;
     return json?.info?.plot || json?.info?.description || null;
@@ -1110,25 +1099,15 @@ async function playItem(item){
     const pin = await window.PIPSILY_AUTH.getParentalPin(S._userId);
     if(pin){
       const ok = await window.PIPSILY_AUTH.promptParentalPin(pin);
-      if(!ok) return; // annulé ou mauvais PIN
+      if(!ok) return;
     }
   }
 
   pushHist(item);
-  const url    = item.url || item.stream_url || "";
-  const title  = item.title || "";
-  const isLive = item.type === "live";
+  const url = item.url || item.stream_url || "";
 
-  // APK Android v4+ (téléphone non-TV) : tente le lecteur VLC/MX externe
-  const isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
-               (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
-  if(!isTV && typeof window.AndroidBridge !== "undefined"
-     && typeof window.AndroidBridge.openInVlc === "function"){
-    try { window.AndroidBridge.openInVlc(url, title, isLive); return; }
-    catch(e){ console.warn("VLC bridge error:", e); }
-  }
-
-  // ── Lecteur interne (navigateur / TV / APK fallback) ──────────────
+  // ── Toujours utiliser le lecteur interne PipPlayer ──────────────────
+  // (Le bouton "Lecture native" dans le lecteur appelle AndroidBridge.openInVlc si dispo)
   PipPlayer.open({
     ...item,
     stream_url : url,
