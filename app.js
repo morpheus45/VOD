@@ -185,7 +185,7 @@ const PipPlayer = {
     try {
       const u    = new URL(streamUrl.replace(/^https?:\/\//i, "http://"));
       const pts  = u.pathname.split("/").filter(Boolean);
-      if(pts[0] === "movie" && pts.length >= 3)
+      if(pts[0] === "movie" && pts.length >= 4)
         creds = { base: u.origin, username: pts[1], password: pts[2] };
       else {
         const usr = u.searchParams.get("username");
@@ -201,13 +201,15 @@ const PipPlayer = {
     const action   = isSeries ? `get_series_info&series_id=${id}` : `get_vod_info&vod_id=${id}`;
     const apiUrl   = `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=${action}`;
 
-    fetch(apiUrl, { signal: AbortSignal.timeout(8000) })
-      .then(r => r.ok ? r.json() : null)
+    const ctrl = new AbortController();
+    const _tid = setTimeout(() => ctrl.abort(), 8000);
+    fetch(apiUrl, { signal: ctrl.signal })
+      .then(r => { clearTimeout(_tid); return r.ok ? r.json() : null; })
       .then(d => {
         const plot = d?.info?.plot || d?.info?.description || d?.movie_data?.plot || null;
         if($("pip-plot")) $("pip-plot").textContent = plot || "Aucune description disponible.";
       })
-      .catch(() => { if($("pip-plot")) $("pip-plot").textContent = "Aucune description disponible."; });
+      .catch(() => { clearTimeout(_tid); if($("pip-plot")) $("pip-plot").textContent = "Aucune description disponible."; });
   },
 
   // ── Favoris ─────────────────────────────────────────────────────
@@ -1473,7 +1475,11 @@ function render(){
   }
 
   // Masquer le filtre qualité pour le live (non pertinent)
-  if($("qualitySelect")) $("qualitySelect").style.display = S.type === "live" ? "none" : "";
+  if($("qualityPills")) $("qualityPills").style.display = S.type === "live" ? "none" : "";
+  // Mettre à jour la pilule active
+  document.querySelectorAll(".quality-pill").forEach(p =>
+    p.classList.toggle("quality-pill--active", p.dataset.q === S.quality)
+  );
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
   const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
@@ -1932,6 +1938,9 @@ async function boot(){
       S.quality = "";
       S.sort    = "title";
       $("searchInput").value = "";
+      // Reset pilules qualité → "Tout"
+      document.querySelectorAll(".quality-pill").forEach(p => p.classList.remove("quality-pill--active"));
+      document.querySelector(".quality-pill[data-q='']")?.classList.add("quality-pill--active");
       // Placeholder dynamique selon la section
       const ph = { vod:"Rechercher un film…", series:"Rechercher une série…", live:"Rechercher une chaîne…" };
       $("searchInput").placeholder = ph[S.type] || "Rechercher…";
@@ -1985,8 +1994,17 @@ async function boot(){
 
   $("categorySelect").addEventListener("change", e => { S.cat = e.target.value; render(); });
   $("searchInput").addEventListener("input",  e => { S.search = e.target.value; render(); });
-  $("qualitySelect").addEventListener("change",e => { S.quality = e.target.value; render(); });
   $("sortSelect").addEventListener("change",  e => { S.sort = e.target.value; render(); });
+
+  // Pilules qualité — remplacent le <select>
+  document.querySelectorAll(".quality-pill").forEach(btn => {
+    btn.addEventListener("click", () => {
+      S.quality = btn.dataset.q || "";
+      document.querySelectorAll(".quality-pill").forEach(p => p.classList.remove("quality-pill--active"));
+      btn.classList.add("quality-pill--active");
+      render();
+    });
+  });
 
   // Clic backdrop
   $("seriesPanel")?.addEventListener("click", e => {

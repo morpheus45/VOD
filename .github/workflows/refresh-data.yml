@@ -42,16 +42,9 @@ jobs:
         run: |
           git config user.name  "PIPSIFLIX Bot"
           git config user.email "bot@pipsiflix.local"
-          git add \
-            series.json \
-            vod.json \
-            live.json \
-            vod.m3u \
-            series.m3u \
-            live.m3u \
-            episodes_part*.json \
-            episodes_map.json \
-            episodes_index.json
+          git add series.json vod.json live.json episodes_map.json episodes_index.json || true
+          git add episodes_part*.json || true
+          git add --ignore-unmatch vod.m3u series.m3u live.m3u || true
           if git diff --staged --quiet; then
             echo "Aucun changement détecté — rien à commiter"
           else

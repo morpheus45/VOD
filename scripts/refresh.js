@@ -15,9 +15,10 @@
 
 "use strict";
 
-const fs   = require("fs");
-const path = require("path");
-const http = require("http");
+const fs    = require("fs");
+const path  = require("path");
+const http  = require("http");
+const https = require("https");
 
 // ─── Chemins ──────────────────────────────────────────────────────────────────
 const ROOT        = path.join(__dirname, "..");
@@ -34,7 +35,14 @@ const MAX_RETRIES = 2;
 // ─── Helpers HTTP ─────────────────────────────────────────────────────────────
 function fetchJson(url, attempt = 0){
   return new Promise(resolve => {
-    const req = http.get(url, { timeout: TIMEOUT_MS }, res => {
+    const mod = url.startsWith("https") ? https : http;
+    const req = mod.get(url, { timeout: TIMEOUT_MS }, res => {
+      // Suivre les redirections 301/302/307/308
+      if((res.statusCode === 301 || res.statusCode === 302 ||
+          res.statusCode === 307 || res.statusCode === 308) && res.headers.location){
+        resolve(fetchJson(res.headers.location, attempt));
+        return;
+      }
       let buf = "";
       res.setEncoding("utf8");
       res.on("data", c => buf += c);

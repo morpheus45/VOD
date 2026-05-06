@@ -1161,3 +1161,41 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
   .pip-actions button{ padding:16px 20px; font-size:16px; border-radius:14px }
   .pip-ep-btn{ padding:16px; font-size:16px; border-radius:14px }
 }
+
+/* ── Pilules qualité ── */
+.quality-pills{
+  display:flex; gap:6px; align-items:center; flex-wrap:nowrap; overflow-x:auto;
+  scrollbar-width:none;
+}
+.quality-pills::-webkit-scrollbar{ display:none }
+.quality-pill{
+  flex-shrink:0;
+  padding:8px 14px;
+  border:1.5px solid rgba(255,255,255,.18);
+  background:rgba(13,22,40,.6);
+  color:var(--muted);
+  border-radius:20px;
+  font:inherit; font-size:13px; font-weight:600;
+  cursor:pointer;
+  transition:background .15s, border-color .15s, color .15s;
+  white-space:nowrap;
+  min-height:36px;
+}
+.quality-pill:hover{
+  background:rgba(123,95,232,.18);
+  border-color:var(--accent);
+  color:#fff;
+}
+.quality-pill--active{
+  background:linear-gradient(135deg,#7B5FE8,#38A8E8) !important;
+  border-color:transparent !important;
+  color:#fff !important;
+  box-shadow:0 2px 10px rgba(123,95,232,.45);
+}
+/* TV : pilules plus larges pour la télécommande */
+.is-tv .quality-pill{
+  padding:12px 22px; font-size:15px; min-height:48px; border-radius:24px;
+}
+.is-tv .quality-pill:focus{
+  outline:3px solid #ff3d5e; outline-offset:3px;
+}
