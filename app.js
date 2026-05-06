@@ -134,7 +134,15 @@ const PipPlayer = {
       this._hls.attachMedia(video);
       this._hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
       this._hls.on(Hls.Events.ERROR, (_, d) => {
-        if(d.fatal) this._showStatus("⚠️ Erreur de flux HLS. Essayez la lecture native.", true);
+        if(d.fatal){
+          // HLS.js ne supporte pas HEVC/H.265 → fallback lecture native automatique
+          this._hls.destroy(); this._hls = null;
+          this._showStatus("⚠️ Flux HLS non supporté — basculement lecture native…", false);
+          setTimeout(() => {
+            video.src = url;
+            video.play().catch(() => this._showStatus("❌ Impossible de lire ce flux.", true));
+          }, 800);
+        }
       });
     } else if(isHLS && video.canPlayType("application/vnd.apple.mpegurl")){
       // Safari natif HLS

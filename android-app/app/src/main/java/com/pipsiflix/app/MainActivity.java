@@ -29,7 +29,7 @@ import androidx.appcompat.app.AppCompatActivity;
 public class MainActivity extends AppCompatActivity {
 
     private static final String APP_URL      = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION  = "7";
+    private static final String APK_VERSION  = "8";
 
     WebView     webView;      // package-private pour le bridge
     ProgressBar progressBar;
@@ -58,6 +58,15 @@ public class MainActivity extends AppCompatActivity {
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
         } else {
+            // Vider le cache WebView au premier lancement de cette version
+            android.content.SharedPreferences prefs =
+                getSharedPreferences("pipsily_prefs", MODE_PRIVATE);
+            String lastVer = prefs.getString("apk_version", "");
+            if (!APK_VERSION.equals(lastVer)) {
+                webView.clearCache(true);
+                webView.clearHistory();
+                prefs.edit().putString("apk_version", APK_VERSION).apply();
+            }
             webView.loadUrl(APP_URL);
         }
     }
