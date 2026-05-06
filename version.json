@@ -1,5 +1,5 @@
 {
-  "apk_version": 12,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v12/PIPSILY.apk",
-  "changes": "APK signé fixe (plus de conflit à l'install) · Fix 403 User-Agent IPTV · Erreurs HTTP exactes"
+  "apk_version": 13,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v13/PIPSILY.apk",
+  "changes": "Fix 406 : OkHttp remplace HttpUrlConnection · Redirects CDN suivis · Accept */* · Connexion pooling"
 }

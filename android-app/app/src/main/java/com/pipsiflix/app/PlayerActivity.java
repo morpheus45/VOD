@@ -18,13 +18,17 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
+import androidx.media3.datasource.okhttp.OkHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.ui.PlayerView;
+
+import okhttp3.OkHttpClient;
+
+import java.util.concurrent.TimeUnit;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -48,8 +52,10 @@ public class PlayerActivity extends FragmentActivity {
     private static final String TAG = "PipsilyPlayer";
 
     // User-Agent universellement accepté par les serveurs IPTV / Xtream Codes
-    // (les serveurs rejettent souvent les UA inconnus avec 403)
     private static final String IPTV_UA = "okhttp/4.11.0";
+
+    // Client OkHttp partagé (connexion pooling, meilleure gestion des redirects CDN)
+    private static OkHttpClient okClient;
 
     private ExoPlayer    player;
     private PlayerView   playerView;
@@ -229,15 +235,30 @@ public class PlayerActivity extends FragmentActivity {
         player.prepare();
     }
 
-    /** Fabrique HTTP partagée — User-Agent compatible Xtream Codes */
-    private DefaultHttpDataSource.Factory buildDsFactory() {
-        return new DefaultHttpDataSource.Factory()
-                .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(20_000)
-                .setReadTimeoutMs(30_000)
-                // okhttp/4.11.0 : accepté par tous les serveurs IPTV / Xtream Codes
-                // Les serveurs rejettent souvent les UA inconnus avec 403
-                .setUserAgent(IPTV_UA);
+    /**
+     * Fabrique OkHttp partagée.
+     *
+     * Avantages vs DefaultHttpDataSource :
+     *  - Suit les redirects HTTP→HTTPS et vers d'autres hôtes CDN (406 fix)
+     *  - Envoie Accept: * / * par défaut (évite les 406 "Not Acceptable")
+     *  - Connection pooling → démarrage plus rapide pour les épisodes suivants
+     *  - Gestion SSL plus robuste
+     */
+    private OkHttpDataSource.Factory buildDsFactory() {
+        if (okClient == null) {
+            okClient = new OkHttpClient.Builder()
+                    .connectTimeout(20, TimeUnit.SECONDS)
+                    .readTimeout(30, TimeUnit.SECONDS)
+                    .followRedirects(true)
+                    .followSslRedirects(true)
+                    .build();
+        }
+        return new OkHttpDataSource.Factory(okClient)
+                .setUserAgent(IPTV_UA)
+                // Accept: */* évite les 406 sur les CDN qui vérifient le content-type
+                .setDefaultRequestProperties(
+                    java.util.Collections.singletonMap("Accept", "*/*")
+                );
     }
 
     /** Traduit PlaybackException en message lisible avec le code HTTP exact */
