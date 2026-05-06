@@ -188,7 +188,7 @@ async function refreshVod(creds){
       stream_icon   : v.stream_icon || v.cover || "",
       plot          : v.plot || "",
       quality       : inferQuality(`${v.name || ""} ${catName}`),
-      stream_url    : `${creds.base}:80/movie/${creds.username}/${creds.password}/${v.stream_id}.${v.container_extension || "mkv"}`,
+      stream_url    : `${creds.base}/movie/${creds.username}/${creds.password}/${v.stream_id}.${v.container_extension || "mkv"}`,
       added         : v.added ? Number(v.added) : 0
     };
   });
@@ -240,7 +240,7 @@ async function refreshLive(creds){
     category_id  : s.category_id || "",
     category_name: cleanTitle(catMap[String(s.category_id)] || s.category_name || "Autre"),
     stream_icon  : s.stream_icon || "",
-    stream_url   : `${creds.base}:80/live/${creds.username}/${creds.password}/${s.stream_id}.m3u8`,
+    stream_url   : `${creds.base}/live/${creds.username}/${creds.password}/${s.stream_id}.m3u8`,
     type         : "live"
   }));
 
@@ -392,6 +392,81 @@ function writeChunks(db){
   console.log(`   ✓ Index : ${chunkCount} chunks, ${entries.length} séries total`);
 }
 
+// ─── Génération M3U ──────────────────────────────────────────────────────────
+function generateVodM3u(creds) {
+  console.log("\n5/5  Génération vod.m3u...");
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(VOD_JSON, "utf8"));
+  } catch {
+    console.warn("   ⚠  vod.json introuvable — vod.m3u non généré");
+    return;
+  }
+
+  const items = data.items || [];
+  const lines = ["#EXTM3U"];
+  for (const v of items) {
+    const logo     = v.stream_icon ? ` tvg-logo="${v.stream_icon}"` : "";
+    const group    = v.category_name || "Films";
+    const title    = v.title || "";
+    const url      = v.stream_url || "";
+    if (!url) continue;
+    lines.push(`#EXTINF:-1${logo} group-title="${group}",${title}`);
+    lines.push(url);
+  }
+  fs.writeFileSync(path.join(ROOT, "vod.m3u"), lines.join("\n"), "utf8");
+  console.log(`   ✓ ${items.length} films → vod.m3u`);
+}
+
+function generateSeriesM3u(creds) {
+  console.log("      Génération series.m3u...");
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(SERIES_JSON, "utf8"));
+  } catch {
+    console.warn("   ⚠  series.json introuvable — series.m3u non généré");
+    return;
+  }
+
+  const items = data.items || [];
+  const lines = ["#EXTM3U"];
+  for (const s of items) {
+    const logo  = s.stream_icon ? ` tvg-logo="${s.stream_icon}"` : "";
+    const group = s.category_name || "Séries";
+    const title = s.title || "";
+    const url   = `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_series_info&series_id=${s.series_id || s.id}`;
+    lines.push(`#EXTINF:-1${logo} group-title="${group}",${title}`);
+    lines.push(url);
+  }
+  fs.writeFileSync(path.join(ROOT, "series.m3u"), lines.join("\n"), "utf8");
+  console.log(`   ✓ ${items.length} séries → series.m3u`);
+}
+
+function generateLiveM3u(creds) {
+  console.log("      Génération live.m3u...");
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(LIVE_JSON, "utf8"));
+  } catch {
+    console.warn("   ⚠  live.json introuvable — live.m3u non généré");
+    return;
+  }
+
+  const items = data.items || [];
+  const lines = ["#EXTM3U"];
+  for (const ch of items) {
+    const logo  = ch.stream_icon ? ` tvg-logo="${ch.stream_icon}"` : "";
+    const group = ch.category_name || "TV";
+    const title = ch.title || "";
+    const url   = ch.stream_url || "";
+    if (!url) continue;
+    lines.push(`#EXTINF:-1${logo} group-title="${group}",${title}`);
+    lines.push(url);
+  }
+  fs.writeFileSync(path.join(ROOT, "live.m3u"), lines.join("\n"), "utf8");
+  console.log(`   ✓ ${items.length} chaînes → live.m3u`);
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function main(){
   console.log("╔══════════════════════════════════════╗");
@@ -407,6 +482,11 @@ async function main(){
   await refreshVod(creds);
   await refreshLive(creds);
   await refreshEpisodes(creds, seriesItems);
+
+  console.log("\n5/5  Fichiers M3U...");
+  generateVodM3u(creds);
+  generateSeriesM3u(creds);
+  generateLiveM3u(creds);
 
   console.log("\n✅  Refresh terminé avec succès !");
 }

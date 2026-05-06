@@ -1058,3 +1058,106 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
 @media (hover:none){
   button,.card,.nav-btn{ -webkit-user-select:none; user-select:none }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LECTEUR INTERNE (pip-player) — overlay plein écran sans navigation
+   ═══════════════════════════════════════════════════════════════════ */
+
+#pip-player{
+  display:none;
+  position:fixed; inset:0; z-index:8000;
+  background:radial-gradient(circle at top left,rgba(42,167,255,.15),transparent 22%),
+    linear-gradient(180deg,#05101f,#08182e 55%,#07111f);
+  color:#fff;
+  font-family:'Segoe UI','Inter',system-ui,sans-serif;
+  flex-direction:column;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+#pip-player.pip-open{ display:flex }
+
+.pip-top{
+  display:flex; align-items:center; gap:12px; padding:12px 14px;
+  background:rgba(5,17,31,.88);
+  position:sticky; top:0; z-index:10;
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(255,255,255,.08);
+  flex-shrink:0;
+}
+.pip-icon-btn{
+  border:1px solid rgba(255,255,255,.14);
+  background:#0d1a31; color:#fff;
+  padding:10px 14px; border-radius:12px; cursor:pointer;
+  white-space:nowrap; font:inherit; transition:background .15s;
+}
+.pip-icon-btn:hover{ background:#1a2d50 }
+.pip-icon-btn:focus{ outline:2px solid #ff3d5e; outline-offset:2px }
+.pip-is-fav{ color:#ff3d5e !important; border-color:rgba(255,61,94,.45) !important; background:rgba(255,61,94,.12) !important }
+.pip-title-wrap{ flex:1; min-width:0 }
+.pip-title-text{ font-size:18px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.pip-sub-text{ font-size:12px; color:#a5b8d9; margin-top:3px }
+
+.pip-video-wrap{ position:relative; background:#000; flex-shrink:0 }
+#pip-video{
+  display:block; width:100%;
+  height:min(72vh, calc(100vh - 190px));
+  background:#02060d; object-fit:contain;
+}
+.pip-status{
+  position:absolute; left:14px; right:14px; bottom:14px;
+  padding:10px 14px; border-radius:12px;
+  background:rgba(4,11,20,.88); border:1px solid rgba(255,255,255,.12);
+  font-size:13px; color:#d8e6ff; backdrop-filter:blur(10px);
+}
+.pip-status--error{ background:rgba(60,10,10,.92); border-color:rgba(255,61,94,.4); color:#ffa0b2 }
+
+.pip-ep-nav{
+  display:flex; gap:10px; padding:10px 14px;
+  background:#060f1d; border-bottom:1px solid rgba(255,255,255,.06); flex-shrink:0;
+}
+.pip-ep-btn{
+  flex:1; padding:12px 16px;
+  border:1px solid rgba(255,255,255,.12);
+  background:#0d1a31; color:#fff;
+  border-radius:12px; cursor:pointer; font:inherit; font-size:14px; font-weight:600;
+  transition:background .15s, border-color .15s;
+}
+.pip-ep-btn:not(:disabled):hover{ background:#1a2d50; border-color:#ff3d5e }
+.pip-ep-btn--next{ text-align:right }
+.pip-ep-btn:disabled{ opacity:.35; cursor:not-allowed }
+.pip-ep-btn:focus:not(:disabled){ outline:2px solid #ff3d5e; outline-offset:2px }
+
+.pip-actions{
+  display:flex; gap:10px; flex-wrap:wrap;
+  padding:14px; background:#06101f; flex-shrink:0;
+}
+.pip-actions button{
+  border:1px solid rgba(255,255,255,.12);
+  background:#0d1a31; color:#fff;
+  padding:12px 14px; border-radius:12px; cursor:pointer; font:inherit;
+  min-height:44px; transition:background .15s;
+}
+.pip-actions button:hover{ background:#1a2d50 }
+.pip-actions button:focus{ outline:2px solid #ff3d5e; outline-offset:2px }
+.pip-btn-primary{
+  background:linear-gradient(135deg,#ff3d5e,#ff9f2c) !important;
+  border-color:transparent !important; font-weight:700 !important; color:#fff !important;
+}
+.pip-btn-primary:hover{ filter:brightness(1.1) }
+
+.pip-info{ padding:20px; background:#08111f; border-top:1px solid rgba(255,255,255,.06) }
+.pip-info h2{ margin:0 0 10px; font-size:18px }
+.pip-info p{ margin:0; color:#c0cce0; line-height:1.65 }
+
+@media(max-width:700px){
+  #pip-video{ height:calc(100svh - 170px) }
+  .pip-icon-btn{ padding:9px 10px; font-size:13px }
+  .pip-ep-nav{ flex-direction:column }
+  .pip-ep-btn{ text-align:center }
+}
+@media(min-width:1280px) and (orientation:landscape){
+  #pip-video{ height:min(80vh, calc(100vh - 150px)) }
+  .pip-title-text{ font-size:22px }
+  .pip-actions button{ padding:16px 20px; font-size:16px; border-radius:14px }
+  .pip-ep-btn{ padding:16px; font-size:16px; border-radius:14px }
+}

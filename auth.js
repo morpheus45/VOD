@@ -178,7 +178,7 @@ async function getGeoInfo(){
 //  Purge automatique des sessions inactives (> 5 min sans heartbeat)
 // ─────────────────────────────────────────────────────────────────
 
-const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes d'inactivité = session expirée
+const SESSION_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours — TV/téléphone ne se déconnectent plus
 
 async function registerSession(userId){
   const token = crypto.randomUUID?.() || ("tok" + Date.now());
@@ -249,8 +249,13 @@ async function _heartbeat(userId){
 async function startSessionWatcher(userId){
   if(!_supa || !userId) return;
 
-  // Heartbeat toutes les 30 secondes — mise à jour last_seen + purge des inactifs
-  _watchInterval = setInterval(() => _heartbeat(userId), 30_000);
+  // Heartbeat toutes les 5 minutes — mise à jour last_seen
+  _watchInterval = setInterval(() => _heartbeat(userId), 5 * 60_000);
+
+  // Heartbeat immédiat quand l'app repasse au premier plan (TV en veille, onglet réactivé)
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState === "visible") _heartbeat(userId);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────

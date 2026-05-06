@@ -9,13 +9,13 @@ on:
         required: false
         default: 'Refresh manuel'
 
-  # Automatique chaque lundi à 3h UTC
+  # Automatique chaque lundi et jeudi à 3h UTC
   schedule:
-    - cron: '0 3 * * 1'
+    - cron: '0 3 * * 1,4'
 
 jobs:
   refresh:
-    name: Refresh séries, films et épisodes
+    name: Refresh séries, films, live et M3U
     runs-on: ubuntu-latest
     permissions:
       contents: write   # Nécessaire pour le commit automatique
@@ -34,7 +34,6 @@ jobs:
       - name: 🔄 Lancer le refresh
         run: node scripts/refresh.js
         env:
-          # Optionnel : si non définis, les credentials sont lus depuis series.json
           XTREAM_BASE: ${{ secrets.XTREAM_BASE }}
           XTREAM_USER: ${{ secrets.XTREAM_USER }}
           XTREAM_PASS: ${{ secrets.XTREAM_PASS }}
@@ -43,7 +42,16 @@ jobs:
         run: |
           git config user.name  "PIPSIFLIX Bot"
           git config user.email "bot@pipsiflix.local"
-          git add series.json vod.json episodes_part*.json episodes_map.json episodes_index.json
+          git add \
+            series.json \
+            vod.json \
+            live.json \
+            vod.m3u \
+            series.m3u \
+            live.m3u \
+            episodes_part*.json \
+            episodes_map.json \
+            episodes_index.json
           if git diff --staged --quiet; then
             echo "Aucun changement détecté — rien à commiter"
           else

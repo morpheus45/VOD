@@ -59,6 +59,237 @@ const $  = id => document.getElementById(id);
 const esc = s  => String(s ?? "").replace(/[&<>"']/g,
   c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
+// ─────────────────────────────────────────────────────────────────
+//  LECTEUR INTERNE — PipPlayer
+//  Remplace la navigation vers player.html par un overlay intégré
+// ─────────────────────────────────────────────────────────────────
+const PipPlayer = {
+  _hls      : null,
+  _item     : null,
+  _epList   : [],
+  _epIdx    : -1,
+  _progTimer: null,
+
+  // ── Ouvrir le lecteur avec un item ──────────────────────────────
+  open(item){
+    this._item   = item;
+    this._epList = item._epList || [];
+    this._epIdx  = item._epIdx  ?? -1;
+
+    const el = $("pip-player");
+    el.classList.add("pip-open");
+    document.body.style.overflow = "hidden";
+    el.scrollTop = 0;
+
+    // Titre
+    const label = item.episode_label
+      ? `${item.title} — ${item.episode_label}`
+      : item.title || "Lecture";
+    const sub = item.episode_title || item.category_name || "";
+    $("pip-title").textContent = label;
+    $("pip-sub").textContent   = sub;
+    document.title = label + " — PIPSILY";
+
+    // Synopsis
+    $("pip-plot").textContent = item.plot || "Chargement du synopsis…";
+    if(!item.plot) this._loadPlot(item);
+
+    // Boutons
+    this._updateEpNav();
+    this._updateFavBtn();
+    this._hideStatus();
+
+    // Vidéo
+    this._loadVideo(item);
+  },
+
+  // ── Fermer le lecteur ───────────────────────────────────────────
+  close(){
+    const video = $("pip-video");
+    if(video){ this._saveProgress(); video.pause(); video.removeAttribute("src"); video.load(); }
+    if(this._hls){ this._hls.destroy(); this._hls = null; }
+    clearTimeout(this._progTimer);
+    $("pip-player").classList.remove("pip-open");
+    document.body.style.overflow = "";
+    document.title = "PIPSILY";
+    this._item = null;
+  },
+
+  // ── Chargement vidéo ────────────────────────────────────────────
+  _loadVideo(item){
+    const video = $("pip-video");
+    if(!video) return;
+    video.removeAttribute("src"); video.load();
+    if(this._hls){ this._hls.destroy(); this._hls = null; }
+
+    const rawUrl = item.url || item.stream_url || "";
+    const url    = rawUrl.replace(/^https?:\/\//i, "http://");
+    if(!url){ this._showStatus("❌ Aucune URL de lecture disponible.", true); return; }
+
+    const isHLS = /\.m3u8/i.test(url) || item.type === "live";
+
+    if(isHLS && window.Hls?.isSupported()){
+      this._hls = new Hls({ maxBufferLength: 30, enableWorker: false });
+      this._hls.loadSource(url);
+      this._hls.attachMedia(video);
+      this._hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+      this._hls.on(Hls.Events.ERROR, (_, d) => {
+        if(d.fatal) this._showStatus("⚠️ Erreur de flux HLS. Essayez la lecture native.", true);
+      });
+    } else if(isHLS && video.canPlayType("application/vnd.apple.mpegurl")){
+      // Safari natif HLS
+      video.src = url;
+      video.play().catch(() => {});
+    } else {
+      video.src = url;
+      video.play().catch(() => {});
+    }
+
+    video.onerror = () => this._showStatus("❌ Impossible de lire ce flux.", true);
+    // Reprendre la progression sauvegardée
+    video.addEventListener("loadedmetadata", () => this._restoreProgress(), { once: true });
+    // Sauvegarder la progression toutes les 5s
+    video.ontimeupdate = () => {
+      clearTimeout(this._progTimer);
+      this._progTimer = setTimeout(() => this._saveProgress(), 5000);
+    };
+  },
+
+  // ── Progression ─────────────────────────────────────────────────
+  _saveProgress(){
+    const video = $("pip-video");
+    if(!video || !this._item || video.currentTime < 5) return;
+    const prog = storeGet(STORE.progress, {});
+    const id   = String(this._item.id || this._item.stream_id || "");
+    if(!id) return;
+    prog[id] = { t: Math.floor(video.currentTime), d: Math.floor(video.duration) || 0, ts: Date.now() };
+    storeSet(STORE.progress, prog);
+  },
+
+  _restoreProgress(){
+    const video = $("pip-video");
+    if(!video || !this._item) return;
+    const prog  = storeGet(STORE.progress, {});
+    const id    = String(this._item.id || this._item.stream_id || "");
+    const saved = prog[id];
+    if(saved?.t > 10 && saved.t < (video.duration || Infinity) - 30){
+      video.currentTime = saved.t;
+    }
+  },
+
+  // ── Synopsis lazy-load ──────────────────────────────────────────
+  _loadPlot(item){
+    const streamUrl = item.stream_url || item.url || "";
+    // Extraire base/user/pass depuis l'URL
+    let creds = null;
+    try {
+      const u    = new URL(streamUrl.replace(/^https?:\/\//i, "http://"));
+      const pts  = u.pathname.split("/").filter(Boolean);
+      if(pts[0] === "movie" && pts.length >= 3)
+        creds = { base: u.origin, username: pts[1], password: pts[2] };
+      else {
+        const usr = u.searchParams.get("username");
+        const pwd = u.searchParams.get("password");
+        if(usr && pwd) creds = { base: u.origin, username: usr, password: pwd };
+      }
+    } catch {}
+    if(!creds) { if($("pip-plot")) $("pip-plot").textContent = "Aucune description disponible."; return; }
+
+    const isSeries = item.type === "series" || !!item.series_id;
+    const id       = isSeries ? (item.series_id || item.id) : (item.id || item.stream_id);
+    if(!id) return;
+    const action   = isSeries ? `get_series_info&series_id=${id}` : `get_vod_info&vod_id=${id}`;
+    const apiUrl   = `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=${action}`;
+
+    fetch(apiUrl, { signal: AbortSignal.timeout(8000) })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const plot = d?.info?.plot || d?.info?.description || d?.movie_data?.plot || null;
+        if($("pip-plot")) $("pip-plot").textContent = plot || "Aucune description disponible.";
+      })
+      .catch(() => { if($("pip-plot")) $("pip-plot").textContent = "Aucune description disponible."; });
+  },
+
+  // ── Favoris ─────────────────────────────────────────────────────
+  _updateFavBtn(){
+    const btn = $("pip-fav");
+    if(!btn || !this._item) return;
+    const favs  = storeGet(STORE.favorites, []);
+    const id    = String(this._item.id || this._item.stream_id || "");
+    const isFav = favs.some(f => String(f.id || f.stream_id || "") === id);
+    btn.classList.toggle("pip-is-fav", isFav);
+    btn.textContent = isFav ? "♥" : "♡";
+  },
+
+  toggleFav(){
+    if(!this._item) return;
+    let favs = storeGet(STORE.favorites, []);
+    const id  = String(this._item.id || this._item.stream_id || "");
+    const idx = favs.findIndex(f => String(f.id || f.stream_id || "") === id);
+    if(idx >= 0) favs.splice(idx, 1);
+    else { const { _epList, _epIdx, ...clean } = this._item; favs.unshift(clean); }
+    storeSet(STORE.favorites, favs.slice(0, 200));
+    this._updateFavBtn();
+  },
+
+  // ── Navigation épisodes ─────────────────────────────────────────
+  _updateEpNav(){
+    const nav  = $("pip-ep-nav");
+    const prev = $("pip-prev");
+    const next = $("pip-next");
+    if(!nav) return;
+    const hasList = this._epList.length > 1;
+    nav.hidden     = !hasList;
+    if(prev) prev.disabled = this._epIdx <= 0;
+    if(next) next.disabled = this._epIdx < 0 || this._epIdx >= this._epList.length - 1;
+  },
+
+  goPrev(){ if(this._epIdx > 0) this._goEp(this._epIdx - 1); },
+  goNext(){ if(this._epIdx < this._epList.length - 1) this._goEp(this._epIdx + 1); },
+
+  _goEp(idx){
+    const ep = this._epList[idx];
+    if(!ep) return;
+    this._saveProgress();
+    this._epIdx = idx;
+    const s   = String(ep.season || 1).padStart(2,"0");
+    const e   = String(ep.episode_num || idx+1).padStart(2,"0");
+    this.open({
+      ...this._item,
+      id            : ep.id,
+      url           : ep.url,
+      stream_url    : ep.url,
+      plot          : ep.plot || this._item.plot || "",
+      episode_label : `S${s}E${e}`,
+      episode_title : ep.title || "",
+      _epList       : this._epList,
+      _epIdx        : idx
+    });
+  },
+
+  // ── Statut ──────────────────────────────────────────────────────
+  _showStatus(msg, isError = false){
+    const el = $("pip-status");
+    if(!el) return;
+    el.textContent = msg;
+    el.className   = "pip-status" + (isError ? " pip-status--error" : "");
+    el.hidden      = false;
+    setTimeout(() => { if(el) el.hidden = true; }, 6000);
+  },
+  _hideStatus(){ const el = $("pip-status"); if(el) el.hidden = true; },
+
+  // ── Lecture native / externe ─────────────────────────────────────
+  openNative(){
+    if(!this._item) return;
+    const url = (this._item.url || this._item.stream_url || "").replace(/^https?:\/\//i, "http://");
+    if(!url) return;
+    if(typeof window.AndroidBridge !== "undefined"){
+      try { window.AndroidBridge.openInVlc(url, this._item.title || "", false); return; } catch {}
+    }
+    window.open(url, "_blank", "noopener");
+  }
+};
+
 function storeGet(k, fb){
   try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fb; } catch { return fb; }
 }
@@ -844,8 +1075,22 @@ function playEpisode(series, ep, season){
     }
   }
 
-  sessionStorage.setItem("iptv_current_item", JSON.stringify(playerItem));
-  window.location.href = "player.html";
+  // ── Lecteur interne ──────────────────────────────────────────────
+  pushHist({ ...playerItem, type: "series" });
+  PipPlayer.open({
+    ...playerItem,
+    id      : playerItem.series_id,
+    _epList : allEps.map((x,i) => ({
+      id          : x.ep.id,
+      url         : x.ep.url,
+      season      : x.season,
+      episode_num : x.ep.episode_num,
+      title       : x.ep.title || "",
+      plot        : x.ep.plot  || "",
+      thumb       : x.ep.thumb || ""
+    })),
+    _epIdx  : curIdx
+  });
 }
 
 async function playItem(item){
@@ -864,49 +1109,21 @@ async function playItem(item){
   const title  = item.title || "";
   const isLive = item.type === "live";
 
-  // ── Toujours pré-remplir sessionStorage : si le bridge VLC échoue
-  //    et que le natif retombe sur player.html, l'item est déjà prêt ──
-  sessionStorage.setItem("iptv_current_item", JSON.stringify({
-    ...item,
-    stream_url : item.stream_url || item.url,
-    url        : item.url || item.stream_url
-  }));
-
-  // ── Transition fluide : overlay noir plein écran AVANT la navigation
-  //    pour masquer le flash blanc du navigateur entre 2 pages ──
-  const blackout = document.createElement("div");
-  blackout.style.cssText =
-    "position:fixed;inset:0;z-index:99999;background:#000;" +
-    "display:flex;align-items:center;justify-content:center;" +
-    "color:#7B5FE8;font-size:14px;font-family:system-ui,sans-serif";
-  blackout.innerHTML = "<div style='display:flex;flex-direction:column;align-items:center;gap:14px'>" +
-    "<div style='width:42px;height:42px;border:3px solid rgba(123,95,232,.2);border-top-color:#7B5FE8;border-radius:50%;animation:pf-spin 1s linear infinite'></div>" +
-    "<div style='letter-spacing:.04em'>Chargement…</div></div>";
-  // Spinner via animation inline
-  const sty = document.createElement("style");
-  sty.textContent = "@keyframes pf-spin{to{transform:rotate(360deg)}}";
-  document.head.appendChild(sty);
-  document.body.appendChild(blackout);
-  document.documentElement.style.background = "#000";
-  document.body.style.background = "#000";
-
-  // APK Android v4+ : tente le lecteur VLC/MX externe
-  // Sur Android TV : player.html (souvent pas de VLC installé)
+  // APK Android v4+ (téléphone non-TV) : tente le lecteur VLC/MX externe
   const isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
                (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
-
   if(!isTV && typeof window.AndroidBridge !== "undefined"
      && typeof window.AndroidBridge.openInVlc === "function"){
-    try {
-      window.AndroidBridge.openInVlc(url, title, isLive);
-      return; // si l'APK ne trouve pas de lecteur, il retombera sur player.html
-    } catch(e) {
-      console.warn("VLC bridge error:", e);
-    }
+    try { window.AndroidBridge.openInVlc(url, title, isLive); return; }
+    catch(e){ console.warn("VLC bridge error:", e); }
   }
 
-  // Fallback direct : player.html (TV / navigateur / APK < v4)
-  window.location.href = "player.html";
+  // ── Lecteur interne (navigateur / TV / APK fallback) ──────────────
+  PipPlayer.open({
+    ...item,
+    stream_url : url,
+    url        : url
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1707,9 +1924,19 @@ async function boot(){
     btn.addEventListener("click", () => {
       document.querySelectorAll(".nav-btn[data-type]").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
-      S.type = btn.dataset.type;
-      S.cat = ""; S.search = "";
+      // Fermer le panneau s'il est ouvert
+      if(S.panel?.open){ closePanel?.(); }
+      S.type    = btn.dataset.type;
+      S.cat     = "";
+      S.search  = "";
+      S.quality = "";
+      S.sort    = "title";
       $("searchInput").value = "";
+      // Placeholder dynamique selon la section
+      const ph = { vod:"Rechercher un film…", series:"Rechercher une série…", live:"Rechercher une chaîne…" };
+      $("searchInput").placeholder = ph[S.type] || "Rechercher…";
+      // Remettre le scroll en haut
+      window.scrollTo({ top: 0, behavior: "instant" });
       render();
     });
   });
@@ -1774,6 +2001,35 @@ async function boot(){
 
   initTV();
 
+  // ── Initialisation du lecteur interne ────────────────────────────
+  $("pip-back")?.addEventListener("click", () => PipPlayer.close());
+  $("pip-fav")?.addEventListener("click",  () => PipPlayer.toggleFav());
+  $("pip-prev")?.addEventListener("click", () => PipPlayer.goPrev());
+  $("pip-next")?.addEventListener("click", () => PipPlayer.goNext());
+  $("pip-native")?.addEventListener("click", () => PipPlayer.openNative());
+  $("pip-fullscreen")?.addEventListener("click", () => {
+    const v = $("pip-video");
+    if(!v) return;
+    if(document.fullscreenElement) document.exitFullscreen?.();
+    else (v.requestFullscreen || v.webkitRequestFullscreen || v.mozRequestFullScreen)?.call(v);
+  });
+  $("pip-copy")?.addEventListener("click", () => {
+    const url = PipPlayer._item?.url || PipPlayer._item?.stream_url || "";
+    if(!url) return;
+    navigator.clipboard?.writeText(url).then(() => PipPlayer._showStatus("✓ Lien copié !"))
+      .catch(() => PipPlayer._showStatus("Copie manuelle : " + url));
+  });
+  // Fermeture par touche Échap / retour TV
+  document.addEventListener("keydown", e => {
+    if(!$("pip-player")?.classList.contains("pip-open")) return;
+    const k = e.key;
+    if(["Escape","GoBack","BrowserBack","Back"].includes(k)){ e.preventDefault(); PipPlayer.close(); }
+    else if(k === "ArrowRight"){ const v = $("pip-video"); if(v){ e.preventDefault(); v.currentTime = Math.min(v.duration||Infinity, v.currentTime+10); } }
+    else if(k === "ArrowLeft") { const v = $("pip-video"); if(v){ e.preventDefault(); v.currentTime = Math.max(0, v.currentTime-10); } }
+    else if(k === "n" || k === "N" || k === "ChannelUp")  { e.preventDefault(); PipPlayer.goNext(); }
+    else if(k === "p" || k === "P" || k === "ChannelDown"){ e.preventDefault(); PipPlayer.goPrev(); }
+  }, true);
+
   // ── Pré-chargement de l'index épisodes (1 Ko, non bloquant) ──
   getEpMap();  // charge episodes_map.json en avance (1 Ko seulement)
 
@@ -1828,6 +2084,25 @@ async function boot(){
       } else {
         el.textContent = "Données en cache";
       }
+    }
+  }
+
+  // ── Restaurer la section si on revient du lecteur ──────────────────
+  {
+    const _ctx = (() => {
+      try { return JSON.parse(sessionStorage.getItem("iptv_nav_ctx") || "null"); } catch { return null; }
+    })();
+    if(_ctx?.type && ["vod","series","live"].includes(_ctx.type)){
+      S.type    = _ctx.type;
+      S.cat     = _ctx.cat    || "";
+      S.search  = _ctx.search || "";
+      if(S.search) $("searchInput").value = S.search;
+      document.querySelectorAll(".nav-btn[data-type]").forEach(b => {
+        b.classList.toggle("active", b.dataset.type === S.type);
+      });
+      const ph = { vod:"Rechercher un film…", series:"Rechercher une série…", live:"Rechercher une chaîne…" };
+      $("searchInput").placeholder = ph[S.type] || "Rechercher…";
+      sessionStorage.removeItem("iptv_nav_ctx");
     }
   }
 

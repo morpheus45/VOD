@@ -138,9 +138,19 @@ async function loadPlotFromApi(it){
   const streamUrl = it.stream_url || it.url || "";
   const creds = parseCredsFromUrl(streamUrl);
   if(!creds) return null;
-  const vodId = it.id || it.stream_id || "";
-  if(!vodId) return null;
-  const apiUrl = `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_vod_info&vod_id=${vodId}`;
+
+  let apiUrl;
+  const isSeries = it.type === "series" || !!it.series_id;
+  if(isSeries){
+    const sid = it.series_id || it.id || "";
+    if(!sid) return null;
+    apiUrl = `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_series_info&series_id=${sid}`;
+  } else {
+    const vodId = it.id || it.stream_id || "";
+    if(!vodId) return null;
+    apiUrl = `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=get_vod_info&vod_id=${vodId}`;
+  }
+
   try {
     const ctrl = new AbortController();
     const tid  = setTimeout(() => ctrl.abort(), 8000);
@@ -334,15 +344,16 @@ function initPlayer(){
 
   if($("playerTitle")) $("playerTitle").textContent = label;
   if($("playerSub"))   $("playerSub").textContent   = sub;
+  document.title = label + " — PIPSILY";
   if($("plotText"))    $("plotText").textContent     = item.plot || "Chargement du synopsis…";
 
   // ── Lazy-load synopsis depuis l'API Xtream (si plot absent) ──
-  if(!item.plot && item.type !== "series"){
+  if(!item.plot){
     loadPlotFromApi(item).then(plot => {
-      if(plot && $("plotText")) $("plotText").textContent = plot;
+      if($("plotText")){
+        $("plotText").textContent = plot || "Aucune description disponible.";
+      }
     });
-  } else if(!item.plot){
-    if($("plotText")) $("plotText").textContent = "Aucune description.";
   }
 
   updateNavButtons();
@@ -454,7 +465,13 @@ function openNative(){
 
 // ─── Bindings UI ───────────────────────────────────────────────────────────────
 
-if($("backBtn"))       $("backBtn").onclick      = () => history.back();
+// Retour vers l'app en conservant la section d'origine
+function goBackToApp(){
+  // Le contexte (section, cat, search) est déjà dans sessionStorage (iptv_nav_ctx),
+  // boot() le lira et restaurera le bon onglet.
+  window.location.href = "index.html";
+}
+if($("backBtn"))       $("backBtn").onclick      = goBackToApp;
 if($("prevEpBtn"))     $("prevEpBtn").onclick     = goPrev;
 if($("nextEpBtn"))     $("nextEpBtn").onclick     = goNext;
 if($("fullscreenBtn")) $("fullscreenBtn").onclick = () => {
@@ -506,7 +523,7 @@ if($("playOverlayBtn")) $("playOverlayBtn").onclick = () => {
 
 document.addEventListener("keydown", e => {
   const k = e.key; const video = $("video");
-  if(["Escape","GoBack","BrowserBack","Back"].includes(k)){ e.preventDefault(); history.back(); }
+  if(["Escape","GoBack","BrowserBack","Back"].includes(k)){ e.preventDefault(); goBackToApp(); }
   else if(["Enter"," ","MediaPlayPause"].includes(k)){ e.preventDefault(); if(video) video.paused?video.play():video.pause(); }
   else if(k==="ArrowRight"||k==="FastForward"){ if(video){ e.preventDefault(); video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10); } }
   else if(k==="ArrowLeft"||k==="Rewind"){ if(video){ e.preventDefault(); video.currentTime=Math.max(0,video.currentTime-10); } }

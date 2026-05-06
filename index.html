@@ -120,9 +120,52 @@
     </button>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════
+       LECTEUR INTERNE — overlay plein écran sans navigation
+       ═══════════════════════════════════════════════════════ -->
+  <div id="pip-player" role="dialog" aria-modal="true" aria-label="Lecteur vidéo">
+
+    <!-- Topbar -->
+    <div class="pip-top">
+      <button id="pip-back" class="pip-icon-btn" type="button">← Retour</button>
+      <div class="pip-title-wrap">
+        <div id="pip-title" class="pip-title-text">Lecture</div>
+        <div id="pip-sub"   class="pip-sub-text"></div>
+      </div>
+      <button id="pip-fav" class="pip-icon-btn" type="button" aria-label="Favoris">♡</button>
+    </div>
+
+    <!-- Vidéo -->
+    <div class="pip-video-wrap">
+      <video id="pip-video" playsinline controls autoplay preload="metadata"></video>
+      <div id="pip-status" class="pip-status" hidden></div>
+    </div>
+
+    <!-- Navigation épisodes -->
+    <div class="pip-ep-nav" id="pip-ep-nav" hidden>
+      <button id="pip-prev" class="pip-ep-btn" type="button" disabled>⏮ Épisode précédent</button>
+      <button id="pip-next" class="pip-ep-btn pip-ep-btn--next" type="button" disabled>Épisode suivant ⏭</button>
+    </div>
+
+    <!-- Actions -->
+    <div class="pip-actions">
+      <button id="pip-fullscreen" type="button">⛶ Plein écran</button>
+      <button id="pip-copy"       type="button">⎘ Copier le lien</button>
+      <button id="pip-native"     type="button" class="pip-btn-primary">▶ Lecture native</button>
+    </div>
+
+    <!-- Synopsis -->
+    <div class="pip-info">
+      <h2>Synopsis</h2>
+      <p id="pip-plot">Aucune description.</p>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" onerror="console.warn('HLS.js indisponible')"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./auth.js"></script>
-  <script src="app.js?v=78"></script>
+  <script src="app.js?v=79"></script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {
