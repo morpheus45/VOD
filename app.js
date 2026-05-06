@@ -2208,54 +2208,92 @@ function showUpdateBanner(){
 //  BANNIÈRE INSTALLATION APK — pour les visiteurs Android (hors APK)
 // ─────────────────────────────────────────────────────────────────
 async function checkApkInstallBanner(){
-  // Seulement si : Android + pas encore dans l'APK + pas ignoré récemment
+  // Seulement si : Android + pas encore dans l'APK
   const isAndroid   = /Android/i.test(navigator.userAgent);
   const isNativeApk = typeof window.AndroidBridge !== "undefined";
   if(!isAndroid || isNativeApk) return;
 
-  const dismissed = Number(localStorage.getItem("pf_apk_install_dismiss") || 0);
-  if(Date.now() < dismissed) return; // ignoré pour 7 jours
+  const vinfo     = await fetchJson("version.json").catch(() => null);
+  const remoteVer = Number(vinfo?.apk_version || 0);
+  const url       = vinfo?.apk_url || "https://github.com/morpheus45/VOD/releases/latest";
 
-  const vinfo = await fetchJson("version.json").catch(() => null);
-  const url   = vinfo?.apk_url || "https://github.com/morpheus45/VOD/releases/latest";
+  // Si une nouvelle version est disponible → ignorer le timer de dismiss
+  const dismissedUntil = Number(localStorage.getItem("pf_apk_install_dismiss") || 0);
+  const dismissedVer   = Number(localStorage.getItem("pf_apk_install_dismiss_ver") || 0);
+  const newVersionOut  = remoteVer > 0 && remoteVer !== dismissedVer;
+  if(!newVersionOut && Date.now() < dismissedUntil) return;
 
   if($("apkInstallBanner")) return;
+
+  // ── Modal plein écran au 1er passage, sinon bandeau ──
+  const isFirstVisit = !localStorage.getItem("pf_apk_install_dismiss");
   const banner = document.createElement("div");
   banner.id = "apkInstallBanner";
-  banner.style.cssText = [
-    "position:fixed;top:0;left:0;right:0;z-index:9998",
-    "display:flex;align-items:center;gap:12px;padding:12px 16px",
-    "background:linear-gradient(135deg,#1a1060,#0e0a30)",
-    "border-bottom:2px solid rgba(107,63,224,.6)",
-    "color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6)",
-    "font-family:'Segoe UI',system-ui,sans-serif"
-  ].join(";");
-  banner.innerHTML = `
-    <img src="./logo.svg" alt="" style="height:32px;width:auto;flex-shrink:0">
-    <div style="flex:1;min-width:0">
-      <div style="font-size:13px;font-weight:800;color:#eef4ff">Installer l'application</div>
-      <div style="font-size:11px;color:#a89be0;margin-top:1px">
-        Meilleure expérience · Lecture VLC · Hors ligne
+
+  if(isFirstVisit || newVersionOut){
+    // Modal centré — impossible à rater
+    banner.style.cssText = `
+      position:fixed;inset:0;z-index:9999;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      background:rgba(5,8,15,.92);backdrop-filter:blur(8px);padding:24px;`;
+    banner.innerHTML = `
+      <div style="background:linear-gradient(135deg,#0d1a31,#1a1060);border:1px solid rgba(107,63,224,.5);
+                  border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center;
+                  box-shadow:0 24px 60px rgba(0,0,0,.8)">
+        <img src="./logo.svg" alt="PIPSILY" style="height:48px;margin-bottom:16px">
+        <div style="font-size:20px;font-weight:800;color:#eef4ff;margin-bottom:8px">
+          ${newVersionOut ? `🆕 PIPSILY v${remoteVer} disponible !` : '📱 Installez l\'appli !'}
+        </div>
+        <div style="font-size:13px;color:#a89be0;margin-bottom:20px;line-height:1.5">
+          ${newVersionOut
+            ? (vinfo?.changes || 'Améliorations & corrections de bugs')
+            : 'Meilleure expérience · Lecture fluide · Pas de mixed content'}
+        </div>
+        <a href="${url}" target="_blank" rel="noopener"
+          style="display:block;width:100%;box-sizing:border-box;padding:14px;border-radius:12px;
+                 background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;
+                 font-size:15px;font-weight:800;text-decoration:none;margin-bottom:10px">
+          📥 Télécharger l'APK
+        </a>
+        <button id="apkInstallDismiss"
+          style="width:100%;padding:11px;border-radius:12px;border:1px solid rgba(255,255,255,.15);
+                 background:transparent;color:#7a9cc0;font-size:13px;cursor:pointer">
+          Plus tard (rappel demain)
+        </button>
+      </div>`;
+  } else {
+    // Bandeau compact (visites suivantes)
+    banner.style.cssText = `
+      position:fixed;top:0;left:0;right:0;z-index:9998;
+      display:flex;align-items:center;gap:12px;padding:10px 14px;
+      background:linear-gradient(135deg,#1a1060,#0e0a30);
+      border-bottom:2px solid rgba(107,63,224,.5);
+      color:#fff;box-shadow:0 4px 16px rgba(0,0,0,.6)`;
+    banner.innerHTML = `
+      <img src="./logo.svg" alt="" style="height:28px">
+      <div style="flex:1;font-size:13px;font-weight:700;color:#eef4ff">
+        📥 Installer l'appli PIPSILY
+        <span style="font-size:11px;font-weight:400;color:#a89be0;margin-left:6px">Meilleure lecture</span>
       </div>
-    </div>
-    <a id="apkInstallBtn" href="${url}" target="_blank" rel="noopener"
-      style="flex-shrink:0;padding:9px 16px;border-radius:10px;border:none;
-             background:linear-gradient(135deg,#6B3FE0,#38A8E8);color:#fff;
-             font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap">
-      📥 Installer
-    </a>
-    <button id="apkInstallDismiss" aria-label="Fermer"
-      style="flex-shrink:0;background:rgba(255,255,255,.1);border:none;color:#fff;
-             border-radius:8px;padding:8px 10px;font-size:14px;cursor:pointer">✕</button>`;
+      <a href="${url}" target="_blank" rel="noopener"
+        style="padding:8px 14px;border-radius:9px;background:linear-gradient(135deg,#7B5FE8,#38A8E8);
+               color:#fff;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">
+        Installer
+      </a>
+      <button id="apkInstallDismiss" aria-label="Fermer"
+        style="background:rgba(255,255,255,.1);border:none;color:#fff;border-radius:7px;
+               padding:7px 9px;font-size:13px;cursor:pointer">✕</button>`;
+    document.body.style.paddingTop = "54px";
+  }
+
   document.body.appendChild(banner);
 
-  // Décaler le contenu vers le bas pour ne pas cacher la topbar
-  document.body.style.paddingTop = (banner.offsetHeight || 64) + "px";
-
-  $("apkInstallDismiss").onclick = () => {
+  banner.querySelector("#apkInstallDismiss").onclick = () => {
     banner.remove();
     document.body.style.paddingTop = "";
-    localStorage.setItem("pf_apk_install_dismiss", String(Date.now() + 7 * 86400000)); // 7 jours
+    // Rappel dans 1 jour + mémoriser la version affichée
+    localStorage.setItem("pf_apk_install_dismiss",     String(Date.now() + 86400000));
+    localStorage.setItem("pf_apk_install_dismiss_ver", String(remoteVer));
   };
 }
 
@@ -2270,7 +2308,6 @@ async function checkApkUpdate(){
     const remoteVer = Number(vinfo.apk_version);
 
     // getApkVersion() est présent dans les APK v2+
-    // Les APK v1 (sans la méthode) sont traités comme version 1
     let localVer = 1;
     if(typeof window.AndroidBridge?.getApkVersion === "function"){
       try { localVer = Number(window.AndroidBridge.getApkVersion()) || 1; } catch {}
@@ -2278,9 +2315,11 @@ async function checkApkUpdate(){
 
     if(remoteVer <= localVer) return; // déjà à jour
 
-    // Respecter "plus tard" (rappel dans 24h)
-    const remindAt = Number(localStorage.getItem("pf_apk_remind") || 0);
-    if(Date.now() < remindAt) return;
+    // "Plus tard" → respecter le timer SEULEMENT si c'est la même version
+    // Si une NOUVELLE version sort → afficher quand même
+    const remindAt  = Number(localStorage.getItem("pf_apk_remind") || 0);
+    const remindVer = Number(localStorage.getItem("pf_apk_remind_ver") || 0);
+    if(remoteVer === remindVer && Date.now() < remindAt) return;
 
     showApkUpdateBanner(vinfo, remoteVer);
   } catch {}
@@ -2332,7 +2371,8 @@ function showApkUpdateBanner(vinfo, remoteVer){
   };
   $("apkDismissBtn").onclick = () => {
     banner.remove();
-    localStorage.setItem("pf_apk_remind", String(Date.now() + 86400000)); // +24h
+    localStorage.setItem("pf_apk_remind",     String(Date.now() + 86400000)); // +24h
+    localStorage.setItem("pf_apk_remind_ver", String(remoteVer)); // version ignorée
   };
 }
 
