@@ -39,7 +39,7 @@ public class TvActivity extends FragmentActivity {
 
     private static final String TAG         = "PipsilyTV";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "11";
+    private static final String APK_VERSION = "12";
 
     WebView webView;
 
