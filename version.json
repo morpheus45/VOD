@@ -1,5 +1,5 @@
 {
-  "apk_version": 7,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v7/PIPSILY.apk",
+  "apk_version": 8,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v8/PIPSILY.apk",
   "changes": "Lecture vidéo : fallback automatique si pas d'app vidéo · TV ultra-compact (cards 95px, pills légers, focus discret) · Paiement Wero intégré · Admin : confirmation paiements + suppression comptes"
 }
