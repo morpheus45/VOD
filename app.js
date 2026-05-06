@@ -76,30 +76,45 @@ const PipPlayer = {
     this._epList = item._epList || [];
     this._epIdx  = item._epIdx  ?? -1;
 
+    const url   = item.url || item.stream_url || "";
+    const label = item.episode_label
+      ? `${item.title} — ${item.episode_label}`
+      : item.title || "Lecture";
+    const sub = item.episode_title || item.category_name || "";
+
+    // ── APK : lecteur natif ExoPlayer (HTTP sans mixed content) ────
+    if(typeof window.AndroidBridge?.openPlayer === "function"){
+      pushHist(item);
+      // Sérialiser la liste d'épisodes pour Java
+      const epsJson = this._epList.length > 1
+        ? JSON.stringify(this._epList.map(ep => ({
+            url          : ep.url || ep.stream_url || "",
+            title        : ep.title || "",
+            episode_label: ep.episode_label || ep.episode_num
+              ? `S${String(ep.season||1).padStart(2,"0")}E${String(ep.episode_num||1).padStart(2,"0")}`
+              : ""
+          })))
+        : "[]";
+      window.AndroidBridge.openPlayer(url, item.title || label, sub, epsJson, this._epIdx);
+      return; // Pas de lecteur WebView overlay
+    }
+
+    // ── Navigateur / PWA : lecteur overlay WebView ──────────────────
     const el = $("pip-player");
     el.classList.add("pip-open");
     document.body.style.overflow = "hidden";
     el.scrollTop = 0;
 
-    // Titre
-    const label = item.episode_label
-      ? `${item.title} — ${item.episode_label}`
-      : item.title || "Lecture";
-    const sub = item.episode_title || item.category_name || "";
     $("pip-title").textContent = label;
     $("pip-sub").textContent   = sub;
     document.title = label + " — PIPSILY";
 
-    // Synopsis
     $("pip-plot").textContent = item.plot || "Chargement du synopsis…";
     if(!item.plot) this._loadPlot(item);
 
-    // Boutons
     this._updateEpNav();
     this._updateFavBtn();
     this._hideStatus();
-
-    // Vidéo
     this._loadVideo(item);
   },
 

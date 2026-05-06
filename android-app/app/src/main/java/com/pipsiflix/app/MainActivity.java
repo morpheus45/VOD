@@ -29,7 +29,7 @@ import androidx.appcompat.app.AppCompatActivity;
 public class MainActivity extends AppCompatActivity {
 
     private static final String APP_URL      = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION  = "8";
+    private static final String APK_VERSION  = "9";
 
     WebView     webView;      // package-private pour le bridge
     ProgressBar progressBar;
@@ -250,16 +250,41 @@ public class MainActivity extends AppCompatActivity {
     // ══════════════════════════════════════════════════════════════════════
     class PipsilyBridge {
 
-        /** Lecture directe dans VLC/lecteur système (appelé par app.js) */
+        /** Lecteur natif ExoPlayer — appelé par app.js PipPlayer */
+        @JavascriptInterface
+        public void openPlayer(String url, String title, String subtitle,
+                               String episodesJson, int epIndex) {
+            runOnUiThread(() -> {
+                Intent i = new Intent(MainActivity.this, PlayerActivity.class);
+                i.putExtra("url",      url);
+                i.putExtra("title",    title);
+                i.putExtra("subtitle", subtitle);
+                i.putExtra("episodes", episodesJson);
+                i.putExtra("epIndex",  epIndex);
+                startActivity(i);
+            });
+        }
+
+        /** Lecture directe (redirigé vers ExoPlayer) */
         @JavascriptInterface
         public void openInVlc(String url, String title, boolean isLive) {
-            runOnUiThread(() -> openVideoIntent(url));
+            runOnUiThread(() -> {
+                Intent i = new Intent(MainActivity.this, PlayerActivity.class);
+                i.putExtra("url",   url);
+                i.putExtra("title", title);
+                startActivity(i);
+            });
         }
 
         /** Lecture (appelé par player.js) */
         @JavascriptInterface
         public void openVideo(String url, String title) {
-            runOnUiThread(() -> openVideoIntent(url));
+            runOnUiThread(() -> {
+                Intent i = new Intent(MainActivity.this, PlayerActivity.class);
+                i.putExtra("url",   url);
+                i.putExtra("title", title);
+                startActivity(i);
+            });
         }
 
         /** Télécharge et installe une nouvelle version de l'APK */

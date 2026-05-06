@@ -13,6 +13,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import org.json.JSONArray;
 
 import androidx.fragment.app.FragmentActivity;
 
@@ -28,7 +29,7 @@ import androidx.fragment.app.FragmentActivity;
 public class TvActivity extends FragmentActivity {
 
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "8";
+    private static final String APK_VERSION = "9";
 
     WebView webView;
 
@@ -206,14 +207,40 @@ public class TvActivity extends FragmentActivity {
     // ══════════════════════════════════════════════════════════════════════
     class TvBridge {
 
+        /** Lecteur natif ExoPlayer — appelé par app.js PipPlayer */
+        @JavascriptInterface
+        public void openPlayer(String url, String title, String subtitle,
+                               String episodesJson, int epIndex) {
+            runOnUiThread(() -> {
+                Intent i = new Intent(TvActivity.this, PlayerActivity.class);
+                i.putExtra("url",      url);
+                i.putExtra("title",    title);
+                i.putExtra("subtitle", subtitle);
+                i.putExtra("episodes", episodesJson);
+                i.putExtra("epIndex",  epIndex);
+                startActivity(i);
+            });
+        }
+
         @JavascriptInterface
         public void openInVlc(String url, String title, boolean isLive) {
-            runOnUiThread(() -> openVideoIntent(url));
+            // Redirigé vers ExoPlayer natif (plus fiable que VLC externe)
+            runOnUiThread(() -> {
+                Intent i = new Intent(TvActivity.this, PlayerActivity.class);
+                i.putExtra("url",   url);
+                i.putExtra("title", title);
+                startActivity(i);
+            });
         }
 
         @JavascriptInterface
         public void openVideo(String url, String title) {
-            runOnUiThread(() -> openVideoIntent(url));
+            runOnUiThread(() -> {
+                Intent i = new Intent(TvActivity.this, PlayerActivity.class);
+                i.putExtra("url",   url);
+                i.putExtra("title", title);
+                startActivity(i);
+            });
         }
 
         @JavascriptInterface
