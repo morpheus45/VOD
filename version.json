@@ -1,5 +1,5 @@
 {
-  "apk_version": 8,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v8/PIPSILY.apk",
-  "changes": "Lecture vidéo : fallback automatique si pas d'app vidéo · TV ultra-compact (cards 95px, pills légers, focus discret) · Paiement Wero intégré · Admin : confirmation paiements + suppression comptes"
+  "apk_version": 9,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v9/PIPSILY.apk",
+  "changes": "Lecteur vidéo natif ExoPlayer intégré — HLS, VOD, TV live sans blocage HTTP · Navigation épisodes · Télécommande TV"
 }

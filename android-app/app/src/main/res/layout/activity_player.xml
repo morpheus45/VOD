@@ -6,7 +6,7 @@
     android:background="#000000"
     android:keepScreenOn="true">
 
-    <!-- Lecteur vidéo ExoPlayer plein écran -->
+    <!-- Lecteur vidéo ExoPlayer plein écran — contrôles intégrés Media3 -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="match_parent"
@@ -14,8 +14,7 @@
         app:show_buffering="when_playing"
         app:use_controller="true"
         app:show_timeout="4000"
-        app:resize_mode="fit"
-        app:controller_layout_id="@layout/player_controls" />
+        app:resize_mode="fit" />
 
     <!-- Barre titre (haut) -->
     <LinearLayout
