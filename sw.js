@@ -1,31 +1,33 @@
 // sw.js — PIPSILY v5.0 — mise à jour automatique + notification
-const CACHE = "pipsily-v82";
-const SHELL = ["./","./index.html","./login.html","./account.html","./player.html","./styles.css?v=75","./player.css","./app.js?v=82","./auth.js","./player.js?v=51","./manifest.webmanifest","./logo.svg","./icons/icon-192.png","./icons/icon-512.png","./version.json"];
+const CACHE = "pipsily-v83";
+const SHELL = ["./","./index.html","./login.html","./account.html","./player.html","./styles.css?v=75","./player.css","./app.js?v=83","./auth.js","./player.js?v=51","./manifest.webmanifest","./logo.svg","./icons/icon-192.png","./icons/icon-512.png","./version.json"];
 
 // ── Installation : vider anciens caches + mettre en cache le shell ──
+// skipWaiting() automatique → pas besoin de cliquer "Mettre à jour"
 self.addEventListener("install", e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.map(k => caches.delete(k))))
       .then(() => caches.open(CACHE).then(c => c.addAll(SHELL)))
-      // NE PAS appeler skipWaiting() ici — on attend que l'utilisateur accepte
+      .then(() => self.skipWaiting())   // activation immédiate
   );
 });
 
-// ── Activation : supprimer les vieux caches ──
+// ── Activation : supprimer vieux caches + prendre le contrôle de toutes les pages ──
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type:"window" }))
+      .then(clients => clients.forEach(c => c.postMessage({ type:"RELOAD" })))
   );
 });
 
-// ── Message : SKIP_WAITING vient de l'app quand l'utilisateur accepte la MAJ ──
+// ── Message SKIP_WAITING (rétrocompat avec le bouton "Mettre à jour") ──
 self.addEventListener("message", e => {
   if(e.data?.type === "SKIP_WAITING"){
     self.skipWaiting().then(() => {
-      // Recharger tous les onglets après activation
       self.clients.matchAll({ type:"window" }).then(clients =>
         clients.forEach(c => c.postMessage({ type:"RELOAD" }))
       );

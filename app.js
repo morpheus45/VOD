@@ -128,6 +128,21 @@ const PipPlayer = {
 
     const isHLS = /\.m3u8/i.test(url) || item.type === "live";
 
+    // ── Fallback natif : ouvre le lecteur de l'appareil si la vidéo plante ──
+    const _openNativeFallback = () => {
+      if(typeof window.AndroidBridge?.openInVlc === "function"){
+        this._showStatus("⚠️ Ouverture du lecteur natif…", false);
+        setTimeout(() => {
+          try { window.AndroidBridge.openInVlc(url, this._item?.title || "", false); }
+          catch(e){ window.open(url, "_blank", "noopener"); }
+        }, 600);
+      } else {
+        // Navigateur de bureau / iOS : ouvrir dans un nouvel onglet
+        window.open(url, "_blank", "noopener");
+      }
+    };
+
+    // ── Lecture via HLS.js (Live + m3u8) ──
     if(isHLS && window.Hls?.isSupported()){
       this._hls = new Hls({ maxBufferLength: 30, enableWorker: false });
       this._hls.loadSource(url);
@@ -135,13 +150,14 @@ const PipPlayer = {
       this._hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
       this._hls.on(Hls.Events.ERROR, (_, d) => {
         if(d.fatal){
-          // HLS.js ne supporte pas HEVC/H.265 → fallback lecture native automatique
           this._hls.destroy(); this._hls = null;
-          this._showStatus("⚠️ Flux HLS non supporté — basculement lecture native…", false);
-          setTimeout(() => {
-            video.src = url;
-            video.play().catch(() => this._showStatus("❌ Impossible de lire ce flux.", true));
-          }, 800);
+          // Essai 1 : lecture native dans l'élément vidéo (Safari / codec supporté)
+          this._showStatus("⚠️ Basculement lecture native…", false);
+          video.src = url;
+          video.play().catch(() => {
+            // Essai 2 : lecteur externe de l'appareil
+            _openNativeFallback();
+          });
         }
       });
     } else if(isHLS && video.canPlayType("application/vnd.apple.mpegurl")){
@@ -153,7 +169,12 @@ const PipPlayer = {
       video.play().catch(() => {});
     }
 
-    video.onerror = () => this._showStatus("❌ Impossible de lire ce flux.", true);
+    // Erreur sur l'élément vidéo → ouvrir lecteur natif automatiquement
+    video.onerror = () => {
+      this._showStatus("⚠️ Le flux ne peut pas être lu ici — ouverture du lecteur natif…", false);
+      setTimeout(_openNativeFallback, 800);
+    };
+
     // Reprendre la progression sauvegardée
     video.addEventListener("loadedmetadata", () => this._restoreProgress(), { once: true });
     // Sauvegarder la progression toutes les 5s
