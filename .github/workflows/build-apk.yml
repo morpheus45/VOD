@@ -85,12 +85,13 @@ jobs:
             echo "✅ APK debug : PIPSILY.apk"
           fi
 
-      # ─── 7. Supprimer l'ancien tag si existant ──────────────────────
-      - name: 🗑️ Supprimer l'ancien tag s'il existe
+      # ─── 7. Forcer le tag local (évite les conflits de tag existant) ──
+      - name: 🏷️ Tagger le commit
         run: |
           TAG="v${{ steps.ver.outputs.code }}"
-          git push origin :refs/tags/$TAG 2>/dev/null || true
-          git tag -d $TAG 2>/dev/null || true
+          git tag -f $TAG
+          git push origin $TAG --force
+        continue-on-error: true
 
       # ─── 8. Créer ou mettre à jour la Release GitHub ────────────────
       - name: 🚀 Publier la Release GitHub
@@ -98,6 +99,8 @@ jobs:
         with:
           tag_name: v${{ steps.ver.outputs.code }}
           name: "PIPSILY v${{ steps.ver.outputs.name }}"
+          draft: false
+          prerelease: false
           body: |
             ## PIPSILY v${{ steps.ver.outputs.name }}
 
