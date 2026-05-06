@@ -59,12 +59,14 @@ jobs:
         id: ks
         run: |
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android-app/app/release.jks
-            echo "signed=true" >> $GITHUB_OUTPUT
-            echo "✅ Keystore release trouvé → APK signé"
+            # Chemin absolu /tmp → pas de confusion avec le répertoire Gradle
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.jks
+            echo "ks_path=/tmp/release.jks" >> $GITHUB_OUTPUT
+            echo "signed=true"              >> $GITHUB_OUTPUT
+            echo "✅ Keystore release → APK signé"
           else
             echo "signed=false" >> $GITHUB_OUTPUT
-            echo "⚠️  Pas de KEYSTORE_BASE64 → APK debug (non updatable par-dessus un release)"
+            echo "⚠️  Pas de KEYSTORE_BASE64 → APK debug"
           fi
 
       # ─── 6. Build APK ───────────────────────────────────────────────
@@ -73,7 +75,7 @@ jobs:
         run: |
           if [ "${{ steps.ks.outputs.signed }}" = "true" ]; then
             ./gradlew assembleRelease \
-              -Pandroid.injected.signing.store.file=app/release.jks \
+              -Pandroid.injected.signing.store.file="${{ steps.ks.outputs.ks_path }}" \
               -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
               -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
               -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
