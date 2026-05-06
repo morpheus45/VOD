@@ -1,5 +1,5 @@
 /* ================================================================
-   PIPSILY — styles.css v5.1 — Dark Cinema
+   PIPSILY — styles.css v5.2 — Dark Cinema
    ================================================================ */
 
 @keyframes slideUp{
@@ -1023,30 +1023,47 @@ html.is-tv .update-bar__date{ display:none }
   margin-bottom:18px;
 }
 .live-picker__btn{
-  display:flex; flex-direction:column; align-items:center; gap:4px;
-  padding:18px 12px; border-radius:14px;
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  padding:20px 14px; border-radius:14px;
   border:2px solid rgba(123,95,232,.35);
   background:rgba(123,95,232,.10);
   color:#eef4ff; font-family:inherit; cursor:pointer;
-  transition:transform .15s, background .2s, border-color .2s;
+  transition:transform .15s, background .2s, border-color .2s, box-shadow .2s;
 }
 .live-picker__btn:hover{ background:rgba(123,95,232,.22) }
-.live-picker__btn:focus{
+.live-picker__btn:focus{ outline:none }
+/* ── Focus TV explicite (géré par JS via classe) ── */
+.live-picker__btn--focus,
+.live-picker__btn--focus:focus{
   outline:none;
-  border-color:#7B5FE8;
-  background:linear-gradient(135deg,rgba(123,95,232,.4),rgba(56,168,232,.3));
-  box-shadow:0 0 0 4px rgba(123,95,232,.25);
-  transform:scale(1.04);
+  border-color:#a78bfa;
+  background:linear-gradient(135deg,rgba(123,95,232,.5),rgba(56,168,232,.35));
+  box-shadow:0 0 0 4px rgba(123,95,232,.45), 0 0 24px rgba(123,95,232,.4);
+  transform:scale(1.07);
 }
-.live-picker__qual{ font-size:18px; font-weight:900; letter-spacing:.04em; color:#fff }
-.live-picker__hint{ font-size:10px; color:#7a9cc0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.live-picker__qual{ font-size:20px; font-weight:900; letter-spacing:.04em; color:#fff }
+/* Hint : autorise le retour à la ligne pour éviter la troncature sur TV */
+.live-picker__hint{
+  font-size:11px; color:#7a9cc0;
+  max-width:100%;
+  white-space:normal; word-break:break-word;
+  line-height:1.3; text-align:center;
+}
 .live-picker__close{
-  width:100%; padding:11px; border-radius:11px;
+  width:100%; padding:12px; border-radius:11px;
   border:1px solid rgba(255,255,255,.12);
   background:transparent; color:#7a9cc0; font-size:13px; cursor:pointer;
+  transition:color .15s, border-color .15s, box-shadow .15s;
 }
 .live-picker__close:hover{ color:#eef4ff; border-color:rgba(255,255,255,.25) }
-.live-picker__close:focus{ outline:none; border-color:#7B5FE8; color:#fff }
+.live-picker__close:focus{ outline:none }
+/* Focus TV explicite sur le bouton Fermer */
+.live-picker__close--focus,
+.live-picker__close:focus-visible{
+  outline:none;
+  border-color:#a78bfa; color:#fff;
+  box-shadow:0 0 0 3px rgba(123,95,232,.4);
+}
 
 /* Focus visible générique (mobile/desktop) */
 :focus-visible{

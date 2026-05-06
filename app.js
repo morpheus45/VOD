@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.1 — cards 110×165 + groupage Live      ║
+// ║  PIPSILY — app.js v6.2 — quality picker TV fix              ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -1233,36 +1233,103 @@ function openLivePicker(group){
   const ov = document.createElement("div");
   ov.id = "livePicker";
   ov.className = "live-picker";
+
+  // Raccourcir le nom de la chaîne dans le hint (enlever la qualité déjà affichée)
+  const makeHint = (title, quality) => {
+    let h = title.replace(new RegExp(`\\b${quality}\\b`,"i"), "").replace(/[\[\]\(\)\s]+$/, "").trim();
+    return h || title;
+  };
+
   ov.innerHTML = `
     <div class="live-picker__box">
       <h2 class="live-picker__title">${esc(group.title)}</h2>
-      <div class="live-picker__sub">Choisissez la qualité de diffusion</div>
+      <p class="live-picker__sub">Choisissez la qualité · utilisez ←→ + OK</p>
       <div class="live-picker__grid">
         ${group._variants.map((v,i) => `
-          <button class="live-picker__btn" data-idx="${i}">
+          <button class="live-picker__btn${i===0?" live-picker__btn--focus":""}"
+                  data-idx="${i}" tabindex="${i===0?0:-1}">
             <span class="live-picker__qual">${esc(v.quality)}</span>
-            <span class="live-picker__hint">${esc(v.item.title)}</span>
+            <span class="live-picker__hint">${esc(makeHint(v.item.title, v.quality))}</span>
           </button>`).join("")}
       </div>
-      <button class="live-picker__close" id="livePickerClose">✕ Fermer</button>
+      <button class="live-picker__close" id="livePickerClose" tabindex="0">✕ Fermer</button>
     </div>`;
   document.body.appendChild(ov);
-  // Focus auto sur la 1ère qualité (TV/D-pad)
-  setTimeout(() => ov.querySelector(".live-picker__btn")?.focus(), 50);
 
   const close = () => ov.remove();
-  ov.querySelectorAll(".live-picker__btn").forEach(btn => {
+
+  // ── Navigation D-pad TV (gérée manuellement pour fiabilité sur Android TV) ──
+  const allBtns = () => [...ov.querySelectorAll(".live-picker__btn")];
+  const closBtn = () => document.getElementById("livePickerClose");
+  let focusIdx = 0;
+
+  const focusBtn = (idx) => {
+    const btns = allBtns();
+    if(idx < 0 || idx >= btns.length) return;
+    focusIdx = idx;
+    btns.forEach((b,i) => {
+      b.classList.toggle("live-picker__btn--focus", i === idx);
+      b.tabIndex = i === idx ? 0 : -1;
+    });
+    closBtn().classList.remove("live-picker__close--focus");
+    btns[idx].focus();
+  };
+
+  const focusClose = () => {
+    allBtns().forEach(b => { b.classList.remove("live-picker__btn--focus"); b.tabIndex = -1; });
+    const c = closBtn();
+    c.classList.add("live-picker__close--focus");
+    c.tabIndex = 0;
+    c.focus();
+  };
+
+  ov.addEventListener("keydown", e => {
+    const btns = allBtns();
+    const onClose = document.activeElement === closBtn();
+
+    if(e.key === "Escape" || e.key === "GoBack" || e.key === "Back"){
+      e.preventDefault(); close(); return;
+    }
+    if(e.key === "ArrowRight" || e.key === "ArrowDown"){
+      e.preventDefault();
+      if(onClose) focusBtn(0);
+      else if(focusIdx < btns.length - 1) focusBtn(focusIdx + 1);
+      else focusClose();
+      return;
+    }
+    if(e.key === "ArrowLeft" || e.key === "ArrowUp"){
+      e.preventDefault();
+      if(onClose) focusBtn(btns.length - 1);
+      else if(focusIdx > 0) focusBtn(focusIdx - 1);
+      else focusClose();
+      return;
+    }
+    if(e.key === "Enter" || e.key === " "){
+      e.preventDefault();
+      if(onClose){ close(); return; }
+      const btn = btns[focusIdx];
+      if(btn){ close(); playItem(group._variants[focusIdx].item); }
+    }
+  });
+
+  allBtns().forEach(btn => {
     btn.addEventListener("click", () => {
       const idx = Number(btn.dataset.idx);
       close();
       playItem(group._variants[idx].item);
     });
+    // Sync focusIdx quand la souris/télécommande focus naturellement un bouton
+    btn.addEventListener("focus", () => {
+      focusIdx = Number(btn.dataset.idx);
+      allBtns().forEach((b,i) => b.classList.toggle("live-picker__btn--focus", i===focusIdx));
+    });
   });
+
   document.getElementById("livePickerClose").addEventListener("click", close);
   ov.addEventListener("click", e => { if(e.target === ov) close(); });
-  ov.addEventListener("keydown", e => {
-    if(e.key === "Escape" || e.key === "GoBack" || e.key === "Back"){ e.preventDefault(); close(); }
-  });
+
+  // Focus auto sur la 1ère qualité
+  setTimeout(() => focusBtn(0), 60);
 }
 
 // ─────────────────────────────────────────────────────────────────
