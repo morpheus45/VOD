@@ -62,12 +62,14 @@ public class PlayerActivity extends FragmentActivity {
     private TextView     titleView, subtitleView;
     private Button       btnPrev, btnNext;
     private LinearLayout epNavBar;
+    private LinearLayout titleBar;          // overlay titre haut
 
     private String[] epUrls;
     private String[] epLabels;
-    private String   seriesTitle  = "";
-    private int      currentIdx   = 0;
-    private boolean  hlsRetried   = false;  // évite la boucle retry infinie
+    private String   seriesTitle     = "";
+    private int      currentIdx      = 0;
+    private boolean  hlsRetried      = false;
+    private boolean  controllerShown = false; // état controller pour toggle TV
 
     // ─── Lifecycle ────────────────────────────────────────────────────
     @SuppressLint("SourceLockedOrientationActivity")
@@ -83,11 +85,32 @@ public class PlayerActivity extends FragmentActivity {
         setContentView(R.layout.activity_player);
 
         playerView   = findViewById(R.id.playerView);
+        titleBar     = findViewById(R.id.titleBar);
         titleView    = findViewById(R.id.playerTitle);
         subtitleView = findViewById(R.id.playerSubtitle);
         epNavBar     = findViewById(R.id.epNavBar);
         btnPrev      = findViewById(R.id.btnPrev);
         btnNext      = findViewById(R.id.btnNext);
+
+        // ── Synchroniser titleBar + epNavBar avec la visibilité du controller ──
+        // Le titleBar est une overlay indépendante → il faut la lier manuellement
+        playerView.addControllerVisibilityListener(visibility -> {
+            controllerShown = (visibility == View.VISIBLE);
+            if (titleBar != null) titleBar.setVisibility(visibility);
+            // epNavBar : ne montrer que si multi-épisodes
+            if (epNavBar != null && epUrls != null && epUrls.length > 1) {
+                epNavBar.setVisibility(visibility);
+            }
+        });
+
+        // Ne pas auto-afficher le controller au démarrage de la lecture
+        // (sinon il reste bloqué visible sur TV)
+        playerView.setControllerAutoShow(false);
+
+        // Focus sur playerView lui-même (pas ses boutons internes)
+        // → libère le D-pad focus qui empêche le timer d'auto-hide
+        playerView.setFocusable(true);
+        playerView.requestFocus();
 
         // ── Lire les extras de l'Intent ──
         String url      = getIntent().getStringExtra("url");      // URL principale
@@ -233,6 +256,15 @@ public class PlayerActivity extends FragmentActivity {
         player.setMediaSource(source);
         player.setPlayWhenReady(true);
         player.prepare();
+
+        // Montrer le controller brièvement au démarrage (titre visible 3s)
+        // puis l'auto-hide prend le relais (show_timeout=4000 dans le XML)
+        playerView.showController();
+        playerView.postDelayed(() -> {
+            if (player != null && player.isPlaying()) {
+                playerView.hideController();
+            }
+        }, 3000);
     }
 
     /**
@@ -314,12 +346,26 @@ public class PlayerActivity extends FragmentActivity {
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (player == null) return super.onKeyDown(keyCode, event);
         switch (keyCode) {
+
+            // OK / Sélection : afficher si masqué, masquer si visible
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+                if (controllerShown) {
+                    playerView.hideController();
+                } else {
+                    playerView.showController();
+                }
+                return true;
+
+            // Lecture / Pause
             case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
             case KeyEvent.KEYCODE_MEDIA_PLAY:
             case KeyEvent.KEYCODE_MEDIA_PAUSE:
             case KeyEvent.KEYCODE_SPACE:
                 if (player.isPlaying()) player.pause(); else player.play();
+                playerView.showController(); // montre la barre quand on pause/reprend
                 return true;
+
+            // Épisode suivant / précédent
             case KeyEvent.KEYCODE_MEDIA_NEXT:
             case KeyEvent.KEYCODE_CHANNEL_UP:
                 goEp(currentIdx + 1);
@@ -328,14 +374,32 @@ public class PlayerActivity extends FragmentActivity {
             case KeyEvent.KEYCODE_CHANNEL_DOWN:
                 goEp(currentIdx - 1);
                 return true;
+
+            // Avance / recul 10s (←→ quand controller masqué)
             case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
-            case KeyEvent.KEYCODE_DPAD_RIGHT:
                 player.seekTo(Math.min(player.getCurrentPosition() + 10_000, player.getDuration()));
+                playerView.showController();
                 return true;
             case KeyEvent.KEYCODE_MEDIA_REWIND:
-            case KeyEvent.KEYCODE_DPAD_LEFT:
                 player.seekTo(Math.max(player.getCurrentPosition() - 10_000, 0));
+                playerView.showController();
                 return true;
+
+            // ←→ : avance/recul SEULEMENT si controller masqué
+            // (si controller visible, laisser le focus naviguer les boutons)
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if (!controllerShown) {
+                    player.seekTo(Math.min(player.getCurrentPosition() + 10_000, player.getDuration()));
+                    return true;
+                }
+                return false;
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (!controllerShown) {
+                    player.seekTo(Math.max(player.getCurrentPosition() - 10_000, 0));
+                    return true;
+                }
+                return false;
+
             case KeyEvent.KEYCODE_BACK:
                 finish();
                 return true;

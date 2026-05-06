@@ -1,5 +1,5 @@
 {
-  "apk_version": 13,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v13/PIPSILY.apk",
-  "changes": "Fix 406 : OkHttp remplace HttpUrlConnection · Redirects CDN suivis · Accept */* · Connexion pooling"
+  "apk_version": 14,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v14/PIPSILY.apk",
+  "changes": "Contrôles auto-cachés : titre + barre disparaissent · OK télécommande toggle · ←→ seek quand masqué"
 }
