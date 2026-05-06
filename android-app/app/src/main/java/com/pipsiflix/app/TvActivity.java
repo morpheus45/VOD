@@ -29,7 +29,7 @@ import androidx.fragment.app.FragmentActivity;
 public class TvActivity extends FragmentActivity {
 
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "9";
+    private static final String APK_VERSION = "10";
 
     WebView webView;
 

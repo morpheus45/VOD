@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Autoriser le trafic HTTP vers goldenlink.live (serveur vidéo HTTP uniquement)
-  Tout le reste reste en HTTPS.
+  IPTV / VOD : les serveurs Xtream Codes utilisent HTTP (port 8080 typiquement).
+  On autorise le cleartext pour TOUS les domaines — nécessaire pour PIPSILY.
 -->
 <network-security-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">goldenlink.live</domain>
-    </domain-config>
-    <base-config cleartextTrafficPermitted="false">
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

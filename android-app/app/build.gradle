@@ -10,8 +10,8 @@ android {
         applicationId "com.pipsiflix.app"
         minSdk 21                // Android 5.0+ (TV inclus)
         targetSdk 34
-        versionCode 9
-        versionName "9.0"
+        versionCode 10
+        versionName "10.0"
     }
 
     // Signing config release (utilisé par GitHub Actions ou Android Studio)

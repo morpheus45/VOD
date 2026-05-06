@@ -1,5 +1,5 @@
 {
-  "apk_version": 9,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v9/PIPSILY.apk",
-  "changes": "Lecteur vidéo natif ExoPlayer intégré — HLS, VOD, TV live sans blocage HTTP · Navigation épisodes · Télécommande TV"
+  "apk_version": 10,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v10/PIPSILY.apk",
+  "changes": "Fix critique : lecture vidéo HTTP débloquée (VOD, séries, TV) · Diagnostic erreur ExoPlayer affiché · Retry HLS automatique"
 }

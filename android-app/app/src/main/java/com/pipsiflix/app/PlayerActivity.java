@@ -3,16 +3,19 @@ package com.pipsiflix.app;
 import android.annotation.SuppressLint;
 import android.content.pm.ActivityInfo;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.OptIn;
 import androidx.fragment.app.FragmentActivity;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultHttpDataSource;
@@ -41,6 +44,8 @@ import java.util.List;
 @OptIn(markerClass = UnstableApi.class)
 public class PlayerActivity extends FragmentActivity {
 
+    private static final String TAG = "PipsilyPlayer";
+
     private ExoPlayer    player;
     private PlayerView   playerView;
     private TextView     titleView, subtitleView;
@@ -49,8 +54,9 @@ public class PlayerActivity extends FragmentActivity {
 
     private String[] epUrls;
     private String[] epLabels;
-    private String   seriesTitle = "";
-    private int      currentIdx  = 0;
+    private String   seriesTitle  = "";
+    private int      currentIdx   = 0;
+    private boolean  hlsRetried   = false;  // évite la boucle retry infinie
 
     // ─── Lifecycle ────────────────────────────────────────────────────
     @SuppressLint("SourceLockedOrientationActivity")
@@ -140,6 +146,8 @@ public class PlayerActivity extends FragmentActivity {
         }
 
         // Créer ou réinitialiser le player
+        hlsRetried = false;   // reset à chaque nouvelle URL
+
         if (player == null) {
             player = new ExoPlayer.Builder(this).build();
             playerView.setPlayer(player);
@@ -153,18 +161,74 @@ public class PlayerActivity extends FragmentActivity {
                         goEp(currentIdx + 1);
                     }
                 }
+
+                @Override
+                public void onPlayerError(PlaybackException error) {
+                    String msg = error.getMessage();
+                    Log.e(TAG, "ExoPlayer error [" + error.errorCode + "] " + msg, error);
+
+                    // ── Retry : si ProgressiveMedia échoue sur une URL HLS déguisée ──
+                    String curUrl = epUrls[currentIdx];
+                    String lo     = curUrl.toLowerCase();
+                    boolean wasProgressive = !lo.contains(".m3u8") && !lo.contains("/live/") && !lo.contains("get_series_info");
+                    if (wasProgressive && !hlsRetried) {
+                        hlsRetried = true;
+                        Log.i(TAG, "Retry en HLS pour: " + curUrl);
+                        runOnUiThread(() -> {
+                            player.stop();
+                            player.clearMediaItems();
+                            DefaultHttpDataSource.Factory ds = new DefaultHttpDataSource.Factory()
+                                    .setAllowCrossProtocolRedirects(true)
+                                    .setConnectTimeoutMs(20_000)
+                                    .setReadTimeoutMs(30_000)
+                                    .setUserAgent("PIPSILY/9.0 (Android)");
+                            MediaSource hlsSrc = new HlsMediaSource.Factory(ds)
+                                    .createMediaSource(MediaItem.fromUri(curUrl));
+                            player.setMediaSource(hlsSrc);
+                            player.setPlayWhenReady(true);
+                            player.prepare();
+                        });
+                        return;
+                    }
+
+                    // ── Afficher l'erreur à l'utilisateur ──
+                    String label;
+                    switch (error.errorCode) {
+                        case PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED:
+                            label = "Connexion réseau impossible — vérifiez l'URL et votre réseau.";
+                            break;
+                        case PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT:
+                            label = "Délai d'attente dépassé — serveur trop lent.";
+                            break;
+                        case PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS:
+                            label = "Erreur HTTP serveur (403/404/500).";
+                            break;
+                        case PlaybackException.ERROR_CODE_DECODER_INIT_FAILED:
+                            label = "Codec non supporté par cet appareil.";
+                            break;
+                        case PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED:
+                            label = "Format vidéo non reconnu.";
+                            break;
+                        default:
+                            label = "Erreur lecture (" + error.errorCode + ")";
+                    }
+                    final String toastMsg = label;
+                    runOnUiThread(() ->
+                        Toast.makeText(PlayerActivity.this, toastMsg, Toast.LENGTH_LONG).show()
+                    );
+                }
             });
         } else {
             player.stop();
             player.clearMediaItems();
         }
 
-        // Fabrique HTTP — pas de restriction mixed content côté Java
+        // Fabrique HTTP — autorisé par network_security_config (cleartextTrafficPermitted=true)
         DefaultHttpDataSource.Factory dsFactory = new DefaultHttpDataSource.Factory()
                 .setAllowCrossProtocolRedirects(true)
                 .setConnectTimeoutMs(20_000)
                 .setReadTimeoutMs(30_000)
-                .setUserAgent("PIPSILY/8.0 (Android)");
+                .setUserAgent("PIPSILY/9.0 (Android)");
 
         MediaSource source;
         String      lUrl = url.toLowerCase();
@@ -174,7 +238,7 @@ public class PlayerActivity extends FragmentActivity {
             source = new HlsMediaSource.Factory(dsFactory)
                     .createMediaSource(MediaItem.fromUri(url));
         } else {
-            // ── Fichier direct (MP4, MKV…) ──
+            // ── Fichier direct (MP4, MKV…) — Xtream VOD ──
             source = new ProgressiveMediaSource.Factory(dsFactory)
                     .createMediaSource(MediaItem.fromUri(url));
         }
