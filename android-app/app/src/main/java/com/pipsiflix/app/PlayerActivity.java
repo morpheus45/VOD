@@ -94,14 +94,16 @@ public class PlayerActivity extends FragmentActivity {
 
         // ── Synchroniser titleBar + epNavBar avec la visibilité du controller ──
         // Le titleBar est une overlay indépendante → il faut la lier manuellement
-        playerView.addControllerVisibilityListener(visibility -> {
-            controllerShown = (visibility == View.VISIBLE);
-            if (titleBar != null) titleBar.setVisibility(visibility);
-            // epNavBar : ne montrer que si multi-épisodes
-            if (epNavBar != null && epUrls != null && epUrls.length > 1) {
-                epNavBar.setVisibility(visibility);
+        playerView.setControllerVisibilityListener(
+            (PlayerView.ControllerVisibilityListener) visibility -> {
+                controllerShown = (visibility == View.VISIBLE);
+                if (titleBar != null) titleBar.setVisibility(visibility);
+                // epNavBar : ne montrer que si multi-épisodes
+                if (epNavBar != null && epUrls != null && epUrls.length > 1) {
+                    epNavBar.setVisibility(visibility);
+                }
             }
-        });
+        );
 
         // Ne pas auto-afficher le controller au démarrage de la lecture
         // (sinon il reste bloqué visible sur TV)
