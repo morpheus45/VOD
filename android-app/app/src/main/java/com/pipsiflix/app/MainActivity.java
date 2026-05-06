@@ -1,9 +1,15 @@
 package com.pipsiflix.app;
 
 import android.annotation.SuppressLint;
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.CookieManager;
@@ -14,8 +20,11 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.ProgressBar;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
+import java.io.File;
 
 /**
  * PIPSILY — Activité principale (phone & tablet)  v5
@@ -28,11 +37,16 @@ import androidx.appcompat.app.AppCompatActivity;
  */
 public class MainActivity extends AppCompatActivity {
 
-    private static final String APP_URL      = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION  = "10";
+    private static final String TAG         = "PipsilyMain";
+    private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
+    private static final String APK_VERSION = "10";
 
-    WebView     webView;      // package-private pour le bridge
+    WebView     webView;
     ProgressBar progressBar;
+
+    // ── Téléchargement APK ──────────────────────────────────────────────
+    private long              apkDownloadId = -1;
+    private BroadcastReceiver apkReceiver   = null;
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
@@ -212,6 +226,89 @@ public class MainActivity extends AppCompatActivity {
                lo.contains("/live/");
     }
 
+    // ── Téléchargement APK via DownloadManager ──────────────────────────
+    void startApkDownload(String apkUrl) {
+        runOnUiThread(() -> {
+            try {
+                File dir  = getExternalFilesDir(null);
+                if (dir == null) dir = getCacheDir();
+                final File dest = new File(dir, "PIPSILY_update.apk");
+                if (dest.exists()) dest.delete();
+
+                DownloadManager.Request req = new DownloadManager.Request(Uri.parse(apkUrl));
+                req.setTitle("PIPSILY — Mise à jour");
+                req.setDescription("Téléchargement en cours…");
+                req.setDestinationUri(Uri.fromFile(dest));
+                req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
+                req.setMimeType("application/vnd.android.package-archive");
+
+                DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                apkDownloadId = dm.enqueue(req);
+
+                Toast.makeText(MainActivity.this, "📥 Téléchargement en cours…", Toast.LENGTH_SHORT).show();
+
+                if (webView != null) {
+                    webView.evaluateJavascript(
+                        "var b=document.getElementById('apkDownloadBtn');" +
+                        "if(b){b.textContent='📥 Téléchargement…';b.disabled=true;}", null);
+                }
+
+                apkReceiver = new BroadcastReceiver() {
+                    @Override public void onReceive(Context ctx, Intent intent) {
+                        long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                        if (id != apkDownloadId) return;
+                        unregisterApkReceiver();
+                        installDownloadedApk(dest);
+                    }
+                };
+                IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+                if (Build.VERSION.SDK_INT >= 26) {
+                    registerReceiver(apkReceiver, filter, 2 /* RECEIVER_EXPORTED */);
+                } else {
+                    registerReceiver(apkReceiver, filter);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "startApkDownload", e);
+                Toast.makeText(MainActivity.this,
+                    "Erreur téléchargement : " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void installDownloadedApk(File apkFile) {
+        runOnUiThread(() -> {
+            try {
+                if (!apkFile.exists()) {
+                    Toast.makeText(this, "Fichier APK introuvable", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                Uri uri = FileProvider.getUriForFile(this, "com.pipsiflix.app.provider", apkFile);
+                Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+                install.setDataAndType(uri, "application/vnd.android.package-archive");
+                install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(install);
+            } catch (Exception e) {
+                Log.e(TAG, "installDownloadedApk", e);
+                Toast.makeText(this,
+                    "Erreur installation : " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void unregisterApkReceiver() {
+        if (apkReceiver != null) {
+            try { unregisterReceiver(apkReceiver); } catch (Exception ignored) {}
+            apkReceiver = null;
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unregisterApkReceiver();
+    }
+
     // ── Touche Retour ──
     @Override
     public void onBackPressed() {
@@ -287,23 +384,16 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        /** Télécharge et installe une nouvelle version de l'APK */
+        /** Télécharge et installe l'APK directement (sans navigateur) */
         @JavascriptInterface
         public void downloadAndInstall(String apkUrl) {
-            runOnUiThread(() -> {
-                try {
-                    // Ouvrir dans le navigateur → Android gère le téléchargement + install
-                    Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl));
-                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(i);
-                } catch (Exception ignored) {}
-            });
+            startApkDownload(apkUrl);
         }
 
-        /** Ouvre une URL (fallback téléchargement APK ancien) */
+        /** Fallback (compatibilité APK anciens) */
         @JavascriptInterface
         public void openDownloadUrl(String url) {
-            downloadAndInstall(url);
+            startApkDownload(url);
         }
 
         /** Vide le cache WebView et recharge */

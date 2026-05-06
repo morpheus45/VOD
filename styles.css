@@ -1199,3 +1199,48 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
 .is-tv .quality-pill:focus{
   outline:3px solid #ff3d5e; outline-offset:3px;
 }
+
+/* ── Modal mise à jour APK (TV plein écran) ─────────────────────────── */
+.apk-tv-modal{
+  text-align:center;
+  padding:48px 60px;
+  background:linear-gradient(160deg,#0d1b2a,#1a3d1a);
+  border:2px solid #4caf50;
+  border-radius:20px;
+  max-width:680px;
+  width:90%;
+  box-shadow:0 0 60px rgba(76,175,80,.25);
+  font-family:sans-serif;
+  color:#fff;
+}
+.apk-tv-icon{ font-size:56px; margin-bottom:16px; }
+.apk-tv-title{ font-size:28px; font-weight:700; margin:0 0 12px; }
+.apk-tv-changes{
+  font-size:16px; opacity:.75; margin:0 0 32px;
+  line-height:1.5;
+}
+.apk-tv-btns{ display:flex; gap:20px; justify-content:center; margin-bottom:20px; flex-wrap:wrap; }
+.apk-tv-btn{
+  font-size:18px; font-weight:700;
+  padding:16px 36px; border-radius:12px; border:2px solid transparent;
+  cursor:pointer; transition:transform .1s,box-shadow .1s,outline .1s;
+  font-family:inherit;
+  outline:none;
+}
+.apk-tv-btn--install{
+  background:#4caf50; color:#fff;
+}
+.apk-tv-btn--later{
+  background:rgba(255,255,255,.1); color:#ccc;
+  border-color:rgba(255,255,255,.2);
+}
+/* Focus télécommande */
+.apk-tv-btn:focus{
+  outline:4px solid #ff3d5e;
+  outline-offset:4px;
+  transform:scale(1.06);
+  box-shadow:0 0 20px rgba(255,61,94,.5);
+}
+.apk-tv-hint{
+  font-size:13px; opacity:.45; margin:0;
+}
