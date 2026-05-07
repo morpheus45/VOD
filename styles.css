@@ -655,6 +655,16 @@ button,select,input{ font:inherit }
   width:100%; height:100%; object-fit:cover; display:block;
   transition:transform .35s ease;
 }
+/* ── Cartes Live (chaînes TV) : logo en mode contain pour ne pas couper ── */
+.nrow-card--live .nrow-media{
+  height:110px; /* format carré mieux adapté aux logos TV */
+  background:#060e1a;
+}
+.nrow-card--live .nrow-media img{
+  object-fit:contain;
+  padding:8px;
+}
+.nrow-card--live .nrow-media::after{ display:none } /* pas de dégradé pour les logos */
 .nrow-media::after{
   content:''; position:absolute; inset:0;
   background:linear-gradient(to top,rgba(5,8,15,.8) 0%,transparent 55%);
@@ -935,8 +945,9 @@ html.is-tv .card-media  { height:165px }
 html.is-tv .card-title  { font-size:11px; line-height:1.3; -webkit-line-clamp:3 }
 html.is-tv .card-info   { padding:6px 3px 0 }
 html.is-tv .netflix-rows { gap:16px; padding:0 36px }
-html.is-tv .nrow-card    { flex:0 0 110px }
-html.is-tv .nrow-media   { width:110px; height:165px; border-radius:8px }
+html.is-tv .nrow-card              { flex:0 0 110px }
+html.is-tv .nrow-media             { width:110px; height:165px; border-radius:8px }
+html.is-tv .nrow-card--live .nrow-media { height:110px }
 html.is-tv .nrow-strip   { gap:7px; padding-top:14px; padding-bottom:7px; overflow-y:visible }
 html.is-tv .nrow-info    { padding:5px 2px 0; height:34px }
 html.is-tv .nrow-name    { font-size:11px }

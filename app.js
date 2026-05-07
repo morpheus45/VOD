@@ -1495,7 +1495,8 @@ const NROW_MAX = 24; // éléments max par rangée
 
 function makeNrowCard(item){
   const card = document.createElement("div");
-  card.className   = "nrow-card";
+  const isLive = item.type === "live";
+  card.className   = "nrow-card" + (isLive ? " nrow-card--live" : "");
   card.tabIndex    = 0;
   card.dataset.key = itemKey(item);
   const poster   = item.stream_icon || "";
