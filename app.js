@@ -1571,13 +1571,22 @@ function renderNetflixRows(){
   }
 
   if(!catMap.size){ grid.innerHTML = ""; empty.hidden = false; return; }
+
+  // Mettre DERNIERS AJOUTS (LATEST MOVIES / LATEST SERIES) en première position
+  const isLatest = k => /LATEST\s+(MOVIES?|SERIES)/i.test(k);
+  const sorted = [...catMap.entries()].sort(([a],[b]) => {
+    if(isLatest(a) && !isLatest(b)) return -1;
+    if(!isLatest(a) && isLatest(b)) return  1;
+    return 0;
+  });
+  const orderedMap = new Map(sorted);
   empty.hidden = true;
   grid.innerHTML = "";
 
   const frag = document.createDocumentFragment();
   let total = 0;
 
-  catMap.forEach((items, catName) => {
+  orderedMap.forEach((items, catName) => {
     total += items.length;
 
     const section = document.createElement("div");
@@ -1631,7 +1640,7 @@ function renderNetflixRows(){
   });
 
   grid.appendChild(frag);
-  $("catalogCount").textContent = `${total} éléments · ${catMap.size} catégories`;
+  $("catalogCount").textContent = `${total} éléments · ${orderedMap.size} catégories`;
 }
 
 // ─────────────────────────────────────────────────────────────────
