@@ -1439,7 +1439,7 @@ function renderGrid(reset = false){
     card.innerHTML = `
       <div class="card-media">
         ${poster
-          ? `<img src="${esc(poster)}" alt="" loading="lazy">`
+          ? `<img src="${esc(poster)}" alt="" loading="lazy" onerror="this.style.display='none';var p=document.createElement('div');p.className='card-placeholder';p.textContent='${isLive?"📡":"🎬"}';this.parentNode.insertBefore(p,this);">`
           : `<div class="card-placeholder">${isLive?"📡":"🎬"}</div>`}
         <span class="card-badge ${badgeCls}">${badgeTxt}</span>
         ${item.quality && !isLive ? `<span class="card-qual">${esc(item.quality)}</span>` : ""}
@@ -1505,7 +1505,7 @@ function makeNrowCard(item){
   card.innerHTML = `
     <div class="nrow-media">
       ${poster
-        ? `<img src="${esc(poster)}" alt="" loading="lazy">`
+        ? `<img src="${esc(poster)}" alt="">`
         : `<div class="nrow-placeholder">${isSeries ? "📺" : "🎬"}</div>`}
       ${item.quality ? `<span class="nrow-qual">${esc(item.quality)}</span>` : ""}
       <div class="nrow-overlay"><span class="nrow-play">▶</span></div>
@@ -1514,6 +1514,18 @@ function makeNrowCard(item){
     <div class="nrow-info">
       <div class="nrow-name">${esc(item.title)}</div>
     </div>`;
+
+  // Fallback si l'image ne charge pas : remplacer par le placeholder emoji
+  if(poster){
+    const imgEl = card.querySelector(".nrow-media img");
+    if(imgEl) imgEl.onerror = function(){
+      this.style.display = "none";
+      const ph = document.createElement("div");
+      ph.className = "nrow-placeholder";
+      ph.textContent = isSeries ? "📺" : "🎬";
+      this.parentNode.insertBefore(ph, this);
+    };
+  }
 
   card.querySelector(".nrow-fav").addEventListener("click", e => {
     e.stopPropagation();
