@@ -1,5 +1,5 @@
 {
-  "apk_version": 14,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v14/PIPSILY.apk",
-  "changes": "Contrôles auto-cachés : titre + barre disparaissent · OK télécommande toggle · ←→ seek quand masqué"
+  "apk_version": 15,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v15/PIPSILY.apk",
+  "changes": "Retour Android ferme le panneau (pas l'app) · Synopsis via bridge Java (sans CORS) · Vignettes non coupées en haut"
 }

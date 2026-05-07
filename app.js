@@ -747,6 +747,8 @@ function openVodPanel(item){
   document.body.style.overflow = "hidden";
   const panel = $("seriesPanel");
   panel.hidden = false;
+  // Pousse un état dans l'historique → Android Back = goBack() → popstate → ferme le panneau
+  history.pushState({pip:"vod"}, "");
 
   const ext    = getExt(item.stream_url || item.url || "");
   const meta   = [item.category_name, item.quality, ext ? ext.toUpperCase() : ""].filter(Boolean).join(" · ");
@@ -818,44 +820,70 @@ function openVodPanel(item){
 async function fetchVodPlot(item){
   const streamUrl = item.stream_url || item.url || "";
   if(!streamUrl) return null;
+
+  // ── Extraire credentials depuis l'URL Xtream ──────────────────────
+  let username = "", password = "", base = "";
   try {
-    const u     = new URL(streamUrl);
-    const parts = u.pathname.split("/").filter(Boolean);
-    let base = u.origin, username = "", password = "";
-    if(parts[0] === "movie" && parts.length >= 4){
-      username = parts[1]; password = parts[2];
+    const u = new URL(streamUrl);
+    base = u.origin;
+    const pts = u.pathname.split("/").filter(Boolean);
+    if((pts[0]==="movie"||pts[0]==="series"||pts[0]==="live") && pts.length >= 4){
+      username = pts[1]; password = pts[2];
+    } else if(!u.search && pts.length >= 3 && !pts[0].includes(".")){
+      // Format /user/pass/id sans préfixe
+      username = pts[0]; password = pts[1];
     } else {
       username = u.searchParams.get("username") || "";
       password = u.searchParams.get("password") || "";
     }
-    if(!username || !password) return null;
-    const vodId = item.id || item.stream_id || String(item.num || "");
-    if(!vodId) return null;
-    // HTTP (le serveur IPTV ne supporte généralement pas HTTPS)
-    const host   = new URL(base).hostname;
-    const port   = new URL(base).port ? `:${new URL(base).port}` : "";
-    const apiUrl = `http://${host}${port}/player_api.php?username=${username}&password=${password}&action=get_vod_info&vod_id=${vodId}`;
+  } catch { return null; }
 
-    const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 8000);
-    let json = null;
+  if(!username || !password) return null;
+  const vodId = item.id || item.stream_id || String(item.num || "");
+  if(!vodId) return null;
+
+  // Toujours HTTP pour les API Xtream (la plupart ne supportent pas HTTPS)
+  const apiUrl = base.replace(/^https?:/, "http:") +
+    `/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&action=get_vod_info&vod_id=${vodId}`;
+
+  let json = null;
+
+  // ── Option 1 : Bridge Android natif (contourne le blocage CORS du WebView) ──
+  if(typeof window.AndroidBridge?.fetchUrlAsync === "function"){
+    json = await new Promise(resolve => {
+      const cbName = "_vodPlotCb" + Date.now();
+      const timer  = setTimeout(() => { delete window[cbName]; resolve(null); }, 12000);
+      window[cbName] = (b64, ok) => {
+        clearTimeout(timer); delete window[cbName];
+        if(!ok){ resolve(null); return; }
+        try { resolve(JSON.parse(atob(b64))); } catch { resolve(null); }
+      };
+      window.AndroidBridge.fetchUrlAsync(apiUrl, cbName);
+    });
+  }
+  // ── Option 2 : fetch standard (bloqué par CORS sur beaucoup de serveurs IPTV) ──
+  else {
     try {
-      const r = await fetch(apiUrl, { signal: ctrl.signal });
+      const ctrl = new AbortController();
+      const tid  = setTimeout(() => ctrl.abort(), 8000);
+      const r    = await fetch(apiUrl, { signal: ctrl.signal });
       clearTimeout(tid);
       if(r.ok) json = await r.json();
-    } catch { clearTimeout(tid); }
+    } catch { /* CORS ou réseau */ }
+  }
 
-    if(!json) return null;
-    return json?.info?.plot || json?.info?.description || null;
-  } catch { return null; }
+  if(!json) return null;
+  return json?.info?.plot || json?.info?.description || json?.movie_data?.plot || null;
 }
 
-function closeVodPanel(){
+function closeVodPanel(_fromPopstate){
+  if(!S.panel.open && !S.panel.isVod) return;
+  const needBack = !_fromPopstate && history.state?.pip === "vod";
   S.panel.open  = false;
   S.panel.isVod = false;
-  const panel = $("seriesPanel");
-  panel.hidden = true;
+  $("seriesPanel").hidden = true;
   document.body.style.overflow = "";
+  if(needBack) history.back(); // nettoie le pushState
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -870,6 +898,7 @@ function openPanel(series){
   S.panel.selSeason  = null;
 
   document.body.style.overflow = "hidden";
+  history.pushState({pip:"series"}, "");
 
   const panel = $("seriesPanel");
   panel.hidden = false;
@@ -886,10 +915,13 @@ function openPanel(series){
   });
 }
 
-function closePanel(){
+function closePanel(_fromPopstate){
+  if(!S.panel.open) return;
+  const needBack = !_fromPopstate && history.state?.pip === "series";
   S.panel.open = false;
   $("seriesPanel").hidden = true;
   document.body.style.overflow = "";
+  if(needBack) history.back();
 }
 
 function bindClose(){
@@ -2149,6 +2181,13 @@ async function boot(){
   ).observe($("gridSentinel"));
 
   initTV();
+
+  // ── Retour Android / Échap : ferme le panneau ouvert (sans quitter l'app) ──
+  window.addEventListener("popstate", () => {
+    if(S.panel.open && S.panel.isVod) { closeVodPanel(true);  return; }
+    if(S.panel.open)                  { closePanel(true);      return; }
+    if($("pip-player")?.classList.contains("pip-open")) { PipPlayer.close(); }
+  });
 
   // ── Initialisation du lecteur interne ────────────────────────────
   $("pip-back")?.addEventListener("click", () => PipPlayer.close());

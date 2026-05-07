@@ -39,7 +39,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG         = "PipsilyMain";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "14";
+    private static final String APK_VERSION = "15";
 
     WebView     webView;
     ProgressBar progressBar;
@@ -416,6 +416,45 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public String getDeviceType() {
             return "android_phone";
+        }
+
+        /**
+         * Requête HTTP depuis Java (pas de CORS) — pour récupérer le synopsis Xtream.
+         * Répond en appelant window[callbackFn](base64, ok) sur le thread UI.
+         */
+        @JavascriptInterface
+        public void fetchUrlAsync(final String url, final String callbackFn) {
+            new Thread(() -> {
+                String b64 = null;
+                try {
+                    java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(5000);
+                    conn.setReadTimeout(8000);
+                    conn.setRequestProperty("User-Agent", "okhttp/4.11.0");
+                    conn.setRequestProperty("Accept", "application/json");
+                    conn.setInstanceFollowRedirects(true);
+                    if(conn.getResponseCode() >= 200 && conn.getResponseCode() < 300){
+                        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                        java.io.InputStream is = conn.getInputStream();
+                        byte[] buf = new byte[4096]; int n;
+                        while((n = is.read(buf)) != -1) baos.write(buf, 0, n);
+                        is.close();
+                        b64 = android.util.Base64.encodeToString(
+                            baos.toByteArray(), android.util.Base64.NO_WRAP);
+                    }
+                    conn.disconnect();
+                } catch(Exception ignored){}
+                final String result = b64;
+                runOnUiThread(() -> {
+                    if(webView == null) return;
+                    String js = result != null
+                        ? "if(window['" + callbackFn + "'])window['" + callbackFn + "']('" + result + "',true);"
+                        : "if(window['" + callbackFn + "'])window['" + callbackFn + "'](null,false);";
+                    webView.evaluateJavascript(js, null);
+                });
+            }).start();
         }
     }
 }
