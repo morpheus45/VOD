@@ -1534,6 +1534,14 @@ function makeNrowCard(item){
   return card;
 }
 
+// Renomme les catégories fournisseur en libellés français lisibles
+function displayCatName(name){
+  const n = (name || "").toUpperCase();
+  if(/LATEST\s+MOVIES?/.test(n)) return "DERNIERS AJOUTS";
+  if(/LATEST\s+SERIES/.test(n))  return "DERNIERS AJOUTS";
+  return name;
+}
+
 function renderNetflixRows(){
   const grid  = $("grid");
   const empty = $("emptyState");
@@ -1568,7 +1576,7 @@ function renderNetflixRows(){
 
     const titleEl = document.createElement("h3");
     titleEl.className = "nrow-title";
-    titleEl.textContent = catName;
+    titleEl.textContent = displayCatName(catName);
 
     hdr.appendChild(titleEl);
     section.appendChild(hdr);
