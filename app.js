@@ -28,9 +28,6 @@ const S = {
   vod       : [],
   series    : [],
   live      : [],
-  srcVod    : "",
-  srcSeries : "",
-  srcLive   : "",
   cat       : "",
   search    : "",
   quality   : "",
@@ -1660,9 +1657,7 @@ function render(){
     if(heroEl)  heroEl.hidden  = false;
     $("heroTitle").textContent    = label;
     $("heroSubtitle").textContent = S.cat || "";
-    $("statType").textContent     = label;
     $("statCount").textContent    = `${col.length} éléments`;
-    $("statSource").textContent   = `source : ${S.srcLive || "locale"}`;
   } else {
     if(heroEl)  heroEl.hidden  = true;
     if(novSect) novSect.hidden = true;
@@ -2260,16 +2255,16 @@ async function boot(){
     fetchJson("episodes_index.json")
   ]);
 
-  if(vodJson){ S.vod = normalizeItems(extractArr(vodJson), "vod"); S.srcVod = "vod.json"; }
+  if(vodJson){ S.vod = normalizeItems(extractArr(vodJson), "vod"); }
   else {
     const vodM3u = await fetchText("vod.m3u");
-    if(vodM3u){ S.vod = parseM3U(vodM3u, "vod"); S.srcVod = "vod.m3u"; }
+    if(vodM3u){ S.vod = parseM3U(vodM3u, "vod"); }
   }
 
-  if(seriesJson){ S.series = normalizeItems(extractArr(seriesJson), "series"); S.srcSeries = "series.json"; }
+  if(seriesJson){ S.series = normalizeItems(extractArr(seriesJson), "series"); }
   else {
     const seriesM3u = await fetchText("series.m3u");
-    if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); S.srcSeries = "series.m3u"; }
+    if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); }
   }
 
   if(liveJson){
@@ -2288,7 +2283,6 @@ async function boot(){
       type         : "live",
       quality      : ""
     }));
-    S.srcLive = "live.json";
   }
 
   // ── Afficher date dernière mise à jour dans la barre fixe ──
@@ -2301,7 +2295,7 @@ async function boot(){
         const nb  = epIndex.total ? ` · ${epIndex.total.toLocaleString("fr-FR")} séries` : "";
         el.textContent = `Mise à jour le ${fmt}${nb}`;
       } else {
-        el.textContent = "Données en cache";
+        el.textContent = "Catalogue à jour";
       }
     }
   }
