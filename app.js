@@ -1658,10 +1658,11 @@ function render(){
   const novSect = $("nouveautesSection");
   if(S.type === "live"){
     if(heroEl)  heroEl.hidden  = false;
-    $("heroTitle").textContent  = label;
-    $("statType").textContent   = label;
-    $("statCount").textContent  = `${col.length} éléments`;
-    $("statSource").textContent = `source : ${S.srcLive || "locale"}`;
+    $("heroTitle").textContent    = label;
+    $("heroSubtitle").textContent = S.cat || "";
+    $("statType").textContent     = label;
+    $("statCount").textContent    = `${col.length} éléments`;
+    $("statSource").textContent   = `source : ${S.srcLive || "locale"}`;
   } else {
     if(heroEl)  heroEl.hidden  = true;
     if(novSect) novSect.hidden = true;
