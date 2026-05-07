@@ -224,36 +224,59 @@ const PipPlayer = {
   // ── Synopsis lazy-load ──────────────────────────────────────────
   _loadPlot(item){
     const streamUrl = item.stream_url || item.url || "";
-    // Extraire base/user/pass depuis l'URL
+    // ── Extraire base/user/pass depuis l'URL Xtream ──────────────────
     let creds = null;
     try {
-      const u    = new URL(streamUrl.replace(/^https?:\/\//i, "http://"));
-      const pts  = u.pathname.split("/").filter(Boolean);
-      if(pts[0] === "movie" && pts.length >= 4)
+      const u   = new URL(streamUrl);
+      const pts = u.pathname.split("/").filter(Boolean);
+      // Format /movie/user/pass/id.ext  ou  /series/user/pass/id.ext
+      if((pts[0]==="movie"||pts[0]==="series"||pts[0]==="live") && pts.length >= 4)
         creds = { base: u.origin, username: pts[1], password: pts[2] };
+      // Format query-string  ?username=...&password=...
       else {
         const usr = u.searchParams.get("username");
         const pwd = u.searchParams.get("password");
         if(usr && pwd) creds = { base: u.origin, username: usr, password: pwd };
       }
+      // Format  /user/pass/id.ext  (Xtream sans préfixe)
+      if(!creds && pts.length >= 3 && !pts[0].includes("."))
+        creds = { base: u.origin, username: pts[0], password: pts[1] };
     } catch {}
-    if(!creds) { if($("pip-plot")) $("pip-plot").textContent = "Aucune description disponible."; return; }
 
-    const isSeries = item.type === "series" || !!item.series_id;
-    const id       = isSeries ? (item.series_id || item.id) : (item.id || item.stream_id);
-    if(!id) return;
-    const action   = isSeries ? `get_series_info&series_id=${id}` : `get_vod_info&vod_id=${id}`;
-    const apiUrl   = `${creds.base}/player_api.php?username=${creds.username}&password=${creds.password}&action=${action}`;
+    // Fallback : peut-être que l'item porte directement les infos de connexion
+    if(!creds && item.username && item.password && item.server)
+      creds = { base: item.server, username: item.username, password: item.password };
+
+    if(!creds){
+      if($("pip-plot")) $("pip-plot").textContent = "Synopsis non disponible pour ce contenu.";
+      return;
+    }
+
+    const isSeries = item.type==="series" || !!item.series_id;
+    const id       = isSeries ? (item.series_id||item.id) : (item.id||item.stream_id);
+    if(!id){ if($("pip-plot")) $("pip-plot").textContent = "Synopsis non disponible pour ce contenu."; return; }
+
+    const action = isSeries ? `get_series_info&series_id=${id}` : `get_vod_info&vod_id=${id}`;
+    const apiUrl = `${creds.base}/player_api.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}&action=${action}`;
 
     const ctrl = new AbortController();
-    const _tid = setTimeout(() => ctrl.abort(), 8000);
-    fetch(apiUrl, { signal: ctrl.signal })
+    const _tid = setTimeout(() => ctrl.abort(), 10000);
+
+    fetch(apiUrl, { signal: ctrl.signal, credentials: "omit" })
       .then(r => { clearTimeout(_tid); return r.ok ? r.json() : null; })
       .then(d => {
-        const plot = d?.info?.plot || d?.info?.description || d?.movie_data?.plot || null;
-        if($("pip-plot")) $("pip-plot").textContent = plot || "Aucune description disponible.";
+        const plot = d?.info?.plot
+                  || d?.info?.description
+                  || d?.info?.overview
+                  || d?.movie_data?.plot
+                  || d?.movie_data?.description
+                  || null;
+        if($("pip-plot")) $("pip-plot").textContent = plot || "Synopsis non renseigné par le fournisseur.";
       })
-      .catch(() => { clearTimeout(_tid); if($("pip-plot")) $("pip-plot").textContent = "Aucune description disponible."; });
+      .catch(() => {
+        clearTimeout(_tid);
+        if($("pip-plot")) $("pip-plot").textContent = "Synopsis non disponible (erreur réseau).";
+      });
   },
 
   // ── Favoris ─────────────────────────────────────────────────────
@@ -1256,9 +1279,7 @@ function openLivePicker(group){
     </div>`;
   document.body.appendChild(ov);
 
-  const close = () => ov.remove();
-
-  // ── Navigation D-pad TV (gérée manuellement pour fiabilité sur Android TV) ──
+  // ── Navigation D-pad TV ──────────────────────────────────────────
   const allBtns = () => [...ov.querySelectorAll(".live-picker__btn")];
   const closBtn = () => document.getElementById("livePickerClose");
   let focusIdx = 0;
@@ -1271,65 +1292,85 @@ function openLivePicker(group){
       b.classList.toggle("live-picker__btn--focus", i === idx);
       b.tabIndex = i === idx ? 0 : -1;
     });
-    closBtn().classList.remove("live-picker__close--focus");
+    const c = closBtn();
+    if(c) c.classList.remove("live-picker__close--focus");
     btns[idx].focus();
   };
 
   const focusClose = () => {
     allBtns().forEach(b => { b.classList.remove("live-picker__btn--focus"); b.tabIndex = -1; });
     const c = closBtn();
+    if(!c) return;
     c.classList.add("live-picker__close--focus");
     c.tabIndex = 0;
     c.focus();
   };
 
-  ov.addEventListener("keydown", e => {
-    const btns = allBtns();
+  const close = () => {
+    document.removeEventListener("keydown", onKey, true);
+    ov.remove();
+  };
+
+  // Listener en phase CAPTURE sur document — intercepte AVANT la nav spatiale Android TV WebView
+  function onKey(e) {
+    if(!document.getElementById("livePicker")){ document.removeEventListener("keydown", onKey, true); return; }
+    const btns   = allBtns();
     const onClose = document.activeElement === closBtn();
 
-    if(e.key === "Escape" || e.key === "GoBack" || e.key === "Back"){
-      e.preventDefault(); close(); return;
-    }
-    if(e.key === "ArrowRight" || e.key === "ArrowDown"){
-      e.preventDefault();
-      if(onClose) focusBtn(0);
-      else if(focusIdx < btns.length - 1) focusBtn(focusIdx + 1);
-      else focusClose();
-      return;
-    }
-    if(e.key === "ArrowLeft" || e.key === "ArrowUp"){
-      e.preventDefault();
-      if(onClose) focusBtn(btns.length - 1);
-      else if(focusIdx > 0) focusBtn(focusIdx - 1);
-      else focusClose();
-      return;
-    }
-    if(e.key === "Enter" || e.key === " "){
-      e.preventDefault();
-      if(onClose){ close(); return; }
-      const btn = btns[focusIdx];
-      if(btn){ close(); playItem(group._variants[focusIdx].item); }
-    }
-  });
+    switch(e.key){
+      case "Escape": case "GoBack": case "Back":
+        e.preventDefault(); e.stopPropagation(); close(); return;
 
+      case "ArrowRight":                        // ← → entre les boutons qualité uniquement
+        e.preventDefault(); e.stopPropagation();
+        if(onClose) focusBtn(0);
+        else focusBtn(Math.min(focusIdx + 1, btns.length - 1));
+        return;
+
+      case "ArrowLeft":
+        e.preventDefault(); e.stopPropagation();
+        if(onClose) focusBtn(btns.length - 1);
+        else focusBtn(Math.max(focusIdx - 1, 0));
+        return;
+
+      case "ArrowDown":                         // ↓ → Fermer
+        e.preventDefault(); e.stopPropagation();
+        if(!onClose) focusClose();
+        return;
+
+      case "ArrowUp":                           // ↑ → retour boutons qualité
+        e.preventDefault(); e.stopPropagation();
+        if(onClose) focusBtn(focusIdx);
+        return;
+
+      case "Enter": case " ":
+        e.preventDefault(); e.stopPropagation();
+        if(onClose){ close(); return; }
+        if(btns[focusIdx]){ close(); playItem(group._variants[focusIdx].item); }
+        return;
+    }
+  }
+  document.addEventListener("keydown", onKey, true);
+
+  // Clics souris / touch
   allBtns().forEach(btn => {
     btn.addEventListener("click", () => {
       const idx = Number(btn.dataset.idx);
       close();
       playItem(group._variants[idx].item);
     });
-    // Sync focusIdx quand la souris/télécommande focus naturellement un bouton
     btn.addEventListener("focus", () => {
       focusIdx = Number(btn.dataset.idx);
       allBtns().forEach((b,i) => b.classList.toggle("live-picker__btn--focus", i===focusIdx));
     });
   });
 
-  document.getElementById("livePickerClose").addEventListener("click", close);
+  const cBtnEl = document.getElementById("livePickerClose");
+  if(cBtnEl) cBtnEl.addEventListener("click", close);
   ov.addEventListener("click", e => { if(e.target === ov) close(); });
 
-  // Focus auto sur la 1ère qualité
-  setTimeout(() => focusBtn(0), 60);
+  // Focus initial sur la 1ère qualité
+  setTimeout(() => focusBtn(0), 80);
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -785,7 +785,7 @@ button,select,input{ font:inherit }
   .grid{ grid-template-columns:repeat(auto-fill,110px); justify-content:flex-start;
          gap:14px 10px; padding:0 36px }
   .card{ border-radius:8px; max-width:110px }
-  .card-title{ font-size:11px; line-height:1.3 }
+  .card-title{ font-size:11px; line-height:1.3; -webkit-line-clamp:3 }
   .card-cat{ display:none }
   .card-info{ padding:6px 3px 0 }
   .card-media{ height:165px }
@@ -932,7 +932,7 @@ html.is-tv .grid--live .card-media{ height:165px }
 html.is-tv .grid--live .card-media img{ object-fit:contain !important; padding:10px !important; background:#0a1422 }
 html.is-tv .card        { max-width:110px; border-radius:8px }
 html.is-tv .card-media  { height:165px }
-html.is-tv .card-title  { font-size:11px; line-height:1.3 }
+html.is-tv .card-title  { font-size:11px; line-height:1.3; -webkit-line-clamp:3 }
 html.is-tv .card-info   { padding:6px 3px 0 }
 html.is-tv .netflix-rows { gap:16px; padding:0 36px }
 html.is-tv .nrow-card    { flex:0 0 110px }
