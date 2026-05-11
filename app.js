@@ -156,8 +156,7 @@ const PipPlayer = {
     video.removeAttribute("src"); video.load();
     if(this._hls){ this._hls.destroy(); this._hls = null; }
 
-    const rawUrl = item.url || item.stream_url || "";
-    const url    = rawUrl.replace(/^https?:\/\//i, "http://");
+    const url = secureUrl((item.url || item.stream_url || "").trim());
     if(!url){ this._showStatus("❌ Aucune URL de lecture disponible.", true); return; }
 
     const isHLS = /\.m3u8/i.test(url) || item.type === "live";
@@ -372,7 +371,7 @@ const PipPlayer = {
   // ── Lecture native / externe ─────────────────────────────────────
   openNative(){
     if(!this._item) return;
-    const url = (this._item.url || this._item.stream_url || "").replace(/^https?:\/\//i, "http://");
+    const url = secureUrl((this._item.url || this._item.stream_url || "").trim());
     if(!url) return;
     if(typeof window.AndroidBridge !== "undefined"){
       try { window.AndroidBridge.openInVlc(url, this._item.title || "", false); return; } catch {}
@@ -383,16 +382,16 @@ const PipPlayer = {
   // ── iOS : ouvrir dans VLC (scheme vlc://) ───────────────────────
   openVLC(){
     if(!this._item) return;
-    const url = (this._item.url || this._item.stream_url || "").replace(/^https?:\/\//i, "http://");
-    if(!url) return;
+    const raw = (this._item.url || this._item.stream_url || "").trim();
+    if(!raw) return;
     // vlc:// remplace le protocole : vlc://exemple.com/stream.m3u8
-    window.location.href = "vlc://" + url.replace(/^https?:\/\//i, "");
+    window.location.href = "vlc://" + raw.replace(/^https?:\/\//i, "");
   },
 
   // ── iOS : ouvrir dans Infuse ────────────────────────────────────
   openInfuse(){
     if(!this._item) return;
-    const url = (this._item.url || this._item.stream_url || "").replace(/^https?:\/\//i, "http://");
+    const url = (this._item.url || this._item.stream_url || "").trim();
     if(!url) return;
     window.location.href = "infuse://x-callback-url/play?url=" + encodeURIComponent(url);
   }
