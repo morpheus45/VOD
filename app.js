@@ -23,6 +23,11 @@ const SENTINEL_M = "300px";
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
               (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
+// Safari natif iOS/iPadOS (pas Chrome/Firefox/Edge sur iOS)
+const isSafariIOS = isIOS &&
+  /Safari/i.test(navigator.userAgent) &&
+  !/CriOS|FxiOS|OPiOS|EdgiOS/i.test(navigator.userAgent);
+
 // ─────────────────────────────────────────────────────────────────
 //  ÉTAT GLOBAL
 // ─────────────────────────────────────────────────────────────────
@@ -98,6 +103,14 @@ const PipPlayer = {
         : "[]";
       window.AndroidBridge.openPlayer(url, item.title || label, sub, epsJson, this._epIdx);
       return; // Pas de lecteur WebView overlay
+    }
+
+    // ── Safari iOS/iPadOS : ouvrir directement dans VLC (comme Android → ExoPlayer) ──
+    if(isSafariIOS){
+      pushHist(item);
+      const raw = (url || "").replace(/^https?:\/\//i, "");
+      window.location.href = "vlc://" + raw;
+      return;
     }
 
     // ── Navigateur / PWA : lecteur overlay WebView ──────────────────
