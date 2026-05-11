@@ -114,7 +114,7 @@ const PipPlayer = {
     // En mode PWA standalone, l'UA ne contient pas "Safari" → on teste isIOS directement.
     if(isIOSContext){
       pushHist(item);
-      _openAVPlayer(item);
+      this._openAVPlayer(item);
       return;
     }
 
@@ -414,6 +414,63 @@ const PipPlayer = {
     const url = (this._item.url || this._item.stream_url || "").trim();
     if(!url) return;
     window.location.href = "infuse://x-callback-url/play?url=" + encodeURIComponent(url);
+  },
+
+  // ── AVPlayer natif iOS via <video> + webkitEnterFullscreen() ────
+  // Méthode dans PipPlayer pour être accessible depuis open() (portée globale)
+  _openAVPlayer(item){
+    const url = (item.url || item.stream_url || "").trim();
+    if(!url) return;
+
+    document.getElementById("_avp")?.remove();
+
+    const vid = document.createElement("video");
+    vid.id       = "_avp";
+    vid.controls = true;
+    vid.setAttribute("x-webkit-airplay", "allow");
+    // PAS de playsinline → iOS utilise le lecteur natif plein écran
+    // Doit être visible dans le layout (≥ 1px) pour que webkitEnterFullscreen fonctionne
+    vid.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;z-index:9998;pointer-events:none";
+    vid.src = url;
+    document.body.appendChild(vid);
+
+    // Appels synchrones dans le geste utilisateur — iOS met en file d'attente
+    // et entre en plein écran dès que le flux est prêt
+    vid.play().catch(() => {});
+    if(typeof vid.webkitEnterFullscreen === "function"){
+      try { vid.webkitEnterFullscreen(); } catch(e) { console.warn("[AVP]", e); }
+    }
+
+    // Sauvegarde progression
+    let _pt;
+    vid.addEventListener("timeupdate", () => {
+      clearTimeout(_pt);
+      _pt = setTimeout(() => {
+        const pct = vid.duration ? vid.currentTime / vid.duration : 0;
+        if(pct > 0.01 && pct < 0.98) saveProg(itemKey(item), pct);
+      }, 5000);
+    });
+
+    // Reprendre depuis la progression sauvegardée
+    vid.addEventListener("loadedmetadata", () => {
+      const saved = getProg()[itemKey(item)];
+      if(saved?.pct && vid.duration) vid.currentTime = saved.pct * vid.duration;
+    }, { once: true });
+
+    // Nettoyage à la fermeture du lecteur natif
+    const cleanup = () => { clearTimeout(_pt); vid.pause(); vid.src = ""; vid.remove(); };
+    vid.addEventListener("webkitendfullscreen", cleanup, { once: true });
+    vid.addEventListener("ended",               cleanup, { once: true });
+
+    // Fallback : si rien ne se passe après 3 s → VLC
+    const fbTimer = setTimeout(() => {
+      if(document.getElementById("_avp")){
+        cleanup();
+        window.location.href = "vlc://" + url.replace(/^https?:\/\//i, "");
+      }
+    }, 3000);
+    vid.addEventListener("webkitbeginfullscreen", () => clearTimeout(fbTimer), { once: true });
+    vid.addEventListener("webkitendfullscreen",   () => clearTimeout(fbTimer), { once: true });
   }
 };
 
@@ -2286,66 +2343,6 @@ async function boot(){
       document.body.removeChild(ta);
       PipPlayer._showStatus("✓ Lien copié !");
     } catch { PipPlayer._showStatus("Lien : " + text); }
-  }
-
-  // ── AVPlayer natif iOS — lecture plein écran sans app tierce ────
-  // AVPlayer natif iOS via <video> + webkitEnterFullscreen()
-  function _openAVPlayer(item){
-    const url = (item.url || item.stream_url || "").trim();
-    if(!url) return;
-
-    document.getElementById("_avp")?.remove();
-
-    const vid = document.createElement("video");
-    vid.id      = "_avp";
-    vid.controls = true;
-    vid.setAttribute("x-webkit-airplay", "allow");
-    vid.setAttribute("webkit-playsinline", "false");
-    // PAS d'attribut playsinline → iOS entre en plein écran natif
-    // Position : visible dans le layout (1×1 px) — requis par iOS pour accepter webkitEnterFullscreen
-    vid.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;z-index:9998;pointer-events:none";
-    vid.src = url;
-    document.body.appendChild(vid);
-
-    // ⚠️ Les deux appels DOIVENT être synchrones dans le contexte du geste utilisateur.
-    // iOS accepte webkitEnterFullscreen() avant que la vidéo soit chargée —
-    // il la met en file d'attente et entre en plein écran dès que le flux est prêt.
-    vid.play().catch(() => {});
-    if(typeof vid.webkitEnterFullscreen === "function"){
-      try { vid.webkitEnterFullscreen(); } catch(e) { console.warn("[AVP]", e); }
-    }
-
-    // Progression
-    let _pt;
-    vid.addEventListener("timeupdate", () => {
-      clearTimeout(_pt);
-      _pt = setTimeout(() => {
-        const pct = vid.duration ? vid.currentTime / vid.duration : 0;
-        if(pct > 0.01 && pct < 0.98) saveProg(itemKey(item), pct);
-      }, 5000);
-    });
-
-    // Reprendre depuis la progression sauvegardée
-    vid.addEventListener("loadedmetadata", () => {
-      const saved = getProg()[itemKey(item)];
-      if(saved?.pct && vid.duration) vid.currentTime = saved.pct * vid.duration;
-    }, { once: true });
-
-    // Nettoyage à la fermeture
-    const cleanup = () => { clearTimeout(_pt); vid.pause(); vid.src = ""; vid.remove(); };
-    vid.addEventListener("webkitendfullscreen", cleanup, { once: true });
-    vid.addEventListener("ended",               cleanup, { once: true });
-
-    // Fallback : si toujours pas en plein écran après 3 s → ouvrir dans VLC
-    const fbTimer = setTimeout(() => {
-      if(!document.webkitFullscreenElement && document.getElementById("_avp")){
-        cleanup();
-        const raw = url.replace(/^https?:\/\//i, "");
-        window.location.href = "vlc://" + raw;
-      }
-    }, 3000);
-    vid.addEventListener("webkitendfullscreen", () => clearTimeout(fbTimer), { once: true });
-    vid.addEventListener("webkitbeginfullscreen", () => clearTimeout(fbTimer), { once: true });
   }
 
   // ── Initialisation du lecteur interne ────────────────────────────
