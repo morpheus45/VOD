@@ -16,7 +16,7 @@
   <link rel="icon" href="./icons/icon-192.png" type="image/png" />
   <link rel="shortcut icon" href="./icons/icon-192.png" type="image/png" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=81" />
+  <link rel="stylesheet" href="styles.css?v=82" />
   <script>
     /* Détection TV précoce — avant le 1er rendu, pour éviter tout flash */
     if(/AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||
@@ -152,6 +152,19 @@
       <button id="pip-native"     type="button" class="pip-btn-primary">▶ Lecture native</button>
     </div>
 
+    <!-- Boutons iOS / iPadOS — masqués sur les autres plateformes -->
+    <div class="pip-ios-actions" id="pip-ios-actions" hidden>
+      <p class="pip-ios-label">Ouvrir dans une app :</p>
+      <div class="pip-ios-btns">
+        <button id="pip-vlc"    type="button" class="pip-ios-btn">
+          <span class="pip-ios-icon">🎬</span>VLC
+        </button>
+        <button id="pip-infuse" type="button" class="pip-ios-btn">
+          <span class="pip-ios-icon">🔥</span>Infuse
+        </button>
+      </div>
+    </div>
+
     <!-- Synopsis -->
     <div class="pip-info">
       <h2>Synopsis</h2>
@@ -163,7 +176,7 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" onerror="console.warn('HLS.js indisponible')"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./auth.js"></script>
-  <script src="app.js?v=95"></script>
+  <script src="app.js?v=96"></script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {

@@ -19,6 +19,10 @@ const STORE = {
 const PER_PAGE   = 48;
 const SENTINEL_M = "300px";
 
+// Détection iOS / iPadOS (y compris iPad en mode desktop avec touch)
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+              (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
 // ─────────────────────────────────────────────────────────────────
 //  ÉTAT GLOBAL
 // ─────────────────────────────────────────────────────────────────
@@ -374,6 +378,23 @@ const PipPlayer = {
       try { window.AndroidBridge.openInVlc(url, this._item.title || "", false); return; } catch {}
     }
     window.open(url, "_blank", "noopener");
+  },
+
+  // ── iOS : ouvrir dans VLC (scheme vlc://) ───────────────────────
+  openVLC(){
+    if(!this._item) return;
+    const url = (this._item.url || this._item.stream_url || "").replace(/^https?:\/\//i, "http://");
+    if(!url) return;
+    // vlc:// remplace le protocole : vlc://exemple.com/stream.m3u8
+    window.location.href = "vlc://" + url.replace(/^https?:\/\//i, "");
+  },
+
+  // ── iOS : ouvrir dans Infuse ────────────────────────────────────
+  openInfuse(){
+    if(!this._item) return;
+    const url = (this._item.url || this._item.stream_url || "").replace(/^https?:\/\//i, "http://");
+    if(!url) return;
+    window.location.href = "infuse://x-callback-url/play?url=" + encodeURIComponent(url);
   }
 };
 
@@ -2242,6 +2263,13 @@ async function boot(){
   $("pip-prev")?.addEventListener("click", () => PipPlayer.goPrev());
   $("pip-next")?.addEventListener("click", () => PipPlayer.goNext());
   $("pip-native")?.addEventListener("click", () => PipPlayer.openNative());
+  $("pip-vlc")?.addEventListener("click",    () => PipPlayer.openVLC());
+  $("pip-infuse")?.addEventListener("click", () => PipPlayer.openInfuse());
+  // Afficher les boutons iOS uniquement sur iPhone / iPad
+  if(isIOS){
+    const iosBar = $("pip-ios-actions");
+    if(iosBar) iosBar.hidden = false;
+  }
   $("pip-fullscreen")?.addEventListener("click", () => {
     const v = $("pip-video");
     if(!v) return;
