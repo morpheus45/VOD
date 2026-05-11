@@ -127,6 +127,24 @@ const PipPlayer = {
     this._item = null;
   },
 
+  // ── Sélection automatique de la piste audio française ──────────
+  _setFrenchAudio(){
+    if(!this._hls) return;
+    const tracks = this._hls.audioTracks;
+    if(!tracks || tracks.length <= 1) return;
+    // Cherche une piste dont le code langue commence par "fr" (fr, fre, fra…)
+    // ou dont le nom contient "french" / "français"
+    const frIdx = tracks.findIndex(t =>
+      /^fr/i.test(t.lang  || "") ||
+      /fran[çc]/i.test(t.name || "") ||
+      /french/i.test(t.name  || "")
+    );
+    if(frIdx >= 0 && frIdx !== this._hls.audioTrack){
+      console.log(`[PipPlayer] Piste audio FR sélectionnée : ${tracks[frIdx].name} (lang=${tracks[frIdx].lang})`);
+      this._hls.audioTrack = frIdx;
+    }
+  },
+
   // ── Chargement vidéo ────────────────────────────────────────────
   _loadVideo(item){
     const video = $("pip-video");
@@ -159,7 +177,10 @@ const PipPlayer = {
       this._hls = new Hls({ maxBufferLength: 30, enableWorker: false });
       this._hls.loadSource(url);
       this._hls.attachMedia(video);
-      this._hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+      this._hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        this._setFrenchAudio();
+        video.play().catch(() => {});
+      });
       this._hls.on(Hls.Events.ERROR, (_, d) => {
         if(d.fatal){
           this._hls.destroy(); this._hls = null;
