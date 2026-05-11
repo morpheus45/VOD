@@ -371,12 +371,14 @@ const PipPlayer = {
   // ── Lecture native / externe ─────────────────────────────────────
   openNative(){
     if(!this._item) return;
-    const url = secureUrl((this._item.url || this._item.stream_url || "").trim());
-    if(!url) return;
+    const rawUrl = (this._item.url || this._item.stream_url || "").trim();
+    if(!rawUrl) return;
     if(typeof window.AndroidBridge !== "undefined"){
-      try { window.AndroidBridge.openInVlc(url, this._item.title || "", false); return; } catch {}
+      // Android APK : URL brute — le WebView accepte HTTP nativement, ne pas toucher
+      try { window.AndroidBridge.openInVlc(rawUrl, this._item.title || "", false); return; } catch {}
     }
-    window.open(url, "_blank", "noopener");
+    // Navigateur / iOS : upgrade HTTP→HTTPS si la page est en HTTPS
+    window.open(secureUrl(rawUrl), "_blank", "noopener");
   },
 
   // ── iOS : ouvrir dans VLC (scheme vlc://) ───────────────────────
