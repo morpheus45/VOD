@@ -105,11 +105,12 @@ const PipPlayer = {
       return; // Pas de lecteur WebView overlay
     }
 
-    // ── Safari iOS/iPadOS : ouvrir directement dans VLC (comme Android → ExoPlayer) ──
+    // ── Safari iOS/iPadOS : AVPlayer natif (pas de VLC, pas d'overlay) ──
+    // Safari utilise AVPlayer en interne — webkitEnterFullscreen() présente
+    // le vrai lecteur natif iOS avec AirPlay, PiP et contrôles système.
     if(isSafariIOS){
       pushHist(item);
-      const raw = (url || "").replace(/^https?:\/\//i, "");
-      window.location.href = "vlc://" + raw;
+      _openAVPlayer(item);
       return;
     }
 
@@ -2281,6 +2282,51 @@ async function boot(){
       document.body.removeChild(ta);
       PipPlayer._showStatus("✓ Lien copié !");
     } catch { PipPlayer._showStatus("Lien : " + text); }
+  }
+
+  // ── AVPlayer natif iOS — lecture plein écran sans app tierce ────
+  // Safari fait le pont vers AVPlayer via <video> + webkitEnterFullscreen()
+  function _openAVPlayer(item){
+    const url = (item.url || item.stream_url || "").trim();
+    if(!url) return;
+
+    // Nettoyer un éventuel lecteur précédent
+    document.getElementById("_avp")?.remove();
+
+    const vid = document.createElement("video");
+    vid.id       = "_avp";
+    vid.controls = true;
+    vid.src      = url;
+    // PAS de playsinline → iOS entre automatiquement en mode natif
+    // Hors-écran mais dans le DOM (requis pour que webkitEnterFullscreen fonctionne)
+    vid.style.cssText = "position:fixed;top:-200vh;left:0;width:100vw;height:100vh;z-index:-1";
+    document.body.appendChild(vid);
+
+    // Entrée en plein écran AVPlayer — appel synchrone dans le geste utilisateur
+    vid.play().catch(() => {});
+    if(vid.webkitSupportsFullscreen) vid.webkitEnterFullscreen();
+
+    // Sauvegarder la progression toutes les 5 s
+    let _pt;
+    vid.addEventListener("timeupdate", () => {
+      clearTimeout(_pt);
+      _pt = setTimeout(() => {
+        const key = itemKey(item);
+        const pct = vid.duration ? vid.currentTime / vid.duration : 0;
+        if(pct > 0.01 && pct < 0.98) saveProg(key, pct);
+      }, 5000);
+    });
+
+    // Reprendre depuis la progression sauvegardée
+    vid.addEventListener("loadedmetadata", () => {
+      const saved = getProg()[itemKey(item)];
+      if(saved?.pct && vid.duration) vid.currentTime = saved.pct * vid.duration;
+    }, { once: true });
+
+    // Nettoyage à la fermeture du lecteur natif
+    const cleanup = () => { clearTimeout(_pt); vid.pause(); vid.src = ""; vid.remove(); };
+    vid.addEventListener("webkitendfullscreen", cleanup, { once: true });
+    vid.addEventListener("ended",               cleanup, { once: true });
   }
 
   // ── Initialisation du lecteur interne ────────────────────────────
