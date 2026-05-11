@@ -11,12 +11,44 @@
   <meta name="apple-mobile-web-app-title" content="PIPSILY" />
   <meta name="application-name" content="PIPSILY" />
   <meta name="msapplication-TileColor" content="#0f172a" />
+  <!-- iOS : empêcher la détection auto des numéros/dates/adresses -->
+  <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
   <title>PIPSILY</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icons/icon-192.png" type="image/png" />
   <link rel="shortcut icon" href="./icons/icon-192.png" type="image/png" />
-  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=82" />
+  <!-- Icône iOS (180×180 recommandé) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-192.png" />
+  <!-- ══ Splash screens iOS ══ -->
+  <!-- iPhone SE / 8 (750×1334 @2x) -->
+  <link rel="apple-touch-startup-image"
+        media="(device-width:375px) and (device-height:667px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)"
+        href="./icons/splash/splash-750x1334.png" />
+  <!-- iPhone 12 / 13 (1170×2532 @3x) -->
+  <link rel="apple-touch-startup-image"
+        media="(device-width:390px) and (device-height:844px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)"
+        href="./icons/splash/splash-1170x2532.png" />
+  <!-- iPhone 14 / 15 / 16 (1179×2556 @3x) -->
+  <link rel="apple-touch-startup-image"
+        media="(device-width:393px) and (device-height:852px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)"
+        href="./icons/splash/splash-1179x2556.png" />
+  <!-- iPhone 14 Plus / 15 Plus / 16 Plus (1290×2796 @3x) -->
+  <link rel="apple-touch-startup-image"
+        media="(device-width:430px) and (device-height:932px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)"
+        href="./icons/splash/splash-1290x2796.png" />
+  <!-- iPhone 16 Pro Max (1320×2868 @3x) -->
+  <link rel="apple-touch-startup-image"
+        media="(device-width:440px) and (device-height:956px) and (-webkit-device-pixel-ratio:3) and (orientation:portrait)"
+        href="./icons/splash/splash-1320x2868.png" />
+  <!-- iPad Pro 11" (1668×2388 @2x) -->
+  <link rel="apple-touch-startup-image"
+        media="(device-width:834px) and (device-height:1194px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)"
+        href="./icons/splash/splash-1668x2388.png" />
+  <!-- iPad Air / iPad Pro 13" / iPad 9–10 (2048×2732 @2x) -->
+  <link rel="apple-touch-startup-image"
+        media="(device-width:1024px) and (device-height:1366px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)"
+        href="./icons/splash/splash-2048x2732.png" />
+  <link rel="stylesheet" href="styles.css?v=83" />
   <script>
     /* Détection TV précoce — avant le 1er rendu, pour éviter tout flash */
     if(/AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||

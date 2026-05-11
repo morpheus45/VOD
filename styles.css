@@ -46,7 +46,17 @@ html,body{
   color:var(--text);
   font-family:'Segoe UI','Inter',system-ui,-apple-system,sans-serif;
   min-height:100vh;
+  /* iOS : empêcher le rebond élastique de la page */
+  overscroll-behavior: none;
+  /* iOS : empêche le zoom au double-tap */
+  touch-action: manipulation;
 }
+/* iOS : empêcher le zoom sur focus des inputs (font-size ≥ 16px obligatoire) */
+input, select, textarea{
+  font-size: max(16px, 1em) !important;
+}
+/* iOS : supprimer le callout (menu "Copier") au long-press sur les images */
+img{ -webkit-touch-callout: none }
 button,select,input{ font:inherit }
 
 /* ── App shell ── */
@@ -59,6 +69,10 @@ button,select,input{ font:inherit }
   backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
   border-bottom:1px solid var(--line);
   padding:10px 0 10px;
+  /* iOS : laisser de la place pour l'encoche / Dynamic Island */
+  padding-top: max(10px, env(safe-area-inset-top));
+  padding-left:  env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 .topbar-brand-row{
   display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;
@@ -1117,6 +1131,10 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
   backdrop-filter:blur(12px);
   border-bottom:1px solid rgba(255,255,255,.08);
   flex-shrink:0;
+  /* iOS : safe area pour encoche / Dynamic Island dans le lecteur plein écran */
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-left:  max(14px, env(safe-area-inset-left));
+  padding-right: max(14px, env(safe-area-inset-right));
 }
 .pip-icon-btn{
   border:1px solid rgba(255,255,255,.14);
