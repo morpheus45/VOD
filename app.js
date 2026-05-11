@@ -2257,6 +2257,18 @@ async function boot(){
     if($("pip-player")?.classList.contains("pip-open")) { PipPlayer.close(); }
   });
 
+  // ── Copie URL — fallback pour Safari sans clipboard API ─────────
+  function _copyFallback(text){
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      PipPlayer._showStatus("✓ Lien copié !");
+    } catch { PipPlayer._showStatus("Lien : " + text); }
+  }
+
   // ── Initialisation du lecteur interne ────────────────────────────
   $("pip-back")?.addEventListener("click", () => PipPlayer.close());
   $("pip-fav")?.addEventListener("click",  () => PipPlayer.toggleFav());
@@ -2273,14 +2285,24 @@ async function boot(){
   $("pip-fullscreen")?.addEventListener("click", () => {
     const v = $("pip-video");
     if(!v) return;
-    if(document.fullscreenElement) document.exitFullscreen?.();
-    else (v.requestFullscreen || v.webkitRequestFullscreen || v.mozRequestFullScreen)?.call(v);
+    // Safari utilise webkitFullscreenElement / webkitExitFullscreen
+    if(document.fullscreenElement || document.webkitFullscreenElement){
+      (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    } else {
+      (v.requestFullscreen || v.webkitRequestFullscreen || v.mozRequestFullScreen)?.call(v);
+    }
   });
   $("pip-copy")?.addEventListener("click", () => {
     const url = PipPlayer._item?.url || PipPlayer._item?.stream_url || "";
     if(!url) return;
-    navigator.clipboard?.writeText(url).then(() => PipPlayer._showStatus("✓ Lien copié !"))
-      .catch(() => PipPlayer._showStatus("Copie manuelle : " + url));
+    // Safari < 13.1 ou non-HTTPS : fallback execCommand
+    if(navigator.clipboard){
+      navigator.clipboard.writeText(url)
+        .then(() => PipPlayer._showStatus("✓ Lien copié !"))
+        .catch(() => _copyFallback(url));
+    } else {
+      _copyFallback(url);
+    }
   });
   // Fermeture par touche Échap / retour TV
   document.addEventListener("keydown", e => {

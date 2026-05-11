@@ -46,10 +46,12 @@ html,body{
   color:var(--text);
   font-family:'Segoe UI','Inter',system-ui,-apple-system,sans-serif;
   min-height:100vh;
-  /* iOS : empêcher le rebond élastique de la page */
+  /* iOS : empêcher le rebond élastique de la page (Safari 16+) */
   overscroll-behavior: none;
   /* iOS : empêche le zoom au double-tap */
   touch-action: manipulation;
+  /* Safari < 16 : overflow hidden bloque le scroll élastique global */
+  overflow-x: hidden;
 }
 /* iOS : empêcher le zoom sur focus des inputs (font-size ≥ 16px obligatoire) */
 input, select, textarea{
@@ -203,7 +205,7 @@ button,select,input{ font:inherit }
 .hero-stats{ display:flex; gap:6px; flex-wrap:wrap; margin-top:10px }
 .hero-stats span{
   padding:4px 12px;
-  background:rgba(255,255,255,.08); backdrop-filter:blur(12px);
+  background:rgba(255,255,255,.08); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
   border:1px solid rgba(255,255,255,.14);
   border-radius:999px; color:#cdd9ef; font-size:11px; font-weight:600;
   letter-spacing:.02em;
@@ -404,7 +406,7 @@ button,select,input{ font:inherit }
   position:absolute; top:7px; left:7px; z-index:1;
   padding:3px 7px; border-radius:6px;
   font-size:9px; font-weight:800; letter-spacing:.04em; color:#fff;
-  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
 }
 .card-badge--f{ background:rgba(0,0,0,.6); border:1px solid rgba(255,255,255,.1) }
 .card-badge--s{ background:rgba(59,124,244,.85) }
@@ -418,7 +420,7 @@ button,select,input{ font:inherit }
 .fav-btn{
   position:absolute; right:7px; bottom:38px; z-index:1;
   border:none; background:rgba(0,0,0,.55);
-  backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
   color:rgba(255,255,255,.5); padding:5px 7px;
   border-radius:999px; cursor:pointer; font-size:13px; line-height:1;
   transition:all .2s;
@@ -716,7 +718,7 @@ button,select,input{ font:inherit }
 }
 .nrow-fav{
   position:absolute; top:5px; right:5px; z-index:2;
-  border:none; background:rgba(0,0,0,.55); backdrop-filter:blur(4px);
+  border:none; background:rgba(0,0,0,.55); -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px);
   color:rgba(255,255,255,.5); padding:4px 6px;
   border-radius:999px; cursor:pointer; font-size:12px; line-height:1;
   transition:all .2s;
@@ -1004,7 +1006,7 @@ html.is-tv .update-bar__date{ display:none }
 /* Overlay de recherche plein écran (TV-friendly) */
 .search-overlay{
   position:fixed; inset:0; z-index:9999;
-  background:rgba(5,8,15,.92); backdrop-filter:blur(20px);
+  background:rgba(5,8,15,.92); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
   display:flex; align-items:flex-start; justify-content:center;
   padding-top:18vh;
   animation:fadeIn .15s ease;
@@ -1031,7 +1033,7 @@ html.is-tv .update-bar__date{ display:none }
 /* ── Picker qualité Live (SD / FHD / HEVC etc.) ── */
 .live-picker{
   position:fixed; inset:0; z-index:9999;
-  background:rgba(5,8,15,.92); backdrop-filter:blur(20px);
+  background:rgba(5,8,15,.92); -webkit-backdrop-filter:blur(20px); backdrop-filter:blur(20px);
   display:flex; align-items:center; justify-content:center; padding:20px;
   animation:fadeIn .15s ease;
 }
@@ -1128,7 +1130,7 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
   display:flex; align-items:center; gap:12px; padding:12px 14px;
   background:rgba(5,17,31,.88);
   position:sticky; top:0; z-index:10;
-  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
   border-bottom:1px solid rgba(255,255,255,.08);
   flex-shrink:0;
   /* iOS : safe area pour encoche / Dynamic Island dans le lecteur plein écran */
@@ -1159,7 +1161,7 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
   position:absolute; left:14px; right:14px; bottom:14px;
   padding:10px 14px; border-radius:12px;
   background:rgba(4,11,20,.88); border:1px solid rgba(255,255,255,.12);
-  font-size:13px; color:#d8e6ff; backdrop-filter:blur(10px);
+  font-size:13px; color:#d8e6ff; -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
 }
 .pip-status--error{ background:rgba(60,10,10,.92); border-color:rgba(255,61,94,.4); color:#ffa0b2 }
 
