@@ -147,6 +147,8 @@ const PipPlayer = {
     document.body.style.overflow = "";
     document.title = "PIPSILY";
     this._item = null;
+    // Rafraîchir "Continuer à regarder" après fermeture
+    if(typeof renderContinueRow === "function") renderContinueRow();
   },
 
   // ── Sélection automatique de la piste audio française ──────────
@@ -500,6 +502,26 @@ function secureUrl(url){
 }
 function isFav(item){ return getFavs().some(x => x.key === itemKey(item)); }
 
+// Progression de visionnage (0–1) — fonctionne avec les deux clés (PipPlayer + AVPlayer iOS)
+function getWatchPct(item){
+  const prog = getProg();
+  const k1   = itemKey(item);                              // clé AVPlayer iOS
+  if(prog[k1]?.pct > 0) return prog[k1].pct;
+  const k2 = String(item.id || item.stream_id || "");     // clé PipPlayer
+  if(k2 && prog[k2]?.t > 0 && prog[k2]?.d > 0) return prog[k2].t / prog[k2].d;
+  return 0;
+}
+
+// Timestamp de la dernière session (pour trier "Continuer à regarder")
+function getWatchTs(item){
+  const prog = getProg();
+  const k1   = itemKey(item);
+  if(prog[k1]?.ts) return prog[k1].ts;
+  const k2 = String(item.id || item.stream_id || "");
+  if(k2 && prog[k2]?.ts) return prog[k2].ts;
+  return 0;
+}
+
 function toggleFav(item){
   const favs = getFavs();
   const key  = itemKey(item);
@@ -511,6 +533,8 @@ function toggleFav(item){
   document.querySelectorAll(`.card[data-key="${CSS.escape(key)}"] .fav-btn`).forEach(b => {
     b.classList.toggle("is-fav", fav);
   });
+  // Rafraîchir la section Favoris
+  if(typeof renderFavoritesRow === "function") renderFavoritesRow();
 }
 
 function pushHist(item){
@@ -1550,6 +1574,10 @@ function renderGrid(reset = false){
     const poster   = item.stream_icon || "";
     const badgeCls = isLive ? "card-badge--live" : isSeries ? "card-badge--s" : "card-badge--f";
     const badgeTxt = isLive ? "📡 Live" : isSeries ? "Série" : "Film";
+    const pct      = isLive ? 0 : getWatchPct(item);
+    const progBar  = (pct > 0.03 && pct < 0.97)
+      ? `<div class="card-prog-bar"><div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div></div>`
+      : "";
 
     card.innerHTML = `
       <div class="card-media">
@@ -1559,6 +1587,7 @@ function renderGrid(reset = false){
         <span class="card-badge ${badgeCls}">${badgeTxt}</span>
         ${item.quality && !isLive ? `<span class="card-qual">${esc(item.quality)}</span>` : ""}
         <button class="fav-btn ${isFav(item)?"is-fav":""}" type="button" aria-label="Favori">♥</button>
+        ${progBar}
       </div>
       <div class="card-info">
         <div class="card-title">${esc(item.title)}</div>
@@ -1780,6 +1809,10 @@ function render(){
     if(heroEl)  heroEl.hidden  = true;
     if(novSect) novSect.hidden = true;
   }
+
+  // Sections Favoris + Continuer (Films, Séries, TV — toujours visibles si données)
+  renderFavoritesRow();
+  renderContinueRow();
 
   // Masquer le filtre qualité pour le live (non pertinent)
   if($("qualityPills")) $("qualityPills").style.display = S.type === "live" ? "none" : "";
@@ -2090,6 +2123,109 @@ function initTV(){
     cards[next]?.focus();
     cards[next]?.scrollIntoView({ behavior:"smooth", block:"nearest" });
   }
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  SECTION CONTINUER À REGARDER
+// ─────────────────────────────────────────────────────────────────
+
+function renderContinueRow(){
+  const sect = $("continueSection");
+  const row  = $("continueRow");
+  if(!sect || !row) return;
+
+  const all = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
+  const items = all
+    .map(item => ({ item, pct: getWatchPct(item), ts: getWatchTs(item) }))
+    .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 20)
+    .map(x => x.item);
+
+  if(!items.length){ sect.hidden = true; return; }
+  sect.hidden = false;
+  row.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  items.forEach(item => {
+    const pct  = getWatchPct(item);
+    const card = document.createElement("div");
+    card.className = "nou-card";
+    card.tabIndex  = 0;
+    card.innerHTML = `
+      <div class="nou-media">
+        ${item.stream_icon
+          ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.parentElement.parentElement.style.display='none'">`
+          : `<div class="nou-placeholder">▶</div>`}
+        <div class="nou-overlay"><span class="nou-play">▶</span></div>
+        <div class="card-prog-bar card-prog-bar--nou">
+          <div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div>
+        </div>
+      </div>
+      <div class="nou-info">
+        <div class="nou-title">${esc(item.title)}</div>
+        <div class="nou-date">${Math.round(pct*100)}% visionné</div>
+      </div>`;
+    const activate = () => {
+      if(item.type === "series") openPanel(item);
+      else if(item.type === "live") playItem(item._variants?.[0]?.item || item);
+      else openVodPanel(item);
+    };
+    card.addEventListener("click", activate);
+    card.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); activate(); } });
+    frag.appendChild(card);
+  });
+  row.appendChild(frag);
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  SECTION FAVORIS
+// ─────────────────────────────────────────────────────────────────
+
+function renderFavoritesRow(){
+  const sect = $("favoritesSection");
+  const row  = $("favoritesRow");
+  if(!sect || !row) return;
+
+  const type  = S.type;
+  const favs  = getFavs()
+    .filter(f => (f.item?.type || type) === type)
+    .slice(0, 30);
+
+  if(!favs.length){ sect.hidden = true; return; }
+  sect.hidden = false;
+  row.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  favs.forEach(({ item }) => {
+    if(!item) return;
+    const pct  = getWatchPct(item);
+    const card = document.createElement("div");
+    card.className = "nou-card";
+    card.tabIndex  = 0;
+    const progBar  = (pct > 0.03 && pct < 0.97)
+      ? `<div class="card-prog-bar card-prog-bar--nou"><div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div></div>`
+      : "";
+    card.innerHTML = `
+      <div class="nou-media">
+        ${item.stream_icon
+          ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.parentElement.parentElement.style.display='none'">`
+          : `<div class="nou-placeholder">❤️</div>`}
+        <div class="nou-overlay"><span class="nou-play">▶</span></div>
+        ${progBar}
+      </div>
+      <div class="nou-info">
+        <div class="nou-title">${esc(item.title)}</div>
+        <div class="nou-date">${esc(item.category_name || "")}</div>
+      </div>`;
+    const activate = () => {
+      if(item.type === "series") openPanel(item);
+      else if(item.type === "live") playItem(item._variants?.[0]?.item || item);
+      else openVodPanel(item);
+    };
+    card.addEventListener("click", activate);
+    card.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); activate(); } });
+    frag.appendChild(card);
+  });
+  row.appendChild(frag);
 }
 
 // ─────────────────────────────────────────────────────────────────
