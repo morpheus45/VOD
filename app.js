@@ -477,6 +477,37 @@ function storeGet(k, fb){
 }
 function storeSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
+// ── Callback appelé par l'APK Android quand le lecteur ExoPlayer se ferme ──
+// MainActivity.reportProgress() injecte ce JS via webView.evaluateJavascript()
+window.onAndroidPlayerClosed = function(url, posMs, durMs){
+  if(!url || !durMs || durMs <= 0) return;
+  const pct = posMs / durMs;
+  if(pct < 0.03 || pct > 0.97) return;         // trop court ou presque fini → ignorer
+
+  const t = Math.floor(posMs / 1000);
+  const d = Math.floor(durMs / 1000);
+
+  // Chercher l'item dans le catalogue par URL exacte
+  const all = [...(S.vod || []), ...(S.series || []), ...(S.live || [])];
+  const item = all.find(x => (x.url || x.stream_url || "") === url);
+
+  const prog = getProg();
+  if(item){
+    // Format PipPlayer (par item.id) — lu par getWatchPct k2
+    const id = String(item.id || item.stream_id || "");
+    if(id) prog[id] = { t, d, ts: Date.now() };
+    // Format AVPlayer (par itemKey) — lu par getWatchPct k1
+    prog[itemKey(item)] = { pct, ts: Date.now() };
+  } else {
+    // Fallback : clé = URL brute (épisode de série non retrouvé dans S.series)
+    prog[url] = { pct, ts: Date.now() };
+  }
+  storeSet(STORE.progress, prog);
+
+  // Rafraîchir la section "Continuer à regarder"
+  if(typeof renderContinueRow === "function") renderContinueRow();
+};
+
 function getFavs()  { return storeGet(STORE.favorites, []); }
 function getHist()  { return storeGet(STORE.history, []); }
 function getProg()  { return storeGet(STORE.progress, {}); }
