@@ -1,5 +1,5 @@
 {
-  "apk_version": 15,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v15/PIPSILY.apk",
+  "apk_version": 16,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v16/PIPSILY.apk",
   "changes": "Retour Android ferme le panneau (pas l'app) · Synopsis via bridge Java (sans CORS) · Vignettes non coupées en haut"
 }
