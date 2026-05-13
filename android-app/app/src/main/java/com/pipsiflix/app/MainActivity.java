@@ -25,6 +25,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
 import java.io.File;
+import java.lang.ref.WeakReference;
 
 /**
  * PIPSILY — Activité principale (phone & tablet)  v5
@@ -39,7 +40,10 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG         = "PipsilyMain";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "15";
+    private static final String APK_VERSION = "16";
+
+    // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
+    static WeakReference<MainActivity> sInstance;
 
     WebView     webView;
     ProgressBar progressBar;
@@ -66,6 +70,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         webView     = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
+        sInstance   = new WeakReference<>(this);
 
         configureWebView();
 
@@ -307,6 +312,27 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         unregisterApkReceiver();
+        sInstance = null;
+    }
+
+    /**
+     * Appelé par PlayerActivity.onDestroy() pour remonter la progression au WebView.
+     * Injecte window.onAndroidPlayerClosed(url, posMs, durMs) dans le JavaScript.
+     */
+    static void reportProgress(final String url, final long posMs, final long durMs) {
+        if (sInstance == null) return;
+        MainActivity main = sInstance.get();
+        if (main == null || main.webView == null) return;
+        // Échapper l'URL pour l'injection JS (remplacer ' par \')
+        final String safeUrl = url.replace("\\", "\\\\").replace("'", "\\'");
+        main.runOnUiThread(() -> {
+            if (main.webView != null) {
+                String js = "if(typeof window.onAndroidPlayerClosed==='function')" +
+                            "window.onAndroidPlayerClosed('" + safeUrl + "'," + posMs + "," + durMs + ");";
+                main.webView.evaluateJavascript(js, null);
+                Log.d("PipsilyMain", "Progress reported: " + Math.round(posMs * 100.0 / durMs) + "% url=" + url);
+            }
+        });
     }
 
     // ── Touche Retour ──

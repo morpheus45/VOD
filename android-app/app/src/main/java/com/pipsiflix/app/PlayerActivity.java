@@ -70,6 +70,7 @@ public class PlayerActivity extends FragmentActivity {
     private int      currentIdx      = 0;
     private boolean  hlsRetried      = false;
     private boolean  controllerShown = false; // état controller pour toggle TV
+    private String   currentUrl      = "";    // URL en cours (pour rapport de progression)
 
     // ─── Lifecycle ────────────────────────────────────────────────────
     @SuppressLint("SourceLockedOrientationActivity")
@@ -175,6 +176,7 @@ public class PlayerActivity extends FragmentActivity {
 
     // ─── Initialiser ExoPlayer et lancer la lecture ───────────────────
     private void playUrl(String url, String epLabel) {
+        currentUrl = (url != null) ? url : "";
         // ── Garde URL vide ──
         if (url == null || url.trim().isEmpty()) {
             Log.e(TAG, "playUrl: URL vide !");
@@ -425,7 +427,13 @@ public class PlayerActivity extends FragmentActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (player != null) {
+        // ── Remonter la progression au WebView avant de libérer le player ──
+        if (player != null && !currentUrl.isEmpty()) {
+            long posMs = player.getCurrentPosition();
+            long durMs = player.getDuration();
+            if (durMs > 0 && posMs > 0) {
+                MainActivity.reportProgress(currentUrl, posMs, durMs);
+            }
             player.release();
             player = null;
         }
