@@ -913,7 +913,9 @@ button,select,input{ font:inherit }
     outline:none !important; box-shadow:none !important;
   }
   .nrow-card:focus .nrow-media,
-  .nou-card:focus .nou-media{
+  .nrow-card.is-tv-focused .nrow-media,
+  .nou-card:focus .nou-media,
+  .nou-card.is-tv-focused .nou-media{
     box-shadow:0 0 0 3px var(--accent), 0 0 0 7px rgba(123,95,232,.22), 0 0 18px rgba(123,95,232,.18);
     transform:scale(1.06);
     transition:transform .15s, box-shadow .15s;
