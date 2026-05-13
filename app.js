@@ -3040,36 +3040,48 @@ async function checkApkInstallBanner(){
 }
 
 async function checkApkUpdate(){
-  const isNativeApk = typeof window.AndroidBridge !== "undefined";
-  if(!isNativeApk) return; // inutile hors APK
+  // Hors APK natif → rien à faire
+  if(typeof window.AndroidBridge === "undefined") return;
 
   try {
     const vinfo = await fetchJson("version.json");
     if(!vinfo || !vinfo.apk_version || !vinfo.apk_url) return;
+    const remoteVer = parseInt(vinfo.apk_version, 10);
+    if(!remoteVer) return;
 
-    const remoteVer = Number(vinfo.apk_version);
-
-    // getApkVersion() est présent dans les APK v2+
-    // Utilisation de la syntaxe classique (pas d'optional chaining) pour compatibilité
-    // Android WebView anciens (< Chromium 79 / Android 7).
-    // localVer = 0 : inconnu → on ne montre PAS la bannière (fail-safe).
+    // ── Lire la version APK installée ──────────────────────────────
+    // On appelle directement (pas de typeof — sur certains WebView Android,
+    // les méthodes Java ne sont pas de type "function" mais restent appelables).
     let localVer = 0;
-    if(window.AndroidBridge &&
-       window.AndroidBridge.getApkVersion &&
-       typeof window.AndroidBridge.getApkVersion === "function"){
-      try { localVer = Number(window.AndroidBridge.getApkVersion()) || 0; } catch {}
+    try {
+      const raw = window.AndroidBridge.getApkVersion();
+      localVer  = raw ? parseInt(String(raw), 10) : 0;
+    } catch {}
+
+    // Mémoriser la version connue pour les prochains lancements
+    if(localVer > 0){
+      localStorage.setItem("pf_local_apk_ver", String(localVer));
+    } else {
+      // Fallback : version mémorisée lors d'un lancement précédent
+      localVer = parseInt(localStorage.getItem("pf_local_apk_ver") || "0", 10);
     }
 
-    // Si on ne peut pas lire la version locale, on abandonne silencieusement.
-    if(localVer === 0) return;
+    // Version toujours inconnue → fail-safe, pas de bannière
+    if(!localVer) return;
 
-    if(remoteVer <= localVer) return; // déjà à jour
+    // Déjà à jour
+    if(remoteVer <= localVer) return;
 
-    // "Plus tard" → respecter le timer SEULEMENT si c'est la même version
-    // Timer long (90 jours) pour éviter les rappels intempestifs.
-    const remindAt  = Number(localStorage.getItem("pf_apk_remind") || 0);
-    const remindVer = Number(localStorage.getItem("pf_apk_remind_ver") || 0);
-    if(remoteVer === remindVer && Date.now() < remindAt) return;
+    // Suppression : déjà affiché pour cette version ET timer actif ?
+    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv") || "0", 10);
+    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su") || "0", 10);
+    if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
+
+    // Enregistrer la suppression DÈS L'AFFICHAGE (30 jours).
+    // Ainsi, même si l'utilisateur ferme sans cliquer, la bannière ne revient pas.
+    // Si une version PLUS RÉCENTE sort, suppressVer < remoteVer → affichage quand même.
+    localStorage.setItem("pf_apk_sv", String(remoteVer));
+    localStorage.setItem("pf_apk_su", String(Date.now() + 2592000000)); // 30 jours
 
     showApkUpdateBanner(vinfo, remoteVer);
   } catch {}
@@ -3162,8 +3174,9 @@ function showApkUpdateBanner(vinfo, remoteVer){
 
   $("apkDismissBtn").onclick = () => {
     banner.remove();
-    localStorage.setItem("pf_apk_remind",     String(Date.now() + 7776000000)); // 90 jours
-    localStorage.setItem("pf_apk_remind_ver", String(remoteVer));
+    // Étendre la suppression à 90 jours si l'utilisateur clique explicitement
+    localStorage.setItem("pf_apk_sv", String(remoteVer));
+    localStorage.setItem("pf_apk_su", String(Date.now() + 7776000000)); // 90 jours
   };
 }
 
