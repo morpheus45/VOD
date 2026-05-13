@@ -943,10 +943,19 @@ function openVodPanel(item){
   // Pousse un état dans l'historique → Android Back = goBack() → popstate → ferme le panneau
   history.pushState({pip:"vod"}, "");
 
-  const ext    = getExt(item.stream_url || item.url || "");
-  const meta   = [item.category_name, item.quality, ext ? ext.toUpperCase() : ""].filter(Boolean).join(" · ");
-  const cover  = item.stream_icon || "";
-  const plot   = item.plot || "";
+  const ext     = getExt(item.stream_url || item.url || "");
+  const meta    = [item.category_name, item.quality, ext ? ext.toUpperCase() : ""].filter(Boolean).join(" · ");
+  const cover   = item.stream_icon || "";
+  const plot    = item.plot || "";
+
+  // ── Progression sauvegardée ──
+  const savedMs = _getSavedProgressMs(item);
+  const _fmtMs  = ms => { const m = Math.floor(ms/60000); const s = String(Math.floor((ms%60000)/1000)).padStart(2,"0"); return `${m}:${s}`; };
+  const _pctSaved = (() => {
+    const prog = getProg();
+    const id   = String(item.id || item.stream_id || "");
+    return (id && prog[id]?.d > 0) ? Math.round(prog[id].t / prog[id].d * 100) : 0;
+  })();
 
   panel.innerHTML = `
     <div class="sp-header">
@@ -969,10 +978,18 @@ function openVodPanel(item){
       </div>
 
       <div class="vod-actions">
-        <button id="vodPlayBtn" class="vod-play-btn">
-          <span class="vod-play-icon">▶</span>
-          <span>Lire le film</span>
-        </button>
+        ${savedMs > 0
+          ? `<button id="vodResumeBtn" class="vod-play-btn">
+               <span class="vod-play-icon">▶</span>
+               <span>Reprendre${_pctSaved ? ` — ${_pctSaved}%` : ` à ${_fmtMs(savedMs)}`}</span>
+             </button>
+             <button id="vodRestartBtn" class="vod-restart-btn">
+               ↩ Début
+             </button>`
+          : `<button id="vodPlayBtn" class="vod-play-btn">
+               <span class="vod-play-icon">▶</span>
+               <span>Lire le film</span>
+             </button>`}
         <button class="fav-btn-large ${isFav(item) ? "is-fav" : ""}" id="vodFavBtn" type="button">
           <span class="fav-heart">♥</span>
           <span id="vodFavLabel">${isFav(item) ? "Favori" : "Ajouter aux favoris"}</span>
@@ -984,10 +1001,22 @@ function openVodPanel(item){
   $("vodCloseBtn").addEventListener("click", closeVodPanel);
   panel.addEventListener("click", e => { if(e.target === panel) closeVodPanel(); }, { once: true });
 
-  $("vodPlayBtn").addEventListener("click", () => {
-    closeVodPanel();
-    playItem(item);
-  });
+  if(savedMs > 0){
+    $("vodResumeBtn").addEventListener("click", () => { closeVodPanel(); playItem(item); });
+    $("vodRestartBtn").addEventListener("click", () => {
+      // Supprimer la progression sauvegardée puis lire depuis le début
+      const prog = getProg();
+      const id   = String(item.id || item.stream_id || "");
+      if(id) delete prog[id];
+      delete prog[itemKey(item)];
+      storeSet(STORE.progress, prog);
+      _invalidateCache();
+      closeVodPanel();
+      playItem(item);
+    });
+  } else {
+    $("vodPlayBtn").addEventListener("click", () => { closeVodPanel(); playItem(item); });
+  }
 
   $("vodFavBtn").addEventListener("click", () => {
     toggleFav(item);
@@ -998,7 +1027,7 @@ function openVodPanel(item){
   });
 
   // ── Focus initial (TV / D-pad) — Entrée joue directement ──
-  setTimeout(() => $("vodPlayBtn")?.focus(), 80);
+  setTimeout(() => ($("vodResumeBtn") || $("vodPlayBtn"))?.focus(), 80);
 
   // ── Lazy-load synopsis depuis l'API si absent ──
   if(!plot){

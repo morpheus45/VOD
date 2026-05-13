@@ -592,6 +592,14 @@ button,select,input{ font:inherit }
 }
 .vod-play-btn:active{ transform:scale(.96) }
 .vod-play-icon{ font-size:20px }
+.vod-restart-btn{
+  display:flex; align-items:center; justify-content:center;
+  padding:14px 18px; border-radius:16px; border:1px solid var(--line);
+  background:var(--panel2); color:var(--muted); cursor:pointer;
+  font-size:14px; font-weight:600; transition:all .15s; white-space:nowrap;
+}
+.vod-restart-btn:hover{ color:var(--fg); border-color:rgba(255,255,255,.25) }
+.vod-restart-btn:active{ transform:scale(.96) }
 .fav-btn-large{
   display:flex; align-items:center; gap:8px;
   padding:14px 18px; border-radius:16px; border:1px solid var(--line);
