@@ -71,6 +71,7 @@ public class PlayerActivity extends FragmentActivity {
     private boolean  hlsRetried      = false;
     private boolean  controllerShown = false; // état controller pour toggle TV
     private String   currentUrl      = "";    // URL en cours (pour rapport de progression)
+    private long     startPositionMs = 0L;   // position de reprise (0 = depuis le début)
 
     // ─── Lifecycle ────────────────────────────────────────────────────
     @SuppressLint("SourceLockedOrientationActivity")
@@ -121,6 +122,7 @@ public class PlayerActivity extends FragmentActivity {
         String subtitle = getIntent().getStringExtra("subtitle"); // Sous-titre / catégorie
         String epsJson  = getIntent().getStringExtra("episodes"); // JSON épisodes (optionnel)
         int    epIdx    = getIntent().getIntExtra("epIndex", -1);
+        startPositionMs = getIntent().getLongExtra("startPositionMs", 0L);
 
         seriesTitle = title != null ? title : "";
         titleView.setText(seriesTitle);
@@ -259,6 +261,11 @@ public class PlayerActivity extends FragmentActivity {
 
         player.setMediaSource(source);
         player.setPlayWhenReady(true);
+        // Reprise à la position sauvegardée (0 = depuis le début)
+        if (startPositionMs > 0) {
+            player.seekTo(startPositionMs);
+            startPositionMs = 0L; // consommé — ne pas re-seeker lors d'un changement d'épisode
+        }
         player.prepare();
 
         // Montrer le controller brièvement au démarrage (titre visible 3s)

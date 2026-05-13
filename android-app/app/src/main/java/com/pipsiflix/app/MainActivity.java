@@ -40,7 +40,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG         = "PipsilyMain";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "16";
+    private static final String APK_VERSION = "17";
 
     // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
     static WeakReference<MainActivity> sInstance;
@@ -287,11 +287,29 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this, "Fichier APK introuvable", Toast.LENGTH_LONG).show();
                     return;
                 }
+                // Android 8+ : vérifier la permission d'installation depuis cette source
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (!getPackageManager().canRequestPackageInstalls()) {
+                        // Ouvrir directement les paramètres pour cette appli
+                        Uri settingsUri = Uri.parse("package:" + getPackageName());
+                        Intent allow = new Intent(
+                            android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, settingsUri);
+                        allow.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(allow);
+                        Toast.makeText(this,
+                            "Activez \"Installer des applis inconnues\" puis relancez la mise à jour.",
+                            Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                }
                 Uri uri = FileProvider.getUriForFile(this, "com.pipsiflix.app.provider", apkFile);
                 Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);
                 install.setDataAndType(uri, "application/vnd.android.package-archive");
                 install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 install.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                // INSTALL_REPLACE_EXISTING : pas de dialogue "Voulez-vous remplacer ?"
+                install.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+                install.putExtra("android.intent.extra.RETURN_RESULT", false);
                 startActivity(install);
             } catch (Exception e) {
                 Log.e(TAG, "installDownloadedApk", e);
@@ -377,13 +395,21 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void openPlayer(String url, String title, String subtitle,
                                String episodesJson, int epIndex) {
+            openPlayerAt(url, title, subtitle, episodesJson, epIndex, 0L);
+        }
+
+        /** Lecteur natif ExoPlayer avec reprise à la position sauvegardée */
+        @JavascriptInterface
+        public void openPlayerAt(String url, String title, String subtitle,
+                                 String episodesJson, int epIndex, long startPositionMs) {
             runOnUiThread(() -> {
                 Intent i = new Intent(MainActivity.this, PlayerActivity.class);
-                i.putExtra("url",      url);
-                i.putExtra("title",    title);
-                i.putExtra("subtitle", subtitle);
-                i.putExtra("episodes", episodesJson);
-                i.putExtra("epIndex",  epIndex);
+                i.putExtra("url",             url);
+                i.putExtra("title",           title);
+                i.putExtra("subtitle",        subtitle);
+                i.putExtra("episodes",        episodesJson);
+                i.putExtra("epIndex",         epIndex);
+                i.putExtra("startPositionMs", startPositionMs);
                 startActivity(i);
             });
         }
