@@ -105,8 +105,14 @@ const PipPlayer = {
               : ""
           })))
         : "[]";
-      window.AndroidBridge.openPlayer(url, item.title || label, sub, epsJson, this._epIdx);
-      return; // Pas de lecteur WebView overlay
+      // Reprise au bon endroit si une progression est sauvegardée
+      const savedMs = _getSavedProgressMs(item);
+      if(savedMs > 0 && typeof window.AndroidBridge.openPlayerAt === "function"){
+        window.AndroidBridge.openPlayerAt(url, item.title || label, sub, epsJson, this._epIdx, savedMs);
+      } else {
+        window.AndroidBridge.openPlayer(url, item.title || label, sub, epsJson, this._epIdx);
+      }
+      return;
     }
 
     // ── iOS / iPadOS : AVPlayer natif (Safari, PWA, Chrome iOS…) ──
@@ -244,11 +250,11 @@ const PipPlayer = {
   _saveProgress(){
     const video = $("pip-video");
     if(!video || !this._item || video.currentTime < 5) return;
-    const prog = storeGet(STORE.progress, {});
+    const prog = getProg();
     const id   = String(this._item.id || this._item.stream_id || "");
     if(!id) return;
     prog[id] = { t: Math.floor(video.currentTime), d: Math.floor(video.duration) || 0, ts: Date.now() };
-    storeSet(STORE.progress, prog);
+    storeSet(STORE.progress, prog); // cache déjà mis à jour (même objet)
   },
 
   _restoreProgress(){
@@ -477,6 +483,28 @@ function storeGet(k, fb){
 }
 function storeSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 
+// ── Cache mémoire — évite des centaines de JSON.parse par render ──
+let _cacheP = null; // cache progression
+let _cacheF = null; // cache favoris
+
+function getProg(){
+  if(!_cacheP) _cacheP = storeGet(STORE.progress, {});
+  return _cacheP;
+}
+function getFavs(){
+  if(!_cacheF) _cacheF = storeGet(STORE.favorites, []);
+  return _cacheF;
+}
+function _invalidateCache(){ _cacheP = null; _cacheF = null; }
+
+// ── Retourne la position sauvegardée en ms (pour Android openPlayerAt) ──
+function _getSavedProgressMs(item){
+  const prog = getProg();
+  const id   = String(item.id || item.stream_id || "");
+  if(id && prog[id]?.t > 10) return prog[id].t * 1000;   // secondes → ms
+  return 0;
+}
+
 // ── Callback appelé par l'APK Android quand le lecteur ExoPlayer se ferme ──
 // MainActivity.reportProgress() injecte ce JS via webView.evaluateJavascript()
 window.onAndroidPlayerClosed = function(url, posMs, durMs){
@@ -508,12 +536,10 @@ window.onAndroidPlayerClosed = function(url, posMs, durMs){
   if(typeof renderContinueRow === "function") renderContinueRow();
 };
 
-function getFavs()  { return storeGet(STORE.favorites, []); }
 function getHist()  { return storeGet(STORE.history, []); }
-function getProg()  { return storeGet(STORE.progress, {}); }
 function saveProg(key, pct){
   const p = getProg(); p[key] = { pct, ts: Date.now() };
-  storeSet(STORE.progress, p);
+  storeSet(STORE.progress, p); // cache déjà mis à jour (même objet)
 }
 
 function itemKey(item){
@@ -555,7 +581,8 @@ function toggleFav(item){
   const idx  = favs.findIndex(x => x.key === key);
   if(idx >= 0) favs.splice(idx, 1);
   else favs.unshift({ key, item, at: Date.now() });
-  storeSet(STORE.favorites, favs.slice(0, 500));
+  _cacheF = favs.slice(0, 500);             // mettre à jour le cache
+  storeSet(STORE.favorites, _cacheF);
   const fav = isFav(item);
   document.querySelectorAll(`.card[data-key="${CSS.escape(key)}"] .fav-btn`).forEach(b => {
     b.classList.toggle("is-fav", fav);
