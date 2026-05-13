@@ -3034,15 +3034,23 @@ async function checkApkUpdate(){
     const remoteVer = Number(vinfo.apk_version);
 
     // getApkVersion() est présent dans les APK v2+
-    let localVer = 1;
-    if(typeof window.AndroidBridge?.getApkVersion === "function"){
-      try { localVer = Number(window.AndroidBridge.getApkVersion()) || 1; } catch {}
+    // Utilisation de la syntaxe classique (pas d'optional chaining) pour compatibilité
+    // Android WebView anciens (< Chromium 79 / Android 7).
+    // localVer = 0 : inconnu → on ne montre PAS la bannière (fail-safe).
+    let localVer = 0;
+    if(window.AndroidBridge &&
+       window.AndroidBridge.getApkVersion &&
+       typeof window.AndroidBridge.getApkVersion === "function"){
+      try { localVer = Number(window.AndroidBridge.getApkVersion()) || 0; } catch {}
     }
+
+    // Si on ne peut pas lire la version locale, on abandonne silencieusement.
+    if(localVer === 0) return;
 
     if(remoteVer <= localVer) return; // déjà à jour
 
     // "Plus tard" → respecter le timer SEULEMENT si c'est la même version
-    // Si une NOUVELLE version sort → afficher quand même
+    // Timer long (90 jours) pour éviter les rappels intempestifs.
     const remindAt  = Number(localStorage.getItem("pf_apk_remind") || 0);
     const remindVer = Number(localStorage.getItem("pf_apk_remind_ver") || 0);
     if(remoteVer === remindVer && Date.now() < remindAt) return;
@@ -3138,7 +3146,7 @@ function showApkUpdateBanner(vinfo, remoteVer){
 
   $("apkDismissBtn").onclick = () => {
     banner.remove();
-    localStorage.setItem("pf_apk_remind",     String(Date.now() + 86400000));
+    localStorage.setItem("pf_apk_remind",     String(Date.now() + 7776000000)); // 90 jours
     localStorage.setItem("pf_apk_remind_ver", String(remoteVer));
   };
 }
