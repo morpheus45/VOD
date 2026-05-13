@@ -254,7 +254,8 @@ const PipPlayer = {
     // Priorité : progress_key (épisodes de série) → id numérique (VOD)
     const key  = this._item.progress_key || String(this._item.id || this._item.stream_id || "");
     if(!key) return;
-    prog[key] = { t: Math.floor(video.currentTime), d: Math.floor(video.duration) || 0, ts: Date.now() };
+    const dur = (video.duration && isFinite(video.duration)) ? Math.floor(video.duration) : 0;
+    prog[key] = { t: Math.floor(video.currentTime), d: dur, ts: Date.now() };
     storeSet(STORE.progress, prog); // cache déjà mis à jour (même objet)
   },
 
@@ -510,12 +511,12 @@ function _getSavedProgressMs(item){
 // ── Callback appelé par l'APK Android quand le lecteur ExoPlayer se ferme ──
 // MainActivity.reportProgress() injecte ce JS via webView.evaluateJavascript()
 window.onAndroidPlayerClosed = function(url, posMs, durMs){
-  if(!url || !durMs || durMs <= 0) return;
-  const pct = posMs / durMs;
-  if(pct < 0.03 || pct > 0.97) return;         // trop court ou presque fini → ignorer
+  if(!url || !posMs || posMs < 30000) return;   // moins de 30s regardées → ignorer
 
-  const t = Math.floor(posMs / 1000);
-  const d = Math.floor(durMs / 1000);
+  const t   = Math.floor(posMs / 1000);
+  const d   = (durMs > 0 && isFinite(durMs)) ? Math.floor(durMs / 1000) : 0;
+  const pct = d > 0 ? posMs / durMs : 0;
+  if(d > 0 && pct > 0.97) return;               // presque fini → pas besoin de reprendre
   const prog = getProg();
 
   // ── Épisodes de série : URL connue via _epUrlMap ────────────────
@@ -1346,16 +1347,22 @@ function renderPanel(){
   });
 
   // ── Modal de reprise : overlay centré accessible télécommande ──
-  function openResumeModal(ep, sk, progK, pct){
+  function openResumeModal(ep, sk, progK, pct, tSec){
     document.getElementById("spResumeModal")?.remove();
     const code = `S${String(sk).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`;
+    // Afficher % si connu, sinon durée absolue
+    const resumeInfo = pct > 0.01
+      ? `${Math.round(pct * 100)}% visionné`
+      : (tSec > 0
+          ? `${Math.floor(tSec/60)}min${tSec%60 > 0 ? " " + String(tSec%60) + "s" : ""} visionnés`
+          : "Reprendre");
     const ov = document.createElement("div");
     ov.id = "spResumeModal";
     ov.className = "sp-resume-modal";
     ov.innerHTML = `
       <div class="sp-resume-modal__box">
         <div class="sp-resume-modal__title">${esc(code)}${ep.title ? " — " + esc(ep.title) : ""}</div>
-        <div class="sp-resume-modal__pct">${Math.round(pct*100)}% visionné</div>
+        <div class="sp-resume-modal__pct">${resumeInfo}</div>
         <div class="sp-resume-modal__btns">
           <button id="spRmResume" class="sp-resume-modal__play">▶ Reprendre</button>
           <button id="spRmRestart" class="sp-resume-modal__restart">↩ Depuis le début</button>
@@ -1409,12 +1416,14 @@ function renderPanel(){
       const code  = `S${String(sk).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`;
       const progK = `${s.id}||${code}`;
       const saved = getProg()[progK];
-      const pct   = saved?.pct
-                  || (saved?.t > 10 && saved?.d > 0 ? saved.t / saved.d : 0);
+      const tSec  = saved?.t || 0;
+      const dSec  = (saved?.d && isFinite(saved.d)) ? saved.d : 0;
+      // pct en fraction 0-1 (0 si durée inconnue)
+      const pctF  = dSec > 0 ? tSec / dSec : (saved?.pct || 0);
 
-      if(pct > 0.02 && pct < 0.95){
-        // Proposer reprise
-        openResumeModal(ep, sk, progK, pct);
+      // Proposer reprise : > 60s regardés ET (pas de durée connue OU pas presque fini)
+      if(tSec > 60 && pctF < 0.95){
+        openResumeModal(ep, sk, progK, pctF, tSec);
       } else {
         playEpisode(s, ep, sk);
       }
