@@ -251,9 +251,10 @@ const PipPlayer = {
     const video = $("pip-video");
     if(!video || !this._item || video.currentTime < 5) return;
     const prog = getProg();
-    const id   = String(this._item.id || this._item.stream_id || "");
-    if(!id) return;
-    prog[id] = { t: Math.floor(video.currentTime), d: Math.floor(video.duration) || 0, ts: Date.now() };
+    // Priorité : progress_key (épisodes de série) → id numérique (VOD)
+    const key  = this._item.progress_key || String(this._item.id || this._item.stream_id || "");
+    if(!key) return;
+    prog[key] = { t: Math.floor(video.currentTime), d: Math.floor(video.duration) || 0, ts: Date.now() };
     storeSet(STORE.progress, prog); // cache déjà mis à jour (même objet)
   },
 
@@ -261,8 +262,8 @@ const PipPlayer = {
     const video = $("pip-video");
     if(!video || !this._item) return;
     const prog  = storeGet(STORE.progress, {});
-    const id    = String(this._item.id || this._item.stream_id || "");
-    const saved = prog[id];
+    const key   = this._item.progress_key || String(this._item.id || this._item.stream_id || "");
+    const saved = prog[key];
     if(saved?.t > 10 && saved.t < (video.duration || Infinity) - 30){
       video.currentTime = saved.t;
     }
@@ -500,8 +501,9 @@ function _invalidateCache(){ _cacheP = null; _cacheF = null; }
 // ── Retourne la position sauvegardée en ms (pour Android openPlayerAt) ──
 function _getSavedProgressMs(item){
   const prog = getProg();
-  const id   = String(item.id || item.stream_id || "");
-  if(id && prog[id]?.t > 10) return prog[id].t * 1000;   // secondes → ms
+  // Priorité : progress_key (épisodes de série) → id numérique (VOD)
+  const key  = item.progress_key || String(item.id || item.stream_id || "");
+  if(key && prog[key]?.t > 10) return prog[key].t * 1000;   // secondes → ms
   return 0;
 }
 
@@ -514,25 +516,31 @@ window.onAndroidPlayerClosed = function(url, posMs, durMs){
 
   const t = Math.floor(posMs / 1000);
   const d = Math.floor(durMs / 1000);
-
-  // Chercher l'item dans le catalogue par URL exacte
-  const all = [...(S.vod || []), ...(S.series || []), ...(S.live || [])];
-  const item = all.find(x => (x.url || x.stream_url || "") === url);
-
   const prog = getProg();
+
+  // ── Épisodes de série : URL connue via _epUrlMap ────────────────
+  const epKey = window._epUrlMap?.[url];
+  if(epKey){
+    prog[epKey] = { t, d, ts: Date.now() };
+    storeSet(STORE.progress, prog);
+    _invalidateCache();
+    if(typeof renderContinueRow === "function") renderContinueRow();
+    return;
+  }
+
+  // ── VOD / Live : chercher l'item dans le catalogue par URL exacte ─
+  const all  = [...(S.vod || []), ...(S.series || []), ...(S.live || [])];
+  const item = all.find(x => (x.url || x.stream_url || "") === url);
   if(item){
-    // Format PipPlayer (par item.id) — lu par getWatchPct k2
     const id = String(item.id || item.stream_id || "");
     if(id) prog[id] = { t, d, ts: Date.now() };
-    // Format AVPlayer (par itemKey) — lu par getWatchPct k1
     prog[itemKey(item)] = { pct, ts: Date.now() };
   } else {
-    // Fallback : clé = URL brute (épisode de série non retrouvé dans S.series)
     prog[url] = { pct, ts: Date.now() };
   }
   storeSet(STORE.progress, prog);
+  _invalidateCache();
 
-  // Rafraîchir la section "Continuer à regarder"
   if(typeof renderContinueRow === "function") renderContinueRow();
 };
 
@@ -1302,6 +1310,14 @@ function renderPanel(){
       ${tabsHtml}
 
       <div id="spEps">${epsHtml}</div>
+    </div>
+
+    <!-- Barre de reprise épisode ──────────────────────────────── -->
+    <div id="spResumeBar" class="sp-resume-bar" hidden>
+      <span class="sp-resume-info" id="spResumeLabel"></span>
+      <button id="spResumeBtn"  class="sp-resume-play">▶ Reprendre</button>
+      <button id="spRestartBtn" class="sp-resume-restart">↩ Début</button>
+      <button id="spResumeDismiss" class="sp-resume-dismiss" aria-label="Fermer">✕</button>
     </div>`;
 
   bindClose();
@@ -1318,13 +1334,63 @@ function renderPanel(){
     });
   });
 
+  // ── Barre de reprise : état courant ──
+  let _pendingEp = null;   // { s, ep, sk, progK }
+
+  function _showResumeBar(ep, sk, progK, pct){
+    const code = `S${String(sk).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`;
+    const bar  = $("spResumeBar");
+    const lbl  = $("spResumeLabel");
+    if(!bar || !lbl) return;
+    lbl.textContent = `${code}${ep.title ? " — " + ep.title : ""} · ${Math.round(pct*100)}%`;
+    bar.hidden = false;
+  }
+  function _hideResumeBar(){ const b = $("spResumeBar"); if(b) b.hidden = true; _pendingEp = null; }
+
+  $("spResumeBtn")?.addEventListener("click", () => {
+    if(!_pendingEp) return;
+    _hideResumeBar();
+    playEpisode(_pendingEp.s, _pendingEp.ep, _pendingEp.sk);
+  });
+
+  $("spRestartBtn")?.addEventListener("click", () => {
+    if(!_pendingEp) return;
+    // Effacer la progression pour cet épisode
+    const prog = getProg();
+    delete prog[_pendingEp.progK];
+    storeSet(STORE.progress, prog);
+    _invalidateCache();
+    const ep = _pendingEp.ep;
+    const sk = _pendingEp.sk;
+    _hideResumeBar();
+    playEpisode(s, ep, sk);
+  });
+
+  $("spResumeDismiss")?.addEventListener("click", _hideResumeBar);
+
   // Boutons épisodes
   panel.querySelectorAll(".sp-ep:not([disabled])").forEach(btn => {
     btn.addEventListener("click", () => {
-      const sk  = btn.dataset.season;
-      const idx = Number(btn.dataset.idx);
-      const ep  = (smap[sk] || [])[idx];
-      if(ep && ep.url) playEpisode(s, ep, sk);
+      const sk    = btn.dataset.season;
+      const idx   = Number(btn.dataset.idx);
+      const ep    = (smap[sk] || [])[idx];
+      if(!ep || !ep.url) return;
+
+      // Vérifier la progression sauvegardée
+      const code  = `S${String(sk).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`;
+      const progK = `${s.id}||${code}`;
+      const saved = getProg()[progK];
+      const pct   = saved?.pct
+                  || (saved?.t > 10 && saved?.d > 0 ? saved.t / saved.d : 0);
+
+      if(pct > 0.02 && pct < 0.95){
+        // Proposer reprise
+        _pendingEp = { s, ep, sk, progK };
+        _showResumeBar(ep, sk, progK, pct);
+      } else {
+        _hideResumeBar();
+        playEpisode(s, ep, sk);
+      }
     });
   });
 
@@ -1373,17 +1439,29 @@ function playEpisode(series, ep, season){
     current_ep_index : curIdx
   };
 
-  // APK Android v4+ : lecteur VLC embarqué pour les épisodes (sauf TV → player.html)
+  // APK Android (non-TV) : ExoPlayer (openPlayerAt) avec reprise de position
   const _isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
                 (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
-  if(!_isTV && typeof window.AndroidBridge !== "undefined"
-     && typeof window.AndroidBridge.openInVlc === "function"){
-    const epTitle = `${series.title} — ${code}${ep.title ? " " + ep.title : ""}`;
-    try {
-      window.AndroidBridge.openInVlc(ep.url, epTitle, false);
-      return;
-    } catch(e) {
-      console.warn("VLC bridge error:", e);
+  if(!_isTV && typeof window.AndroidBridge !== "undefined"){
+    const epTitle  = `${series.title} — ${code}${ep.title ? " " + ep.title : ""}`;
+    const epsJson  = JSON.stringify(playerItem.all_episodes);
+    const savedMs  = _getSavedProgressMs({ progress_key: progKey });
+
+    // Mémoriser l'URL → progress_key pour que onAndroidPlayerClosed puisse sauvegarder
+    if(!window._epUrlMap) window._epUrlMap = {};
+    window._epUrlMap[ep.url] = progKey;
+
+    if(typeof window.AndroidBridge.openPlayerAt === "function"){
+      try { window.AndroidBridge.openPlayerAt(ep.url, series.title, epTitle, epsJson, curIdx, savedMs); return; }
+      catch(e){ console.warn("openPlayerAt:", e); }
+    }
+    if(typeof window.AndroidBridge.openPlayer === "function"){
+      try { window.AndroidBridge.openPlayer(ep.url, series.title, epTitle, epsJson, curIdx); return; }
+      catch(e){ console.warn("openPlayer:", e); }
+    }
+    if(typeof window.AndroidBridge.openInVlc === "function"){
+      try { window.AndroidBridge.openInVlc(ep.url, epTitle, false); return; }
+      catch(e){ console.warn("openInVlc:", e); }
     }
   }
 
