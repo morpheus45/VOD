@@ -1320,13 +1320,7 @@ function renderPanel(){
       <div id="spEps">${epsHtml}</div>
     </div>
 
-    <!-- Barre de reprise épisode ──────────────────────────────── -->
-    <div id="spResumeBar" class="sp-resume-bar" hidden>
-      <span class="sp-resume-info" id="spResumeLabel"></span>
-      <button id="spResumeBtn"  class="sp-resume-play">▶ Reprendre</button>
-      <button id="spRestartBtn" class="sp-resume-restart">↩ Début</button>
-      <button id="spResumeDismiss" class="sp-resume-dismiss" aria-label="Fermer">✕</button>
-    </div>`;
+    `;
 
   bindClose();
 
@@ -1351,41 +1345,57 @@ function renderPanel(){
     });
   });
 
-  // ── Barre de reprise : état courant ──
-  let _pendingEp = null;   // { s, ep, sk, progK }
-
-  function _showResumeBar(ep, sk, progK, pct){
+  // ── Modal de reprise : overlay centré accessible télécommande ──
+  function openResumeModal(ep, sk, progK, pct){
+    document.getElementById("spResumeModal")?.remove();
     const code = `S${String(sk).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`;
-    const bar  = $("spResumeBar");
-    const lbl  = $("spResumeLabel");
-    if(!bar || !lbl) return;
-    lbl.textContent = `${code}${ep.title ? " — " + ep.title : ""} · ${Math.round(pct*100)}%`;
-    bar.hidden = false;
-    // Focus automatique sur "Reprendre" pour la télécommande
-    setTimeout(() => $("spResumeBtn")?.focus(), 60);
+    const ov = document.createElement("div");
+    ov.id = "spResumeModal";
+    ov.className = "sp-resume-modal";
+    ov.innerHTML = `
+      <div class="sp-resume-modal__box">
+        <div class="sp-resume-modal__title">${esc(code)}${ep.title ? " — " + esc(ep.title) : ""}</div>
+        <div class="sp-resume-modal__pct">${Math.round(pct*100)}% visionné</div>
+        <div class="sp-resume-modal__btns">
+          <button id="spRmResume" class="sp-resume-modal__play">▶ Reprendre</button>
+          <button id="spRmRestart" class="sp-resume-modal__restart">↩ Depuis le début</button>
+        </div>
+        <button id="spRmClose" class="sp-resume-modal__close">✕</button>
+      </div>`;
+    document.body.appendChild(ov);
+
+    const closeModal = () => { document.removeEventListener("keydown", onModalKey, true); ov.remove(); };
+
+    function onModalKey(e){
+      if(!document.getElementById("spResumeModal")){ document.removeEventListener("keydown", onModalKey, true); return; }
+      if(["Escape","GoBack","Back"].includes(e.key)){ e.preventDefault(); e.stopPropagation(); closeModal(); return; }
+      if(e.key === "ArrowLeft" || e.key === "ArrowRight"){ e.preventDefault(); e.stopPropagation();
+        const cur = document.activeElement;
+        if(cur?.id === "spRmResume") $("spRmRestart")?.focus();
+        else $("spRmResume")?.focus();
+        return;
+      }
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); e.stopPropagation();
+        if(document.activeElement?.id === "spRmRestart") document.activeElement.click();
+        else $("spRmResume")?.click();
+        return;
+      }
+    }
+    document.addEventListener("keydown", onModalKey, true);
+
+    $("spRmResume").addEventListener("click", () => { closeModal(); playEpisode(s, ep, sk); });
+    $("spRmRestart").addEventListener("click", () => {
+      const prog = getProg();
+      delete prog[progK];
+      storeSet(STORE.progress, prog);
+      _invalidateCache();
+      closeModal();
+      playEpisode(s, ep, sk);
+    });
+    $("spRmClose").addEventListener("click", closeModal);
+    ov.addEventListener("click", e => { if(e.target === ov) closeModal(); });
+    setTimeout(() => $("spRmResume")?.focus(), 60);
   }
-  function _hideResumeBar(){ const b = $("spResumeBar"); if(b) b.hidden = true; _pendingEp = null; }
-
-  $("spResumeBtn")?.addEventListener("click", () => {
-    if(!_pendingEp) return;
-    _hideResumeBar();
-    playEpisode(_pendingEp.s, _pendingEp.ep, _pendingEp.sk);
-  });
-
-  $("spRestartBtn")?.addEventListener("click", () => {
-    if(!_pendingEp) return;
-    // Effacer la progression pour cet épisode
-    const prog = getProg();
-    delete prog[_pendingEp.progK];
-    storeSet(STORE.progress, prog);
-    _invalidateCache();
-    const ep = _pendingEp.ep;
-    const sk = _pendingEp.sk;
-    _hideResumeBar();
-    playEpisode(s, ep, sk);
-  });
-
-  $("spResumeDismiss")?.addEventListener("click", _hideResumeBar);
 
   // Boutons épisodes
   panel.querySelectorAll(".sp-ep:not([disabled])").forEach(btn => {
@@ -1404,10 +1414,8 @@ function renderPanel(){
 
       if(pct > 0.02 && pct < 0.95){
         // Proposer reprise
-        _pendingEp = { s, ep, sk, progK };
-        _showResumeBar(ep, sk, progK, pct);
+        openResumeModal(ep, sk, progK, pct);
       } else {
-        _hideResumeBar();
         playEpisode(s, ep, sk);
       }
     });
@@ -1654,6 +1662,7 @@ function openLivePicker(group){
 
   const focusClose = () => {
     allBtns().forEach(b => { b.classList.remove("live-picker__btn--focus"); b.tabIndex = -1; });
+    const f = document.getElementById("livePickerFav"); if(f){ f.tabIndex = -1; }
     const c = closBtn();
     if(!c) return;
     c.classList.add("live-picker__close--focus");
@@ -1686,20 +1695,21 @@ function openLivePicker(group){
 
       case "ArrowRight":
         e.preventDefault(); e.stopPropagation();
-        if(onClose || onFav) focusBtn(0);
-        else focusBtn(Math.min(focusIdx + 1, btns.length - 1));
+        if(onClose)      focusFav();
+        else if(onFav)   focusClose();
+        else             focusBtn(Math.min(focusIdx + 1, btns.length - 1));
         return;
 
       case "ArrowLeft":
         e.preventDefault(); e.stopPropagation();
-        if(onClose || onFav) focusBtn(btns.length - 1);
-        else focusBtn(Math.max(focusIdx - 1, 0));
+        if(onFav)        focusClose();
+        else if(onClose) focusFav();
+        else             focusBtn(Math.max(focusIdx - 1, 0));
         return;
 
-      case "ArrowDown":                         // ↓ qualité → Fermer → Favori
+      case "ArrowDown":                         // ↓ qualité → rangée action (Fermer)
         e.preventDefault(); e.stopPropagation();
         if(!onClose && !onFav) focusClose();
-        else if(onClose)       focusFav();
         return;
 
       case "ArrowUp":                           // ↑ → retour boutons qualité
@@ -1932,44 +1942,32 @@ function renderNetflixRows(){
   empty.hidden = true;
   grid.innerHTML = "";
 
-  const frag = document.createDocumentFragment();
-  let total = 0;
+  const rowsArr = [...orderedMap.entries()];
+  let rowIdx = 0;
+  let totalItems = 0;
+  const RBATCH = 3;
 
-  orderedMap.forEach((items, catName) => {
-    total += items.length;
-
+  function _buildRow(catName, items){
+    totalItems += items.length;
     const section = document.createElement("div");
     section.className = "nrow";
-
-    // En-tête de rangée
     const hdr = document.createElement("div");
     hdr.className = "nrow-hdr";
-
     const titleEl = document.createElement("h3");
     titleEl.className = "nrow-title";
     titleEl.textContent = displayCatName(catName);
-
     hdr.appendChild(titleEl);
     section.appendChild(hdr);
-
-    // Bande horizontale
     const strip = document.createElement("div");
     strip.className = "nrow-strip";
-
     items.slice(0, NROW_MAX).forEach(item => strip.appendChild(makeNrowCard(item)));
-
-    // ── Tuile "Voir tout" en fin de rangée (style poster, focusable D-pad) ──
+    // Tuile "Voir tout"
     const allTile = document.createElement("button");
     allTile.className = "nrow-card nrow-all-tile";
-    allTile.type     = "button";
+    allTile.type = "button";
     allTile.tabIndex = 0;
     allTile.setAttribute("aria-label", `Voir tout ${catName} (${items.length})`);
-    allTile.innerHTML = `
-      <div class="nrow-media nrow-all-media">
-        <span class="nrow-all-arrow">→</span>
-        <span class="nrow-all-label">Voir tout</span>
-        <span class="nrow-all-count">(${items.length})</span>
-      </div>`;
+    allTile.innerHTML = `<div class="nrow-media nrow-all-media"><span class="nrow-all-arrow">→</span><span class="nrow-all-label">Voir tout</span><span class="nrow-all-count">(${items.length})</span></div>`;
     allTile.addEventListener("click", () => {
       S.cat = catName;
       const sel = $("categorySelect");
@@ -1983,13 +1981,23 @@ function renderNetflixRows(){
       renderGrid(true);
     });
     strip.appendChild(allTile);
-
     section.appendChild(strip);
-    frag.appendChild(section);
-  });
+    return section;
+  }
 
-  grid.appendChild(frag);
-  $("catalogCount").textContent = `${total} éléments · ${orderedMap.size} catégories`;
+  function _renderBatch(){
+    const end = Math.min(rowIdx + RBATCH, rowsArr.length);
+    for(; rowIdx < end; rowIdx++){
+      const [catName, items] = rowsArr[rowIdx];
+      grid.appendChild(_buildRow(catName, items));
+    }
+    if(rowIdx < rowsArr.length){
+      requestAnimationFrame(_renderBatch);
+    } else {
+      $("catalogCount").textContent = `${totalItems} éléments · ${rowsArr.length} catégories`;
+    }
+  }
+  _renderBatch();
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -2679,7 +2687,12 @@ async function boot(){
   });
 
   $("categorySelect").addEventListener("change", e => { S.cat = e.target.value; render(); });
-  $("searchInput").addEventListener("input",  e => { S.search = e.target.value; render(); });
+  let _searchTimer = null;
+  $("searchInput").addEventListener("input", e => {
+    S.search = e.target.value;
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(render, 250);
+  });
   $("sortSelect").addEventListener("change",  e => { S.sort = e.target.value; render(); });
 
   // Pilules qualité — remplacent le <select>

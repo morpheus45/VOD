@@ -592,6 +592,42 @@ button,select,input{ font:inherit }
   font-size:16px; line-height:1; flex-shrink:0;
 }
 .sp-resume-dismiss:hover{ color:rgba(255,255,255,.7) }
+
+/* ── Modal reprise épisode ── */
+.sp-resume-modal{
+  position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:3000;
+  display:flex; align-items:center; justify-content:center;
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+}
+.sp-resume-modal__box{
+  position:relative; width:min(480px,92vw);
+  background:linear-gradient(135deg,#0c1422,#0a1828);
+  border:1px solid rgba(123,95,232,.35); border-radius:20px;
+  padding:28px 24px 22px; text-align:center;
+  box-shadow:0 24px 64px rgba(0,0,0,.8);
+}
+.sp-resume-modal__title{ font-size:17px; font-weight:700; color:#eef4ff; margin-bottom:4px }
+.sp-resume-modal__pct{ font-size:13px; color:#7a9cc0; margin-bottom:24px }
+.sp-resume-modal__btns{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-bottom:16px }
+.sp-resume-modal__play{
+  flex:1; min-width:140px; padding:14px 20px; border-radius:14px; border:none; cursor:pointer;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:#fff; font-size:15px; font-weight:800;
+  box-shadow:0 4px 18px rgba(123,95,232,.4);
+}
+.sp-resume-modal__restart{
+  flex:1; min-width:140px; padding:13px 16px; border-radius:14px;
+  border:1px solid var(--line); background:var(--panel2);
+  color:var(--muted); font-size:14px; font-weight:600; cursor:pointer;
+}
+.sp-resume-modal__play:focus,
+.sp-resume-modal__restart:focus { outline:3px solid var(--accent); outline-offset:2px }
+.sp-resume-modal__close{
+  position:absolute; top:12px; right:14px; background:none; border:none;
+  color:rgba(255,255,255,.3); font-size:20px; cursor:pointer; padding:4px 8px;
+}
+.sp-resume-modal__close:hover{ color:#fff }
+
 .sp-direct{
   display:flex; align-items:center; justify-content:center; gap:10px;
   width:100%; padding:16px; border:1px solid var(--accent);
