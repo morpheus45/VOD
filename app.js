@@ -1344,6 +1344,8 @@ function renderPanel(){
     if(!bar || !lbl) return;
     lbl.textContent = `${code}${ep.title ? " — " + ep.title : ""} · ${Math.round(pct*100)}%`;
     bar.hidden = false;
+    // Focus automatique sur "Reprendre" pour la télécommande
+    setTimeout(() => $("spResumeBtn")?.focus(), 60);
   }
   function _hideResumeBar(){ const b = $("spResumeBar"); if(b) b.hidden = true; _pendingEp = null; }
 
@@ -2110,8 +2112,10 @@ function initTV(){
     const panel = $("seriesPanel");
     if(!panel) return;
     const items = [...panel.querySelectorAll(
-      ".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct, .vod-play-btn, .fav-btn-large"
-    )];
+      ".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct," +
+      ".vod-play-btn, .vod-restart-btn, .fav-btn-large," +
+      ".sp-resume-play, .sp-resume-restart, .sp-resume-dismiss"
+    )].filter(el => !el.closest("[hidden]"));
     const idx = items.indexOf(document.activeElement);
     if(idx < 0){ items[0]?.focus(); return; }
     if(k === "ArrowDown" || k === "ArrowRight"){
