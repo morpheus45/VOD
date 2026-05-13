@@ -1623,12 +1623,10 @@ function openLivePicker(group){
   };
 
   const _isFavGroup = isFav(group);
+  // ♥ et Fermer sont dans la MÊME rangée en bas — accessibles avec un seul ↓
   ov.innerHTML = `
     <div class="live-picker__box">
-      <div class="live-picker__head">
-        <h2 class="live-picker__title">${esc(group.title)}</h2>
-        <button class="live-picker__fav ${_isFavGroup?"is-fav":""}" id="livePickerFav" tabindex="-1" aria-label="Favori">♥</button>
-      </div>
+      <h2 class="live-picker__title">${esc(group.title)}</h2>
       <p class="live-picker__sub">Choisissez la qualité · utilisez ←→ + OK</p>
       <div class="live-picker__grid">
         ${group._variants.map((v,i) => `
@@ -1638,36 +1636,56 @@ function openLivePicker(group){
             <span class="live-picker__hint">${esc(makeHint(v.item.title, v.quality))}</span>
           </button>`).join("")}
       </div>
-      <button class="live-picker__close" id="livePickerClose" tabindex="0">✕ Fermer</button>
+      <div class="live-picker__actions">
+        <button class="live-picker__fav ${_isFavGroup?"is-fav":""}" id="livePickerFav" tabindex="-1">
+          ${_isFavGroup?"♥ Retirer":"♡ Favori"}
+        </button>
+        <button class="live-picker__close" id="livePickerClose" tabindex="-1">✕ Fermer</button>
+      </div>
     </div>`;
   document.body.appendChild(ov);
 
   // ── Navigation D-pad TV ──────────────────────────────────────────
-  const allBtns = () => [...ov.querySelectorAll(".live-picker__btn")];
-  const closBtn = () => document.getElementById("livePickerClose");
-  let focusIdx = 0;
+  // Zones : [qualité 0…N] → ↓ → [♥ Favori] [✕ Fermer]
+  //         ←→ dans chaque zone ; ↑ remonte aux qualités
+  const allBtns  = () => [...ov.querySelectorAll(".live-picker__btn")];
+  const favEl    = () => document.getElementById("livePickerFav");
+  const closeEl  = () => document.getElementById("livePickerClose");
+  // actionRow : 0=♥, 1=Fermer
+  let focusIdx     = 0;  // index dans la grille qualité
+  let actionFocus  = -1; // -1=pas dans action row, 0=♥, 1=Fermer
+
+  const clearQualFocus = () => {
+    allBtns().forEach(b => { b.classList.remove("live-picker__btn--focus"); b.tabIndex = -1; });
+  };
+  const clearActionFocus = () => {
+    const f = favEl();   if(f){ f.classList.remove("live-picker__fav--focus");   f.tabIndex = -1; }
+    const c = closeEl(); if(c){ c.classList.remove("live-picker__close--focus"); c.tabIndex = -1; }
+  };
 
   const focusBtn = (idx) => {
     const btns = allBtns();
     if(idx < 0 || idx >= btns.length) return;
-    focusIdx = idx;
+    focusIdx    = idx;
+    actionFocus = -1;
+    clearActionFocus();
     btns.forEach((b,i) => {
       b.classList.toggle("live-picker__btn--focus", i === idx);
       b.tabIndex = i === idx ? 0 : -1;
     });
-    const c = closBtn();
-    if(c) c.classList.remove("live-picker__close--focus");
     btns[idx].focus();
   };
 
-  const focusClose = () => {
-    allBtns().forEach(b => { b.classList.remove("live-picker__btn--focus"); b.tabIndex = -1; });
-    const f = document.getElementById("livePickerFav"); if(f){ f.tabIndex = -1; }
-    const c = closBtn();
-    if(!c) return;
-    c.classList.add("live-picker__close--focus");
-    c.tabIndex = 0;
-    c.focus();
+  const focusAction = (which) => {
+    // which : 0=♥, 1=Fermer
+    actionFocus = which;
+    clearQualFocus();
+    const f = favEl();
+    const c = closeEl();
+    if(f){ f.classList.toggle("live-picker__fav--focus",   which === 0); f.tabIndex = which === 0 ? 0 : -1; }
+    if(c){ c.classList.toggle("live-picker__close--focus", which === 1); c.tabIndex = which === 1 ? 0 : -1; }
+    if(which === 0 && f) f.focus();
+    else if(which === 1 && c) c.focus();
   };
 
   const close = () => {
@@ -1675,19 +1693,11 @@ function openLivePicker(group){
     ov.remove();
   };
 
-  const focusFav = () => {
-    allBtns().forEach(b => { b.classList.remove("live-picker__btn--focus"); b.tabIndex = -1; });
-    const c = closBtn(); if(c){ c.classList.remove("live-picker__close--focus"); c.tabIndex = -1; }
-    const f = document.getElementById("livePickerFav"); if(!f) return;
-    f.tabIndex = 0; f.focus();
-  };
-
   // Listener en phase CAPTURE sur document — intercepte AVANT la nav spatiale Android TV WebView
   function onKey(e) {
     if(!document.getElementById("livePicker")){ document.removeEventListener("keydown", onKey, true); return; }
-    const btns    = allBtns();
-    const onClose = document.activeElement === closBtn();
-    const onFav   = document.activeElement === document.getElementById("livePickerFav");
+    const btns     = allBtns();
+    const inAction = actionFocus >= 0;
 
     switch(e.key){
       case "Escape": case "GoBack": case "Back":
@@ -1695,37 +1705,40 @@ function openLivePicker(group){
 
       case "ArrowRight":
         e.preventDefault(); e.stopPropagation();
-        if(onClose)      focusFav();
-        else if(onFav)   focusClose();
-        else             focusBtn(Math.min(focusIdx + 1, btns.length - 1));
+        if(inAction)  focusAction(actionFocus === 0 ? 1 : 0); // ♥ ↔ Fermer
+        else          focusBtn(Math.min(focusIdx + 1, btns.length - 1));
         return;
 
       case "ArrowLeft":
         e.preventDefault(); e.stopPropagation();
-        if(onFav)        focusClose();
-        else if(onClose) focusFav();
-        else             focusBtn(Math.max(focusIdx - 1, 0));
+        if(inAction)  focusAction(actionFocus === 0 ? 1 : 0); // ♥ ↔ Fermer
+        else          focusBtn(Math.max(focusIdx - 1, 0));
         return;
 
-      case "ArrowDown":                         // ↓ qualité → rangée action (Fermer)
+      case "ArrowDown":                         // ↓ qualité → ♥ (direct, un seul ↓)
         e.preventDefault(); e.stopPropagation();
-        if(!onClose && !onFav) focusClose();
+        if(!inAction) focusAction(0);           // atterrit sur ♥ en premier
         return;
 
       case "ArrowUp":                           // ↑ → retour boutons qualité
         e.preventDefault(); e.stopPropagation();
-        if(onClose || onFav) focusBtn(focusIdx);
+        if(inAction) focusBtn(focusIdx);
         return;
 
       case "Enter": case " ":
         e.preventDefault(); e.stopPropagation();
-        if(onClose){ close(); return; }
-        if(onFav){
+        if(inAction && actionFocus === 1){ close(); return; }
+        if(inAction && actionFocus === 0){
           toggleFav(group);
-          const f = document.getElementById("livePickerFav");
-          if(f) f.classList.toggle("is-fav", isFav(group));
+          const f = favEl();
+          if(f){
+            const nowFav = isFav(group);
+            f.classList.toggle("is-fav", nowFav);
+            f.textContent = nowFav ? "♥ Retirer" : "♡ Favori";
+          }
           return;
         }
+        // sur une qualité
         if(btns[focusIdx]){ close(); playItem(group._variants[focusIdx].item); }
         return;
     }
@@ -1740,18 +1753,21 @@ function openLivePicker(group){
       playItem(group._variants[idx].item);
     });
     btn.addEventListener("focus", () => {
-      focusIdx = Number(btn.dataset.idx);
+      focusIdx    = Number(btn.dataset.idx);
+      actionFocus = -1;
       allBtns().forEach((b,i) => b.classList.toggle("live-picker__btn--focus", i===focusIdx));
     });
   });
 
-  const favBtnEl = document.getElementById("livePickerFav");
+  const favBtnEl = favEl();
   if(favBtnEl) favBtnEl.addEventListener("click", () => {
     toggleFav(group);
-    favBtnEl.classList.toggle("is-fav", isFav(group));
+    const nowFav = isFav(group);
+    favBtnEl.classList.toggle("is-fav", nowFav);
+    favBtnEl.textContent = nowFav ? "♥ Retirer" : "♡ Favori";
   });
 
-  const cBtnEl = document.getElementById("livePickerClose");
+  const cBtnEl = closeEl();
   if(cBtnEl) cBtnEl.addEventListener("click", close);
   ov.addEventListener("click", e => { if(e.target === ov) close(); });
 
