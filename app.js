@@ -1614,9 +1614,13 @@ function openLivePicker(group){
     return h || title;
   };
 
+  const _isFavGroup = isFav(group);
   ov.innerHTML = `
     <div class="live-picker__box">
-      <h2 class="live-picker__title">${esc(group.title)}</h2>
+      <div class="live-picker__head">
+        <h2 class="live-picker__title">${esc(group.title)}</h2>
+        <button class="live-picker__fav ${_isFavGroup?"is-fav":""}" id="livePickerFav" tabindex="-1" aria-label="Favori">♥</button>
+      </div>
       <p class="live-picker__sub">Choisissez la qualité · utilisez ←→ + OK</p>
       <div class="live-picker__grid">
         ${group._variants.map((v,i) => `
@@ -1662,41 +1666,56 @@ function openLivePicker(group){
     ov.remove();
   };
 
+  const focusFav = () => {
+    allBtns().forEach(b => { b.classList.remove("live-picker__btn--focus"); b.tabIndex = -1; });
+    const c = closBtn(); if(c){ c.classList.remove("live-picker__close--focus"); c.tabIndex = -1; }
+    const f = document.getElementById("livePickerFav"); if(!f) return;
+    f.tabIndex = 0; f.focus();
+  };
+
   // Listener en phase CAPTURE sur document — intercepte AVANT la nav spatiale Android TV WebView
   function onKey(e) {
     if(!document.getElementById("livePicker")){ document.removeEventListener("keydown", onKey, true); return; }
-    const btns   = allBtns();
+    const btns    = allBtns();
     const onClose = document.activeElement === closBtn();
+    const onFav   = document.activeElement === document.getElementById("livePickerFav");
 
     switch(e.key){
       case "Escape": case "GoBack": case "Back":
         e.preventDefault(); e.stopPropagation(); close(); return;
 
-      case "ArrowRight":                        // ← → entre les boutons qualité uniquement
+      case "ArrowRight":
         e.preventDefault(); e.stopPropagation();
-        if(onClose) focusBtn(0);
+        if(onClose || onFav) focusBtn(0);
         else focusBtn(Math.min(focusIdx + 1, btns.length - 1));
         return;
 
       case "ArrowLeft":
         e.preventDefault(); e.stopPropagation();
-        if(onClose) focusBtn(btns.length - 1);
+        if(onClose || onFav) focusBtn(btns.length - 1);
         else focusBtn(Math.max(focusIdx - 1, 0));
         return;
 
-      case "ArrowDown":                         // ↓ → Fermer
+      case "ArrowDown":                         // ↓ qualité → Fermer → Favori
         e.preventDefault(); e.stopPropagation();
-        if(!onClose) focusClose();
+        if(!onClose && !onFav) focusClose();
+        else if(onClose)       focusFav();
         return;
 
       case "ArrowUp":                           // ↑ → retour boutons qualité
         e.preventDefault(); e.stopPropagation();
-        if(onClose) focusBtn(focusIdx);
+        if(onClose || onFav) focusBtn(focusIdx);
         return;
 
       case "Enter": case " ":
         e.preventDefault(); e.stopPropagation();
         if(onClose){ close(); return; }
+        if(onFav){
+          toggleFav(group);
+          const f = document.getElementById("livePickerFav");
+          if(f) f.classList.toggle("is-fav", isFav(group));
+          return;
+        }
         if(btns[focusIdx]){ close(); playItem(group._variants[focusIdx].item); }
         return;
     }
@@ -1714,6 +1733,12 @@ function openLivePicker(group){
       focusIdx = Number(btn.dataset.idx);
       allBtns().forEach((b,i) => b.classList.toggle("live-picker__btn--focus", i===focusIdx));
     });
+  });
+
+  const favBtnEl = document.getElementById("livePickerFav");
+  if(favBtnEl) favBtnEl.addEventListener("click", () => {
+    toggleFav(group);
+    favBtnEl.classList.toggle("is-fav", isFav(group));
   });
 
   const cBtnEl = document.getElementById("livePickerClose");
@@ -2430,7 +2455,10 @@ function renderFavoritesRow(){
       </div>`;
     const activate = () => {
       if(item.type === "series") openPanel(item);
-      else if(item.type === "live") playItem(item._variants?.[0]?.item || item);
+      else if(item.type === "live"){
+        if(item._variants && item._variants.length > 1) openLivePicker(item);
+        else playItem(item._variants?.[0]?.item || item);
+      }
       else openVodPanel(item);
     };
     card.addEventListener("click", activate);

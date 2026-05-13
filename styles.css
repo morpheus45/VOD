@@ -1104,10 +1104,23 @@ html.is-tv .update-bar__date{ display:none }
   border-radius:22px; box-shadow:0 30px 80px rgba(0,0,0,.8);
   text-align:center;
 }
+.live-picker__head{
+  display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:6px;
+}
 .live-picker__title{
-  margin:0 0 6px; color:#eef4ff;
+  margin:0; color:#eef4ff;
   font-size:22px; font-weight:800; letter-spacing:-.3px;
 }
+.live-picker__fav{
+  background:none; border:1px solid var(--line); border-radius:50%;
+  width:36px; height:36px; color:rgba(255,255,255,.35);
+  font-size:18px; cursor:pointer; flex-shrink:0; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  transition:color .15s, border-color .15s;
+}
+.live-picker__fav.is-fav,
+.live-picker__fav:focus-visible { color:var(--accent); border-color:var(--accent); outline:none }
+.live-picker__fav:focus          { outline:2px solid var(--accent); outline-offset:2px }
 .live-picker__sub{
   color:#7a9cc0; font-size:13px; margin-bottom:20px;
 }
