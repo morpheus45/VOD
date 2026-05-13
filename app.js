@@ -320,25 +320,18 @@ const PipPlayer = {
       });
   },
 
-  // ── Favoris ─────────────────────────────────────────────────────
+  // ── Favoris — utilise le système global (format {key,item,at}) ──
   _updateFavBtn(){
     const btn = $("pip-fav");
     if(!btn || !this._item) return;
-    const favs  = storeGet(STORE.favorites, []);
-    const id    = String(this._item.id || this._item.stream_id || "");
-    const isFav = favs.some(f => String(f.id || f.stream_id || "") === id);
-    btn.classList.toggle("pip-is-fav", isFav);
-    btn.textContent = isFav ? "♥" : "♡";
+    const fav = isFav(this._item);
+    btn.classList.toggle("pip-is-fav", fav);
+    btn.textContent = fav ? "♥" : "♡";
   },
 
   toggleFav(){
     if(!this._item) return;
-    let favs = storeGet(STORE.favorites, []);
-    const id  = String(this._item.id || this._item.stream_id || "");
-    const idx = favs.findIndex(f => String(f.id || f.stream_id || "") === id);
-    if(idx >= 0) favs.splice(idx, 1);
-    else { const { _epList, _epIdx, ...clean } = this._item; favs.unshift(clean); }
-    storeSet(STORE.favorites, favs.slice(0, 200));
+    toggleFav(this._item);   // appel de la fonction globale unifiée
     this._updateFavBtn();
   },
 
@@ -459,8 +452,11 @@ const PipPlayer = {
       if(saved?.pct && vid.duration) vid.currentTime = saved.pct * vid.duration;
     }, { once: true });
 
-    // Nettoyage à la fermeture du lecteur natif
-    const cleanup = () => { clearTimeout(_pt); vid.pause(); vid.src = ""; vid.remove(); };
+    // Nettoyage à la fermeture du lecteur natif + rafraîchissement "Continuer"
+    const cleanup = () => {
+      clearTimeout(_pt); vid.pause(); vid.src = ""; vid.remove();
+      if(typeof renderContinueRow === "function") renderContinueRow();
+    };
     vid.addEventListener("webkitendfullscreen", cleanup, { once: true });
     vid.addEventListener("ended",               cleanup, { once: true });
 
@@ -2134,20 +2130,35 @@ function renderContinueRow(){
   const row  = $("continueRow");
   if(!sect || !row) return;
 
+  // Lire la progression une seule fois (évite N×JSON.parse pour des catalogues de 5000+ items)
+  const prog = getProg();
+  function _pct(item){
+    const k1 = itemKey(item);
+    if(prog[k1]?.pct > 0) return prog[k1].pct;
+    const k2 = String(item.id || item.stream_id || "");
+    if(k2 && prog[k2]?.t > 0 && prog[k2]?.d > 0) return prog[k2].t / prog[k2].d;
+    return 0;
+  }
+  function _ts(item){
+    const k1 = itemKey(item);
+    if(prog[k1]?.ts) return prog[k1].ts;
+    const k2 = String(item.id || item.stream_id || "");
+    if(k2 && prog[k2]?.ts) return prog[k2].ts;
+    return 0;
+  }
+
   const all = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const items = all
-    .map(item => ({ item, pct: getWatchPct(item), ts: getWatchTs(item) }))
+  const scored = all
+    .map(item => ({ item, pct: _pct(item), ts: _ts(item) }))
     .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
     .sort((a, b) => b.ts - a.ts)
-    .slice(0, 20)
-    .map(x => x.item);
+    .slice(0, 20);
 
-  if(!items.length){ sect.hidden = true; return; }
+  if(!scored.length){ sect.hidden = true; return; }
   sect.hidden = false;
   row.innerHTML = "";
   const frag = document.createDocumentFragment();
-  items.forEach(item => {
-    const pct  = getWatchPct(item);
+  scored.forEach(({ item, pct }) => {
     const card = document.createElement("div");
     card.className = "nou-card";
     card.tabIndex  = 0;
