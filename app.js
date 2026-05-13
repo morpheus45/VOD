@@ -2015,9 +2015,10 @@ function render(){
     if(novSect) novSect.hidden = true;
   }
 
-  // Sections Favoris + Continuer (Films, Séries, TV — toujours visibles si données)
+  // Section Favoris uniquement (Continuer à regarder supprimé à la demande)
   renderFavoritesRow();
-  renderContinueRow();
+  const contSect = $("continueSection");
+  if(contSect) contSect.hidden = true;
 
   // Masquer le filtre qualité pour le live (non pertinent)
   if($("qualityPills")) $("qualityPills").style.display = S.type === "live" ? "none" : "";
