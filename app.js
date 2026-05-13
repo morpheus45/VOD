@@ -1307,6 +1307,14 @@ function renderPanel(){
         </div>
       </div>
 
+      <!-- Bouton favoris série -->
+      <div class="sp-series-actions">
+        <button class="fav-btn-large ${isFav(s) ? "is-fav" : ""}" id="seriesFavBtn" type="button">
+          <span class="fav-heart">♥</span>
+          <span id="seriesFavLabel">${isFav(s) ? "Favori" : "Ajouter aux favoris"}</span>
+        </button>
+      </div>
+
       ${tabsHtml}
 
       <div id="spEps">${epsHtml}</div>
@@ -1324,6 +1332,15 @@ function renderPanel(){
 
   // Lecture directe
   $("spDirectBtn")?.addEventListener("click", () => playItem(s));
+
+  // Bouton favoris série
+  $("seriesFavBtn")?.addEventListener("click", () => {
+    toggleFav(s);
+    const fav = isFav(s);
+    $("seriesFavBtn")?.classList.toggle("is-fav", fav);
+    const lbl = $("seriesFavLabel");
+    if(lbl) lbl.textContent = fav ? "Favori" : "Ajouter aux favoris";
+  });
 
   // Onglets
   panel.querySelectorAll(".sp-tab").forEach(btn => {
