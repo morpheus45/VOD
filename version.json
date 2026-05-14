@@ -1,5 +1,5 @@
 {
-  "apk_version": 18,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v18/PIPSILY.apk",
+  "apk_version": 17,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v17/PIPSILY.apk",
   "changes": "Reprendre fonctionne sur AndroidTV · TvActivity.reportProgress() · openPlayerAt TV · APK_VERSION sync"
 }
