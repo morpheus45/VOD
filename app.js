@@ -620,6 +620,11 @@ function cleanTitle(t){
   return s.replace(/\s+/g, " ").trim();
 }
 
+// Supprime le préfixe "EU | " ou "EU|" des noms de catégorie Live pour l'affichage
+function displayCat(name){
+  return String(name || "").replace(/^EU\s*\|\s*/i, "").trim();
+}
+
 // "NomSérie - S01E01 - Titre épisode"  →  "Titre épisode"
 function cleanEpTitle(raw, seriesTitle){
   if(!raw) return "";
@@ -1831,7 +1836,7 @@ function renderGrid(reset = false){
       </div>
       <div class="card-info">
         <div class="card-title">${esc(item.title)}</div>
-        <div class="card-cat">${esc(item.category_name)}</div>
+        <div class="card-cat">${esc(displayCat(item.category_name))}</div>
       </div>`;
 
     card.querySelector(".fav-btn").addEventListener("click", e => {
@@ -2063,7 +2068,7 @@ function render(){
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
   const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
-    cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(c)}</option>`).join("");
+    cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
 
   // Pills catégories (Films / Séries)
   renderCatPills(cats);
@@ -2094,7 +2099,7 @@ function renderCatPills(cats){
     `<button class="cat-pill cat-pill--search" data-search="1" aria-label="Rechercher">🔍</button>` +
     `<button class="cat-pill ${!S.cat ? "cat-pill--active" : ""}" data-cat="">Tout</button>` +
     cats.map(c =>
-      `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`
+      `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(displayCat(c))}</button>`
     ).join("");
 
   // ── Bouton recherche : ouvre un overlay plein écran ──
@@ -2112,7 +2117,8 @@ function renderCatPills(cats){
       // Revenir aux rangées Netflix si "Tout" est sélectionné et aucun filtre actif
       const useNetflix = !S.cat && !S.search && !S.quality;
       const g = $("grid");
-      if(g) g.className = useNetflix ? "netflix-rows" : "grid";
+      if(g) g.className = useNetflix ? "netflix-rows"
+                        : S.type === "live" ? "grid grid--live" : "grid";
       if(useNetflix) renderNetflixRows();
       else           renderGrid(true);
     });
@@ -2201,12 +2207,18 @@ function initTV(){
     }
   }
 
-  // ── Helper : focus sur le 1er pill catégorie (ou pill actif) ──
+  // ── Helper : focus sur le 1er pill catégorie (ou pill actif) + scroll en haut ──
   function _focusFirstPill(){
     const pills = $("catPills");
     if(!pills || pills.hidden) return false;
     const target = pills.querySelector(".cat-pill--active") || pills.querySelector(".cat-pill");
-    if(target){ target.focus(); target.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); return true; }
+    if(target){
+      target.focus();
+      target.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+      // Remonter tout en haut de la page pour que les pills soient visibles
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return true;
+    }
     return false;
   }
 
@@ -2260,6 +2272,7 @@ function initTV(){
       }
       if(k === "ArrowUp"){
         document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
       if(k === "ArrowDown"){
@@ -2307,7 +2320,10 @@ function initTV(){
       if(target){ target.focus(); target.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
     } else {
       // Plus de rangée au-dessus → remonter aux pills ou aux boutons de nav
-      if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+      if(!_focusFirstPill()){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     }
   }
 
@@ -2346,6 +2362,7 @@ function initTV(){
       }
       if(k === "ArrowUp"){
         document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
       if(k === "ArrowDown"){
@@ -2371,7 +2388,10 @@ function initTV(){
 
     if(next < 0){
       // Au-dessus de la 1ère ligne → cat-pills, sinon nav-btns
-      if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+      if(!_focusFirstPill()){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
       return;
     }
     cards[next]?.focus();
