@@ -92,12 +92,16 @@ const PipPlayer = {
       : item.title || "Lecture";
     const sub = item.episode_title || item.category_name || "";
 
-    // ── APK : lecteur natif ExoPlayer (HTTP sans mixed content) ────
-    if(typeof window.AndroidBridge?.openPlayer === "function"){
+    // ── APK : lecteur natif ExoPlayer (téléphones/tablettes non-TV) ──
+    // Sur TV/AndroidTV, on utilise le lecteur interne WebView à la place :
+    // le lecteur overlay sauvegarde la progression toutes les 5s via _saveProgress(),
+    // ce qui garantit le "Reprendre" même si l'APK n'implémente pas onAndroidPlayerClosed.
+    const _isTVCtx = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
+                    (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
+    if(!_isTVCtx && typeof window.AndroidBridge?.openPlayer === "function"){
       pushHist(item);
 
       // ── Mémoriser URL(s) → progress_key pour que onAndroidPlayerClosed puisse sauvegarder ──
-      // Nécessaire sur TV (où playEpisode() saute le bloc APK classique)
       if(!window._epUrlMap) window._epUrlMap = {};
       if(item.progress_key && url) window._epUrlMap[url] = item.progress_key;
       if(Array.isArray(item.all_episodes)){
@@ -199,7 +203,21 @@ const PipPlayer = {
     const isHLS = /\.m3u8/i.test(url) || item.type === "live";
 
     // ── Fallback natif : ouvre le lecteur de l'appareil si la vidéo plante ──
+    const _isTVFallback = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
+                          (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
     const _openNativeFallback = () => {
+      // TV : le lecteur interne a échoué (ex. HTTP bloqué) → ExoPlayer en dernier recours
+      if(_isTVFallback && typeof window.AndroidBridge?.openPlayer === "function"){
+        this._showStatus("⚠️ Basculement vers le lecteur natif…", false);
+        const epListJson = this._epList.length > 1
+          ? JSON.stringify(this._epList.map(ep => ({ url: ep.url || "", title: ep.title || "", episode_label: ep.episode_label || "" })))
+          : "[]";
+        setTimeout(() => {
+          try { window.AndroidBridge.openPlayer(url, this._item?.title || "", "", epListJson, this._epIdx ?? 0); }
+          catch(e){ window.open(url, "_blank", "noopener"); }
+        }, 600);
+        return;
+      }
       if(typeof window.AndroidBridge?.openInVlc === "function"){
         this._showStatus("⚠️ Ouverture du lecteur natif…", false);
         setTimeout(() => {
