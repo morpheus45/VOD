@@ -525,8 +525,24 @@ function _getSavedProgressMs(item){
 
 // ── Callback appelé par l'APK Android quand le lecteur ExoPlayer se ferme ──
 // MainActivity.reportProgress() injecte ce JS via webView.evaluateJavascript()
-window.onAndroidPlayerClosed = function(url, posMs, durMs){
-  if(!url || !posMs || posMs < 30000) return;   // moins de 30s regardées → ignorer
+window.onAndroidPlayerClosed = function(url, rawPos, rawDur){
+  if(!url || !rawPos || rawPos <= 0) return;
+
+  // ── Auto-détection de l'unité : millisecondes ou secondes ──────────
+  // ExoPlayer standard → ms. Certains APKs envoient en secondes.
+  // Si rawPos ou rawDur >= 100 000 c'est forcément en ms (100 000 ms = 100 s,
+  // une durée plausible ; 100 000 s = 27 h, irréaliste). Sinon → secondes.
+  let posMs, durMs;
+  if(rawPos >= 100000 || rawDur >= 100000){
+    posMs = rawPos;
+    durMs = rawDur;
+  } else {
+    // Valeurs "petites" → probablement en secondes, convertir en ms
+    posMs = rawPos * 1000;
+    durMs = rawDur > 0 ? rawDur * 1000 : 0;
+  }
+
+  if(posMs < 30000) return;   // moins de 30s regardées → ignorer
 
   const t   = Math.floor(posMs / 1000);
   const d   = (durMs > 0 && isFinite(durMs)) ? Math.floor(durMs / 1000) : 0;
@@ -2347,6 +2363,17 @@ function initTV(){
     const active   = document.activeElement;
     const isPill   = active?.classList.contains("cat-pill");
     const isNavBtn = active?.classList.contains("nav-btn");
+    const isNouCard = active?.classList.contains("nou-card");
+
+    // ── Helper : première nou-card visible (favoris / continuer) ──
+    const _firstNouCard = () => {
+      for(const row of document.querySelectorAll(".nou-row")){
+        if(row.closest("[hidden]")) continue;
+        const c = row.querySelector(".nou-card");
+        if(c) return c;
+      }
+      return null;
+    };
 
     // ── Sur les nav-btns ──
     if(isNavBtn){
@@ -2356,6 +2383,8 @@ function initTV(){
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
       if(k === "ArrowDown"){
         if(_focusFirstPill()) return;
+        const nou = _firstNouCard();
+        if(nou){ nou.focus(); nou.scrollIntoView({ behavior:"smooth", block:"nearest" }); return; }
         document.querySelector(".card")?.focus();
       }
       return;
@@ -2381,7 +2410,55 @@ function initTV(){
         return;
       }
       if(k === "ArrowDown"){
+        const nou = _firstNouCard();
+        if(nou){ nou.focus(); nou.scrollIntoView({ behavior:"smooth", block:"nearest" }); return; }
         document.querySelector(".card")?.focus();
+        return;
+      }
+      return;
+    }
+
+    // ── Sur une nou-card (favoris / continuer) ──
+    if(isNouCard){
+      const row   = active.closest(".nou-row");
+      const cards = row ? [...row.querySelectorAll(".nou-card")] : [];
+      const ci    = cards.indexOf(active);
+      if(k === "ArrowRight"){
+        const next = cards[ci + 1];
+        if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+        return;
+      }
+      if(k === "ArrowLeft"){
+        const prev = cards[ci - 1];
+        if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+        return;
+      }
+      if(k === "ArrowUp"){
+        // Chercher la nou-row précédente, sinon remonter aux pills
+        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
+        const ri = allRows.indexOf(row);
+        if(ri > 0){
+          const prevRow = allRows[ri - 1];
+          const prevCard = prevRow.querySelectorAll(".nou-card")[ci] || prevRow.querySelector(".nou-card");
+          prevCard?.focus(); prevCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        } else {
+          if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        return;
+      }
+      if(k === "ArrowDown"){
+        // Passer à la prochaine nou-row ou à la grille principale
+        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
+        const ri = allRows.indexOf(row);
+        if(ri >= 0 && ri < allRows.length - 1){
+          const nextRow  = allRows[ri + 1];
+          const nextCard = nextRow.querySelectorAll(".nou-card")[ci] || nextRow.querySelector(".nou-card");
+          nextCard?.focus(); nextCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        } else {
+          const first = document.querySelector(".card");
+          if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
+        }
         return;
       }
       return;
@@ -2402,7 +2479,9 @@ function initTV(){
     else if(k === "ArrowUp")   next = idx - cols;
 
     if(next < 0){
-      // Au-dessus de la 1ère ligne → cat-pills, sinon nav-btns
+      // Au-dessus de la 1ère ligne → nou-cards, sinon cat-pills, sinon nav-btns
+      const nou = _firstNouCard();
+      if(nou){ nou.focus(); nou.scrollIntoView({ behavior:"smooth", block:"nearest" }); return; }
       if(!_focusFirstPill()){
         document.querySelector(".nav-btn.active, .nav-btn")?.focus();
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2453,7 +2532,8 @@ function renderContinueRow(){
   const frag = document.createDocumentFragment();
   scored.forEach(({ item, pct }) => {
     const card = document.createElement("div");
-    card.className = "nou-card";
+    const isLiveCont = item.type === "live";
+    card.className = "nou-card" + (isLiveCont ? " nou-card--live" : "");
     card.tabIndex  = 0;
     card.innerHTML = `
       <div class="nou-media">
@@ -2505,7 +2585,8 @@ function renderFavoritesRow(){
     if(!item) return;
     const pct  = getWatchPct(item);
     const card = document.createElement("div");
-    card.className = "nou-card";
+    const isLiveFav = item.type === "live";
+    card.className = "nou-card" + (isLiveFav ? " nou-card--live" : "");
     card.tabIndex  = 0;
     const progBar  = (pct > 0.03 && pct < 0.97)
       ? `<div class="card-prog-bar card-prog-bar--nou"><div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div></div>`

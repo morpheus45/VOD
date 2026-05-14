@@ -323,6 +323,18 @@ button,select,input{ font:inherit }
 }
 .nou-date{ font-size:10px; color:var(--muted); margin-top:2px }
 
+/* ── Carte live dans les rangées Favoris / Continuer : format 16/9 ── */
+.nou-card--live{
+  flex:0 0 170px;   /* plus large que les posters 2:3 */
+}
+.nou-card--live .nou-media{
+  width:170px; height:96px;   /* ratio 16:9 pour les logos TV */
+  background:#06101e;
+}
+.nou-card--live .nou-media img{
+  object-fit:contain;   /* logo TV centré, sans recadrage */
+}
+
 /* ── Grille principale ── */
 .grid{
   display:grid;
