@@ -95,6 +95,17 @@ const PipPlayer = {
     // ── APK : lecteur natif ExoPlayer (HTTP sans mixed content) ────
     if(typeof window.AndroidBridge?.openPlayer === "function"){
       pushHist(item);
+
+      // ── Mémoriser URL(s) → progress_key pour que onAndroidPlayerClosed puisse sauvegarder ──
+      // Nécessaire sur TV (où playEpisode() saute le bloc APK classique)
+      if(!window._epUrlMap) window._epUrlMap = {};
+      if(item.progress_key && url) window._epUrlMap[url] = item.progress_key;
+      if(Array.isArray(item.all_episodes)){
+        item.all_episodes.forEach(ep => {
+          if(ep.url && ep.progress_key) window._epUrlMap[ep.url] = ep.progress_key;
+        });
+      }
+
       // Sérialiser la liste d'épisodes pour Java
       const epsJson = this._epList.length > 1
         ? JSON.stringify(this._epList.map(ep => ({
@@ -365,6 +376,9 @@ const PipPlayer = {
     this._epIdx = idx;
     const s   = String(ep.season || 1).padStart(2,"0");
     const e   = String(ep.episode_num || idx+1).padStart(2,"0");
+    // Calculer la bonne clé de progression pour le nouvel épisode
+    const seriesId   = this._item.series_id || this._item.id;
+    const newProgKey = seriesId ? `${seriesId}||S${s}E${e}` : this._item.progress_key;
     this.open({
       ...this._item,
       id            : ep.id,
@@ -373,6 +387,7 @@ const PipPlayer = {
       plot          : ep.plot || this._item.plot || "",
       episode_label : `S${s}E${e}`,
       episode_title : ep.title || "",
+      progress_key  : newProgKey,
       _epList       : this._epList,
       _epIdx        : idx
     });
