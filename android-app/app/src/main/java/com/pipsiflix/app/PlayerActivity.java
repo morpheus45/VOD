@@ -439,7 +439,12 @@ public class PlayerActivity extends FragmentActivity {
             long posMs = player.getCurrentPosition();
             long durMs = player.getDuration();
             if (durMs > 0 && posMs > 0) {
-                MainActivity.reportProgress(currentUrl, posMs, durMs);
+                // Essayer MainActivity d'abord (phone/tablet), puis TvActivity (AndroidTV)
+                if (MainActivity.sInstance != null && MainActivity.sInstance.get() != null) {
+                    MainActivity.reportProgress(currentUrl, posMs, durMs);
+                } else {
+                    TvActivity.reportProgress(currentUrl, posMs, durMs);
+                }
             }
             player.release();
             player = null;

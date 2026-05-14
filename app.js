@@ -92,13 +92,9 @@ const PipPlayer = {
       : item.title || "Lecture";
     const sub = item.episode_title || item.category_name || "";
 
-    // ── APK : lecteur natif ExoPlayer (téléphones/tablettes non-TV) ──
-    // Sur TV/AndroidTV, on utilise le lecteur interne WebView à la place :
-    // le lecteur overlay sauvegarde la progression toutes les 5s via _saveProgress(),
-    // ce qui garantit le "Reprendre" même si l'APK n'implémente pas onAndroidPlayerClosed.
-    const _isTVCtx = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
-                    (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
-    if(!_isTVCtx && typeof window.AndroidBridge?.openPlayer === "function"){
+    // ── APK : lecteur natif ExoPlayer (téléphones, tablettes et AndroidTV) ──
+    // TvActivity.reportProgress() est disponible depuis APK v18 → le "Reprendre" fonctionne sur TV.
+    if(typeof window.AndroidBridge?.openPlayer === "function"){
       pushHist(item);
 
       // ── Mémoriser URL(s) → progress_key pour que onAndroidPlayerClosed puisse sauvegarder ──
@@ -1529,10 +1525,8 @@ function playEpisode(series, ep, season){
     current_ep_index : curIdx
   };
 
-  // APK Android (non-TV) : ExoPlayer (openPlayerAt) avec reprise de position
-  const _isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
-                (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
-  if(!_isTV && typeof window.AndroidBridge !== "undefined"){
+  // APK Android (phone, tablet et AndroidTV depuis v18) : ExoPlayer avec reprise de position
+  if(typeof window.AndroidBridge !== "undefined"){
     const epTitle  = `${series.title} — ${code}${ep.title ? " " + ep.title : ""}`;
     const epsJson  = JSON.stringify(playerItem.all_episodes);
     const savedMs  = _getSavedProgressMs({ progress_key: progKey });

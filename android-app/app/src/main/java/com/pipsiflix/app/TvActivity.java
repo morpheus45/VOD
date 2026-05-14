@@ -25,6 +25,7 @@ import org.json.JSONArray;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.FragmentActivity;
 import java.io.File;
+import java.lang.ref.WeakReference;
 
 /**
  * PIPSILY — Activité Android TV / Google TV  v5
@@ -39,7 +40,10 @@ public class TvActivity extends FragmentActivity {
 
     private static final String TAG         = "PipsilyTV";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "15";
+    private static final String APK_VERSION = "17";
+
+    // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
+    static WeakReference<TvActivity> sInstance;
 
     WebView webView;
 
@@ -63,6 +67,7 @@ public class TvActivity extends FragmentActivity {
 
         setContentView(R.layout.activity_tv);
         webView = findViewById(R.id.tvWebView);
+        sInstance = new WeakReference<>(this);
 
         configureWebView();
 
@@ -265,6 +270,26 @@ public class TvActivity extends FragmentActivity {
     protected void onDestroy() {
         super.onDestroy();
         unregisterApkReceiver();
+        sInstance = null;
+    }
+
+    /**
+     * Appelé par PlayerActivity.onDestroy() pour remonter la progression au WebView TV.
+     * Injecte window.onAndroidPlayerClosed(url, posMs, durMs) dans le JavaScript.
+     */
+    static void reportProgress(final String url, final long posMs, final long durMs) {
+        if (sInstance == null) return;
+        TvActivity tv = sInstance.get();
+        if (tv == null || tv.webView == null) return;
+        final String safeUrl = url.replace("\\", "\\\\").replace("'", "\\'");
+        tv.runOnUiThread(() -> {
+            if (tv.webView != null) {
+                String js = "if(typeof window.onAndroidPlayerClosed==='function')" +
+                            "window.onAndroidPlayerClosed('" + safeUrl + "'," + posMs + "," + durMs + ");";
+                tv.webView.evaluateJavascript(js, null);
+                Log.d(TAG, "Progress reported: " + Math.round(posMs * 100.0 / durMs) + "% url=" + url);
+            }
+        });
     }
 
     // ── Télécommande ─────────────────────────────────────────────────────
@@ -313,13 +338,21 @@ public class TvActivity extends FragmentActivity {
         @JavascriptInterface
         public void openPlayer(String url, String title, String subtitle,
                                String episodesJson, int epIndex) {
+            openPlayerAt(url, title, subtitle, episodesJson, epIndex, 0L);
+        }
+
+        /** Lecteur natif avec reprise à une position donnée (en ms) */
+        @JavascriptInterface
+        public void openPlayerAt(String url, String title, String subtitle,
+                                 String episodesJson, int epIndex, long startPositionMs) {
             runOnUiThread(() -> {
                 Intent i = new Intent(TvActivity.this, PlayerActivity.class);
-                i.putExtra("url",      url);
-                i.putExtra("title",    title);
-                i.putExtra("subtitle", subtitle);
-                i.putExtra("episodes", episodesJson);
-                i.putExtra("epIndex",  epIndex);
+                i.putExtra("url",             url);
+                i.putExtra("title",           title);
+                i.putExtra("subtitle",        subtitle);
+                i.putExtra("episodes",        episodesJson);
+                i.putExtra("epIndex",         epIndex);
+                i.putExtra("startPositionMs", startPositionMs);
                 startActivity(i);
             });
         }
