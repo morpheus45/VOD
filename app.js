@@ -69,6 +69,11 @@ const $  = id => document.getElementById(id);
 const esc = s  => String(s ?? "").replace(/[&<>"']/g,
   c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
+// Supprime le préfixe "EU | " ou "EU|" des noms de catégorie Live pour l'affichage
+function displayCat(name){
+  return String(name || "").replace(/^EU\s*\|\s*/i, "").trim();
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  LECTEUR INTERNE — PipPlayer
 //  Remplace la navigation vers player.html par un overlay intégré
@@ -1831,7 +1836,7 @@ function renderGrid(reset = false){
       </div>
       <div class="card-info">
         <div class="card-title">${esc(item.title)}</div>
-        <div class="card-cat">${esc(item.category_name)}</div>
+        <div class="card-cat">${esc(displayCat(item.category_name))}</div>
       </div>`;
 
     card.querySelector(".fav-btn").addEventListener("click", e => {
@@ -2063,7 +2068,7 @@ function render(){
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
   const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
-    cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(c)}</option>`).join("");
+    cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
 
   // Pills catégories (Films / Séries)
   renderCatPills(cats);
@@ -2094,7 +2099,7 @@ function renderCatPills(cats){
     `<button class="cat-pill cat-pill--search" data-search="1" aria-label="Rechercher">🔍</button>` +
     `<button class="cat-pill ${!S.cat ? "cat-pill--active" : ""}" data-cat="">Tout</button>` +
     cats.map(c =>
-      `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`
+      `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(displayCat(c))}</button>`
     ).join("");
 
   // ── Bouton recherche : ouvre un overlay plein écran ──
@@ -2112,7 +2117,8 @@ function renderCatPills(cats){
       // Revenir aux rangées Netflix si "Tout" est sélectionné et aucun filtre actif
       const useNetflix = !S.cat && !S.search && !S.quality;
       const g = $("grid");
-      if(g) g.className = useNetflix ? "netflix-rows" : "grid";
+      if(g) g.className = useNetflix ? "netflix-rows"
+                        : S.type === "live" ? "grid grid--live" : "grid";
       if(useNetflix) renderNetflixRows();
       else           renderGrid(true);
     });
@@ -2146,7 +2152,8 @@ function openSearchOverlay(){
       S.shown[S.type] = PER_PAGE;
       const useNetflix = !S.cat && !S.search && !S.quality;
       const g = $("grid");
-      if(g) g.className = useNetflix ? "netflix-rows" : "grid";
+      if(g) g.className = useNetflix ? "netflix-rows"
+                        : S.type === "live" ? "grid grid--live" : "grid";
       if(useNetflix) renderNetflixRows(); else renderGrid(true);
       close();
     }
@@ -2206,7 +2213,13 @@ function initTV(){
     const pills = $("catPills");
     if(!pills || pills.hidden) return false;
     const target = pills.querySelector(".cat-pill--active") || pills.querySelector(".cat-pill");
-    if(target){ target.focus(); target.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); return true; }
+    if(target){
+      target.focus();
+      target.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+      // Remonter tout en haut de la page pour que les pills soient visibles
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return true;
+    }
     return false;
   }
 
@@ -2216,6 +2229,63 @@ function initTV(){
     const active   = document.activeElement;
     const isPill   = active?.classList.contains("cat-pill");
     const isNavBtn = active?.classList.contains("nav-btn");
+    const isNouCard = active?.classList.contains("nou-card");
+
+    // ── Helper : première nou-card visible (favoris / continuer) ──
+    const _firstNouCard = () => {
+      for(const row of document.querySelectorAll(".nou-row")){
+        if(row.closest("[hidden]")) continue;
+        const c = row.querySelector(".nou-card");
+        if(c) return c;
+      }
+      return null;
+    };
+
+    // ── Sur une nou-card (favoris / continuer) ──
+    if(isNouCard){
+      const row   = active.closest(".nou-row");
+      const cards = row ? [...row.querySelectorAll(".nou-card")] : [];
+      const ci    = cards.indexOf(active);
+      if(k === "ArrowRight"){
+        const next = cards[ci + 1];
+        if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+        return;
+      }
+      if(k === "ArrowLeft"){
+        const prev = cards[ci - 1];
+        if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+        return;
+      }
+      if(k === "ArrowUp"){
+        // Chercher la nou-row précédente, sinon remonter aux pills
+        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
+        const ri = allRows.indexOf(row);
+        if(ri > 0){
+          const prevRow = allRows[ri - 1];
+          const prevCard = prevRow.querySelectorAll(".nou-card")[ci] || prevRow.querySelector(".nou-card");
+          prevCard?.focus(); prevCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        } else {
+          if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        return;
+      }
+      if(k === "ArrowDown"){
+        // Passer à la prochaine nou-row ou à la grille principale
+        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
+        const ri = allRows.indexOf(row);
+        if(ri >= 0 && ri < allRows.length - 1){
+          const nextRow  = allRows[ri + 1];
+          const nextCard = nextRow.querySelectorAll(".nou-card")[ci] || nextRow.querySelector(".nou-card");
+          nextCard?.focus(); nextCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        } else {
+          const first = document.querySelector(".card");
+          if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
+        }
+        return;
+      }
+      return;
+    }
 
     // Toutes les rangées visibles dans l'ordre DOM :
     //   1. nou-row (Continuer, Favoris, Nouveautés) — seulement si section visible + non vide
@@ -2307,7 +2377,10 @@ function initTV(){
       if(target){ target.focus(); target.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
     } else {
       // Plus de rangée au-dessus → remonter aux pills ou aux boutons de nav
-      if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+      if(!_focusFirstPill()){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     }
   }
 
@@ -2316,6 +2389,16 @@ function initTV(){
     const active   = document.activeElement;
     const isPill   = active?.classList.contains("cat-pill");
     const isNavBtn = active?.classList.contains("nav-btn");
+
+    // ── Helper : première nou-card visible (favoris / continuer) ──
+    const _firstNouCard = () => {
+      for(const row of document.querySelectorAll(".nou-row")){
+        if(row.closest("[hidden]")) continue;
+        const c = row.querySelector(".nou-card");
+        if(c) return c;
+      }
+      return null;
+    };
 
     // ── Sur les nav-btns ──
     if(isNavBtn){
@@ -2370,8 +2453,13 @@ function initTV(){
     else if(k === "ArrowUp")   next = idx - cols;
 
     if(next < 0){
-      // Au-dessus de la 1ère ligne → cat-pills, sinon nav-btns
-      if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+      // Au-dessus de la 1ère ligne → nou-cards, sinon cat-pills, sinon nav-btns
+      const nou = _firstNouCard();
+      if(nou){ nou.focus(); nou.scrollIntoView({ behavior:"smooth", block:"nearest" }); return; }
+      if(!_focusFirstPill()){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
       return;
     }
     cards[next]?.focus();
@@ -2418,7 +2506,8 @@ function renderContinueRow(){
   const frag = document.createDocumentFragment();
   scored.forEach(({ item, pct }) => {
     const card = document.createElement("div");
-    card.className = "nou-card";
+    const isLiveCont = item.type === "live";
+    card.className = "nou-card" + (isLiveCont ? " nou-card--live" : "");
     card.tabIndex  = 0;
     card.innerHTML = `
       <div class="nou-media">
@@ -2470,7 +2559,8 @@ function renderFavoritesRow(){
     if(!item) return;
     const pct  = getWatchPct(item);
     const card = document.createElement("div");
-    card.className = "nou-card";
+    const isLiveFav = item.type === "live";
+    card.className = "nou-card" + (isLiveFav ? " nou-card--live" : "");
     card.tabIndex  = 0;
     const progBar  = (pct > 0.03 && pct < 0.97)
       ? `<div class="card-prog-bar card-prog-bar--nou"><div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div></div>`
