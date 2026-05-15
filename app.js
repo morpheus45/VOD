@@ -46,6 +46,7 @@ const S = {
   quality   : "",
   sort      : "title",
   shown     : { vod: 0, series: 0, live: 0 },
+  favOnly   : false,
   loading   : false,
   // Panneau séries
   panel     : {
@@ -1570,6 +1571,12 @@ function filtered(){
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
   if(S.type === "live") items = groupLiveItems(items);
 
+  // Filtre favoris uniquement (bouton ❤️ dans la barre)
+  if(S.favOnly){
+    if(S.type === "live") items = items.filter(g => isFav(g));
+    else items = items.filter(x => isFav(x));
+  }
+
   return items;
 }
 
@@ -2053,10 +2060,11 @@ function render(){
     if(novSect) novSect.hidden = true;
   }
 
-  // Section Favoris uniquement (Continuer à regarder supprimé à la demande)
-  renderFavoritesRow();
-  const contSect = $("continueSection");
-  if(contSect) contSect.hidden = true;
+  // Continuer à regarder (persiste via localStorage après reboot)
+  renderContinueRow();
+  // Section favoris mid-page cachée — remplacée par le bouton ❤️ dans la barre
+  const favSect = $("favoritesSection");
+  if(favSect) favSect.hidden = true;
 
   // Masquer le filtre qualité pour le live (non pertinent)
   if($("qualityPills")) $("qualityPills").style.display = S.type === "live" ? "none" : "";
@@ -2279,12 +2287,13 @@ function initTV(){
           const nextCard = nextRow.querySelectorAll(".nou-card")[ci] || nextRow.querySelector(".nou-card");
           nextCard?.focus(); nextCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
         } else {
-          const first = document.querySelector(".card");
+          // .nrow-card en mode Netflix, .card en mode grille
+          const first = document.querySelector(".nrow-card, .card");
           if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
         }
         return;
       }
-      return;
+      // Ne pas consommer les touches non-flèches (Enter/Space gérés par le card lui-même)
     }
 
     // Toutes les rangées visibles dans l'ordre DOM :
@@ -2493,12 +2502,37 @@ function renderContinueRow(){
     return 0;
   }
 
-  const all = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const scored = all
-    .map(item => ({ item, pct: _pct(item), ts: _ts(item) }))
-    .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, 20);
+  let scored;
+  if(S.type === "series"){
+    // Les épisodes sont stockés sous "seriesId||SxxExx" — scanner les clés
+    const seriesIdx = {};
+    S.series.forEach(s => { seriesIdx[String(s.id || s.stream_id || "")] = s; });
+    const epKeyRe = /^(.+)\|\|S\d+E\d+$/;
+    const bestBySeries = {};
+    Object.keys(prog).forEach(k => {
+      const m = epKeyRe.exec(k);
+      if(!m) return;
+      const sid = m[1];
+      if(!seriesIdx[sid]) return;
+      const entry = prog[k];
+      if(!entry?.ts) return;
+      const pct = (entry.t > 0 && entry.d > 0) ? entry.t / entry.d : (entry.pct || 0);
+      if(pct <= 0.03 || pct >= 0.97) return;
+      if(!bestBySeries[sid] || entry.ts > bestBySeries[sid].ts)
+        bestBySeries[sid] = { pct, ts: entry.ts };
+    });
+    scored = Object.keys(bestBySeries)
+      .map(sid => ({ item: seriesIdx[sid], pct: bestBySeries[sid].pct, ts: bestBySeries[sid].ts }))
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 20);
+  } else {
+    const all = S.type === "vod" ? S.vod : S.live;
+    scored = all
+      .map(item => ({ item, pct: _pct(item), ts: _ts(item) }))
+      .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 20);
+  }
 
   if(!scored.length){ sect.hidden = true; return; }
   sect.hidden = false;
@@ -2746,10 +2780,12 @@ async function boot(){
       S.search  = "";
       S.quality = "";
       S.sort    = "title";
+      S.favOnly = false;
       $("searchInput").value = "";
       // Reset pilules qualité → "Tout"
       document.querySelectorAll(".quality-pill").forEach(p => p.classList.remove("quality-pill--active"));
       document.querySelector(".quality-pill[data-q='']")?.classList.add("quality-pill--active");
+      $("favFilterBtn")?.classList.remove("quality-pill--active");
       // Placeholder dynamique selon la section
       const ph = { vod:"Rechercher un film…", series:"Rechercher une série…", live:"Rechercher une chaîne…" };
       $("searchInput").placeholder = ph[S.type] || "Rechercher…";
@@ -2811,13 +2847,25 @@ async function boot(){
   $("sortSelect").addEventListener("change",  e => { S.sort = e.target.value; render(); });
 
   // Pilules qualité — remplacent le <select>
-  document.querySelectorAll(".quality-pill").forEach(btn => {
+  document.querySelectorAll(".quality-pill:not(.fav-pill)").forEach(btn => {
     btn.addEventListener("click", () => {
-      S.quality = btn.dataset.q || "";
+      S.quality  = btn.dataset.q || "";
+      S.favOnly  = false;
       document.querySelectorAll(".quality-pill").forEach(p => p.classList.remove("quality-pill--active"));
       btn.classList.add("quality-pill--active");
       render();
     });
+  });
+
+  // Bouton ❤️ Favoris dans la barre (remplace la section mid-page)
+  $("favFilterBtn")?.addEventListener("click", () => {
+    S.favOnly = !S.favOnly;
+    S.quality = "";
+    document.querySelectorAll(".quality-pill").forEach(p => p.classList.remove("quality-pill--active"));
+    if(!S.favOnly) document.querySelector(".quality-pill[data-q='']")?.classList.add("quality-pill--active");
+    $("favFilterBtn")?.classList.toggle("quality-pill--active", S.favOnly);
+    S.shown[S.type] = PER_PAGE;
+    render();
   });
 
   // Clic backdrop
