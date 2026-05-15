@@ -1,5 +1,5 @@
 {
-  "apk_version": 17,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v17/PIPSILY.apk",
-  "changes": "Retour Android ferme le panneau (pas l'app) · Synopsis via bridge Java (sans CORS) · Vignettes non coupées en haut"
+  "apk_version": 18,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v18/PIPSILY.apk",
+  "changes": "Reprendre TV et series corrige · saveProgress series · renderContinueRow scan episodes"
 }

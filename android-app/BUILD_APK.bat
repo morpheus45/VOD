@@ -14,38 +14,34 @@ if errorlevel 1 (
     pause & exit /b 1
 )
 
-:: Permissions gradlew (Windows ne nécessite pas chmod)
-set KEYSTORE=%~dp0release.jks
+:: Keystore de signature — même clé que toutes les versions précédentes
+:: pipsily.keystore = sauvegarde de ~/.android/debug.keystore du PC de build
+set KEYSTORE=%~dp0pipsily.keystore
+set KS_ALIAS=androiddebugkey
+set KS_PASS=android
+set KS_KEY_PASS=android
+set OUT_APK=app\build\outputs\apk\debug\app-debug.apk
 
-if exist "%KEYSTORE%" (
-    echo [INFO] Keystore release trouvé → APK signé ^(installable par-dessus^)
-    set BUILD_TYPE=assembleRelease
-    set SIGNING_ARGS=-Pandroid.injected.signing.store.file=%KEYSTORE%
-    :: Lire KS_PASS, KS_ALIAS, KS_KEY_PASS depuis l'env ou utiliser les valeurs par défaut
-    if "%KS_PASS%"=="" set KS_PASS=android
-    if "%KS_ALIAS%"=="" set KS_ALIAS=pipsily
-    if "%KS_KEY_PASS%"=="" set KS_KEY_PASS=android
-    set SIGNING_ARGS=%SIGNING_ARGS% -Pandroid.injected.signing.store.password=%KS_PASS%
-    set SIGNING_ARGS=%SIGNING_ARGS% -Pandroid.injected.signing.key.alias=%KS_ALIAS%
-    set SIGNING_ARGS=%SIGNING_ARGS% -Pandroid.injected.signing.key.password=%KS_KEY_PASS%
-    set OUT_APK=app\build\outputs\apk\release\app-release.apk
-) else (
-    echo [INFO] Pas de keystore release.jks — APK debug généré
-    echo [INFO] L'APK debug ne peut pas se mettre à jour par-dessus un APK release.
-    echo [INFO] Pour signer : créez release.jks avec keytool et relancez ce script.
-    set BUILD_TYPE=assembleDebug
-    set SIGNING_ARGS=
-    set OUT_APK=app\build\outputs\apk\debug\app-debug.apk
+if not exist "%KEYSTORE%" (
+    echo [INFO] pipsily.keystore absent — utilisation de la debug keystore systeme
+    set KEYSTORE=%USERPROFILE%\.android\debug.keystore
 )
 
+if not exist "%KEYSTORE%" (
+    echo [ERREUR] Aucune keystore trouvee.
+    echo Copiez ~/.android/debug.keystore vers android-app\pipsily.keystore
+    pause & exit /b 1
+)
+
+echo [INFO] Keystore : %KEYSTORE%
+echo [BUILD] Compilation assembleDebug...
 echo.
-echo [BUILD] Compilation %BUILD_TYPE%...
-call gradlew.bat %BUILD_TYPE% %SIGNING_ARGS% --stacktrace
+
+call gradlew.bat assembleDebug --no-daemon
 
 if errorlevel 1 (
     echo.
-    echo [ERREUR] La compilation a échoué.
-    echo Ouvrez Android Studio pour voir les erreurs détaillées.
+    echo [ERREUR] La compilation a echoue.
     pause & exit /b 1
 )
 
@@ -53,11 +49,16 @@ if errorlevel 1 (
 copy "%OUT_APK%" "PIPSILY.apk" > nul
 echo.
 echo ╔═══════════════════════════════════════════════════╗
-echo ║  ✅  APK généré : android-app\PIPSILY.apk         ║
+echo ║  OK  APK genere : android-app\PIPSILY.apk         ║
 echo ╚═══════════════════════════════════════════════════╝
 echo.
-echo Prochaines étapes :
-echo   1. Publiez PIPSILY.apk sur GitHub Releases ^(tag v5^)
-echo   2. OU double-cliquez pour l'installer directement
+echo Prochaines etapes :
+echo   1. git add . et git commit -m "apk: vXX"
+echo   2. gh release create vXX android-app/PIPSILY.apk#PIPSILY.apk
+echo   3. Mettre a jour version.json : apk_version + apk_url
+echo   4. git push origin main
+echo.
+echo IMPORTANT : Conserver pipsily.keystore dans ce dossier.
+echo             Meme cle pour toutes les versions = mises a jour auto.
 echo.
 pause
