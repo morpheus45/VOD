@@ -3081,16 +3081,17 @@ async function checkApkUpdate(){
     // Déjà à jour
     if(remoteVer <= localVer) return;
 
-    // Suppression : déjà affiché pour cette version ET timer actif ?
-    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv") || "0", 10);
-    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su") || "0", 10);
+    // Suppression : déjà affiché pour cette version ET timer actif ? (clé v2)
+    // Changement de clé intentionnel : invalide les suppressions stockées sous l'ancienne clé.
+    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv2") || "0", 10);
+    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su2") || "0", 10);
     if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
 
-    // Enregistrer la suppression DÈS L'AFFICHAGE (30 jours).
+    // Enregistrer la suppression DÈS L'AFFICHAGE (3 jours).
     // Ainsi, même si l'utilisateur ferme sans cliquer, la bannière ne revient pas.
     // Si une version PLUS RÉCENTE sort, suppressVer < remoteVer → affichage quand même.
-    localStorage.setItem("pf_apk_sv", String(remoteVer));
-    localStorage.setItem("pf_apk_su", String(Date.now() + 2592000000)); // 30 jours
+    localStorage.setItem("pf_apk_sv2", String(remoteVer));
+    localStorage.setItem("pf_apk_su2", String(Date.now() + 259200000)); // 3 jours
 
     showApkUpdateBanner(vinfo, remoteVer);
   } catch {}
