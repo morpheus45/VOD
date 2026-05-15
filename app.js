@@ -92,8 +92,10 @@ const PipPlayer = {
       : item.title || "Lecture";
     const sub = item.episode_title || item.category_name || "";
 
-    // ── APK : lecteur natif ExoPlayer (téléphones/tablettes uniquement) ──
-    // TV/AndroidTV → lecteur interne WebView : _saveProgress() sauvegarde toutes les 5 s.
+    // ── APK : lecteur natif ExoPlayer (téléphones/tablettes non-TV) ──
+    // Sur TV/AndroidTV, on utilise le lecteur interne WebView à la place :
+    // le lecteur overlay sauvegarde la progression toutes les 5s via _saveProgress(),
+    // ce qui garantit le "Reprendre" même si l'APK n'implémente pas onAndroidPlayerClosed.
     const _isTVCtx = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
                     (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
     if(!_isTVCtx && typeof window.AndroidBridge?.openPlayer === "function"){
@@ -282,11 +284,7 @@ const PipPlayer = {
     const key  = this._item.progress_key || String(this._item.id || this._item.stream_id || "");
     if(!key) return;
     const dur = (video.duration && isFinite(video.duration)) ? Math.floor(video.duration) : 0;
-    const entry = { t: Math.floor(video.currentTime), d: dur, ts: Date.now() };
-    prog[key] = entry;
-    // Pour les séries : sauvegarder aussi sous l'ID de série (pour renderContinueRow)
-    const seriesId = this._item.series_id ? String(this._item.series_id) : null;
-    if(seriesId && seriesId !== key) prog[seriesId] = entry;
+    prog[key] = { t: Math.floor(video.currentTime), d: dur, ts: Date.now() };
     storeSet(STORE.progress, prog); // cache déjà mis à jour (même objet)
   },
 
@@ -573,11 +571,7 @@ window.onAndroidPlayerClosed = function(url, rawPos, rawDur){
   // ── Épisodes de série : URL connue via _epUrlMap ────────────────
   const epKey = window._epUrlMap?.[url];
   if(epKey){
-    const epEntry = { t, d, ts: Date.now() };
-    prog[epKey] = epEntry;
-    // Sauvegarder aussi sous l'ID de série (avant "||") pour renderContinueRow
-    const seriesIdFromKey = epKey.includes("||") ? epKey.split("||")[0] : null;
-    if(seriesIdFromKey) prog[seriesIdFromKey] = epEntry;
+    prog[epKey] = { t, d, ts: Date.now() };
     storeSet(STORE.progress, prog);
     _invalidateCache();
     if(typeof renderContinueRow === "function") renderContinueRow();
@@ -1535,7 +1529,7 @@ function playEpisode(series, ep, season){
     current_ep_index : curIdx
   };
 
-  // APK Android (phone/tablet uniquement — TV utilise le lecteur interne)
+  // APK Android (non-TV) : ExoPlayer (openPlayerAt) avec reprise de position
   const _isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
                 (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
   if(!_isTV && typeof window.AndroidBridge !== "undefined"){
@@ -2532,8 +2526,7 @@ function renderContinueRow(){
     const k1 = itemKey(item);
     if(prog[k1]?.pct > 0) return prog[k1].pct;
     const k2 = String(item.id || item.stream_id || "");
-    // d peut être 0 si ExoPlayer ne connaît pas la durée → afficher 50% plutôt que cacher
-    if(k2 && prog[k2]?.t > 0) return prog[k2].d > 0 ? prog[k2].t / prog[k2].d : 0.5;
+    if(k2 && prog[k2]?.t > 0 && prog[k2]?.d > 0) return prog[k2].t / prog[k2].d;
     return 0;
   }
   function _ts(item){
