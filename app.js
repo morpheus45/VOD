@@ -2060,11 +2060,8 @@ function render(){
     if(novSect) novSect.hidden = true;
   }
 
-  // Continuer à regarder (persiste via localStorage après reboot)
-  renderContinueRow();
-  // Section favoris mid-page cachée — remplacée par le bouton ❤️ dans la barre
-  const favSect = $("favoritesSection");
-  if(favSect) favSect.hidden = true;
+  // Section Poursuivre — En cours + Favoris fusionnés (persiste via localStorage)
+  renderPoursuivreRow();
 
   // Masquer le filtre qualité pour le live (non pertinent)
   if($("qualityPills")) $("qualityPills").style.display = S.type === "live" ? "none" : "";
@@ -2477,156 +2474,118 @@ function initTV(){
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  SECTION CONTINUER À REGARDER
+//  SECTION POURSUIVRE — En cours + Favoris fusionnés
+//  Ordre : items en cours (tri par ts desc) → favoris non commencés
 // ─────────────────────────────────────────────────────────────────
 
-function renderContinueRow(){
-  const sect = $("continueSection");
-  const row  = $("continueRow");
+function renderPoursuivreRow(){
+  const sect = $("poursuivreSection");
+  const row  = $("poursuivreRow");
   if(!sect || !row) return;
 
-  // Lire la progression une seule fois (évite N×JSON.parse pour des catalogues de 5000+ items)
   const prog = getProg();
-  function _pct(item){
-    const k1 = itemKey(item);
-    if(prog[k1]?.pct > 0) return prog[k1].pct;
-    const k2 = String(item.id || item.stream_id || "");
-    if(k2 && prog[k2]?.t > 0 && prog[k2]?.d > 0) return prog[k2].t / prog[k2].d;
-    return 0;
-  }
-  function _ts(item){
-    const k1 = itemKey(item);
-    if(prog[k1]?.ts) return prog[k1].ts;
-    const k2 = String(item.id || item.stream_id || "");
-    if(k2 && prog[k2]?.ts) return prog[k2].ts;
-    return 0;
-  }
+  const type = S.type;
 
-  let scored;
-  if(S.type === "series"){
-    // Les épisodes sont stockés sous "seriesId||SxxExx" — scanner les clés
+  // ── 1. Items en cours ──────────────────────────────────────────
+  let inProgress = [];
+  if(type === "series"){
+    // Épisodes stockés sous "seriesId||SxxExx"
     const seriesIdx = {};
     S.series.forEach(s => { seriesIdx[String(s.id || s.stream_id || "")] = s; });
     const epKeyRe = /^(.+)\|\|S\d+E\d+$/;
-    const bestBySeries = {};
+    const best = {};
     Object.keys(prog).forEach(k => {
       const m = epKeyRe.exec(k);
       if(!m) return;
       const sid = m[1];
       if(!seriesIdx[sid]) return;
-      const entry = prog[k];
-      if(!entry?.ts) return;
-      const pct = (entry.t > 0 && entry.d > 0) ? entry.t / entry.d : (entry.pct || 0);
+      const e = prog[k];
+      if(!e?.ts) return;
+      const pct = (e.t > 0 && e.d > 0) ? e.t / e.d : (e.pct || 0);
       if(pct <= 0.03 || pct >= 0.97) return;
-      if(!bestBySeries[sid] || entry.ts > bestBySeries[sid].ts)
-        bestBySeries[sid] = { pct, ts: entry.ts };
+      if(!best[sid] || e.ts > best[sid].ts) best[sid] = { pct, ts: e.ts };
     });
-    scored = Object.keys(bestBySeries)
-      .map(sid => ({ item: seriesIdx[sid], pct: bestBySeries[sid].pct, ts: bestBySeries[sid].ts }))
-      .sort((a, b) => b.ts - a.ts)
-      .slice(0, 20);
+    inProgress = Object.keys(best)
+      .map(sid => ({ item: seriesIdx[sid], pct: best[sid].pct, ts: best[sid].ts }))
+      .sort((a, b) => b.ts - a.ts).slice(0, 15);
   } else {
-    const all = S.type === "vod" ? S.vod : S.live;
-    scored = all
-      .map(item => ({ item, pct: _pct(item), ts: _ts(item) }))
-      .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
-      .sort((a, b) => b.ts - a.ts)
-      .slice(0, 20);
+    const all = type === "vod" ? S.vod : S.live;
+    inProgress = all.map(item => {
+      const k1 = itemKey(item), k2 = String(item.id || item.stream_id || "");
+      const en = prog[k1] || prog[k2];
+      const pct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
+      return { item, pct, ts: en?.ts || 0 };
+    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+      .sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
 
-  if(!scored.length){ sect.hidden = true; return; }
+  // ── 2. Favoris non déjà en cours ──────────────────────────────
+  const inProgKeys = new Set(inProgress.map(x => itemKey(x.item)));
+  const favItems = getFavs()
+    .filter(f => {
+      if(!f.item) return false;
+      const ftype = f.item.type || type;
+      return ftype === type && !inProgKeys.has(itemKey(f.item));
+    })
+    .map(f => ({ item: f.item, pct: 0, ts: 0 }))
+    .slice(0, 15);
+
+  // ── 3. Fusionner — en cours d'abord, puis favoris ─────────────
+  const all = [...inProgress, ...favItems].slice(0, 25);
+
+  if(!all.length){ sect.hidden = true; return; }
   sect.hidden = false;
   row.innerHTML = "";
   const frag = document.createDocumentFragment();
-  scored.forEach(({ item, pct }) => {
+
+  all.forEach(({ item, pct, ts }) => {
+    const isLive    = item.type === "live";
+    const isInProg  = ts > 0 && pct > 0.03;
     const card = document.createElement("div");
-    const isLiveCont = item.type === "live";
-    card.className = "nou-card" + (isLiveCont ? " nou-card--live" : "");
+    card.className = "nou-card" + (isLive ? " nou-card--live" : "");
     card.tabIndex  = 0;
-    card.innerHTML = `
-      <div class="nou-media">
-        ${item.stream_icon
-          ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.parentElement.parentElement.style.display='none'">`
-          : `<div class="nou-placeholder">▶</div>`}
-        <div class="nou-overlay"><span class="nou-play">▶</span></div>
-        <div class="card-prog-bar card-prog-bar--nou">
-          <div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div>
-        </div>
-      </div>
-      <div class="nou-info">
-        <div class="nou-title">${esc(item.title)}</div>
-        <div class="nou-date">${Math.round(pct*100)}% visionné</div>
-      </div>`;
-    const activate = () => {
-      if(item.type === "series") openPanel(item);
-      else if(item.type === "live") playItem(item._variants?.[0]?.item || item);
-      else openVodPanel(item);
-    };
-    card.addEventListener("click", activate);
-    card.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); activate(); } });
-    card.addEventListener("focus", () => { document.querySelectorAll(".nou-card.is-tv-focused").forEach(c=>c.classList.remove("is-tv-focused")); card.classList.add("is-tv-focused"); card.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); });
-    card.addEventListener("blur",  () => card.classList.remove("is-tv-focused"));
-    frag.appendChild(card);
-  });
-  row.appendChild(frag);
-}
 
-// ─────────────────────────────────────────────────────────────────
-//  SECTION FAVORIS
-// ─────────────────────────────────────────────────────────────────
-
-function renderFavoritesRow(){
-  const sect = $("favoritesSection");
-  const row  = $("favoritesRow");
-  if(!sect || !row) return;
-
-  const type  = S.type;
-  const favs  = getFavs()
-    .filter(f => (f.item?.type || type) === type)
-    .slice(0, 30);
-
-  if(!favs.length){ sect.hidden = true; return; }
-  sect.hidden = false;
-  row.innerHTML = "";
-  const frag = document.createDocumentFragment();
-  favs.forEach(({ item }) => {
-    if(!item) return;
-    const pct  = getWatchPct(item);
-    const card = document.createElement("div");
-    const isLiveFav = item.type === "live";
-    card.className = "nou-card" + (isLiveFav ? " nou-card--live" : "");
-    card.tabIndex  = 0;
-    const progBar  = (pct > 0.03 && pct < 0.97)
+    const progBar = isInProg
       ? `<div class="card-prog-bar card-prog-bar--nou"><div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div></div>`
-      : "";
+      : `<div class="nou-fav-badge">❤️</div>`;
+
     card.innerHTML = `
       <div class="nou-media">
         ${item.stream_icon
           ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.parentElement.parentElement.style.display='none'">`
-          : `<div class="nou-placeholder">❤️</div>`}
+          : `<div class="nou-placeholder">${isInProg ? "▶" : "❤️"}</div>`}
         <div class="nou-overlay"><span class="nou-play">▶</span></div>
         ${progBar}
       </div>
       <div class="nou-info">
         <div class="nou-title">${esc(item.title)}</div>
-        <div class="nou-date">${esc(item.category_name || "")}</div>
+        <div class="nou-date">${isInProg ? Math.round(pct*100) + "% visionné" : esc(displayCat(item.category_name) || "Favori")}</div>
       </div>`;
+
     const activate = () => {
       if(item.type === "series") openPanel(item);
       else if(item.type === "live"){
-        if(item._variants && item._variants.length > 1) openLivePicker(item);
+        if(item._variants?.length > 1) openLivePicker(item);
         else playItem(item._variants?.[0]?.item || item);
       }
       else openVodPanel(item);
     };
     card.addEventListener("click", activate);
     card.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); activate(); } });
-    card.addEventListener("focus", () => { document.querySelectorAll(".nou-card.is-tv-focused").forEach(c=>c.classList.remove("is-tv-focused")); card.classList.add("is-tv-focused"); card.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); });
-    card.addEventListener("blur",  () => card.classList.remove("is-tv-focused"));
+    card.addEventListener("focus", () => {
+      document.querySelectorAll(".nou-card.is-tv-focused").forEach(c => c.classList.remove("is-tv-focused"));
+      card.classList.add("is-tv-focused");
+      card.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+    });
+    card.addEventListener("blur", () => card.classList.remove("is-tv-focused"));
     frag.appendChild(card);
   });
   row.appendChild(frag);
 }
+
+// Stubs de compatibilité (call sites existants)
+function renderContinueRow()  { renderPoursuivreRow(); }
+function renderFavoritesRow() { renderPoursuivreRow(); }
 
 // ─────────────────────────────────────────────────────────────────
 //  SECTION NOUVEAUTÉS

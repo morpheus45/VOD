@@ -284,6 +284,14 @@ button,select,input{ font:inherit }
 .nou-card:hover .nou-media img{ transform:scale(1.05) }
 .nou-media img{ transition:transform .35s ease }
 
+/* ── Badge ❤️ sur les cartes favoris dans la section Poursuivre ── */
+.nou-fav-badge{
+  position:absolute; bottom:4px; right:5px;
+  font-size:12px; line-height:1;
+  text-shadow:0 1px 3px rgba(0,0,0,.8);
+  pointer-events:none;
+}
+
 /* ── Carte live dans les rangées Favoris / Continuer : format 16/9 ── */
 .nou-card--live{
   flex:0 0 170px;   /* plus large que les posters 2:3 */
