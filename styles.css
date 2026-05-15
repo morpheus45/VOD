@@ -657,8 +657,8 @@ button,select,input{ font:inherit }
 }
 .sp-direct:hover{ background:linear-gradient(135deg,rgba(123,95,232,.25),rgba(56,168,232,.18)) }
 .sp-direct:focus{ outline:2px solid var(--accent); outline-offset:2px }
-/* Bouton favoris dans le panneau série */
-.sp-series-actions{ padding:4px 20px 12px; }
+/* Actions série : Reprendre / Début / Regarder + Favoris */
+.sp-series-actions{ display:flex; flex-wrap:wrap; gap:10px; padding:4px 16px 12px; }
 .sp-noep{ padding:18px; color:var(--muted); font-size:13px; text-align:center; line-height:1.6 }
 .sp-noep-block{
   padding:32px 24px; text-align:center;

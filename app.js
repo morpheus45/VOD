@@ -1293,6 +1293,37 @@ function renderPanel(){
     }
   }
 
+  // ── Trouver le dernier épisode en cours pour cette série ──
+  let lastWatched = null;
+  {
+    const prog = getProg();
+    const epKeyRe = new RegExp(`^${s.id}\\|\\|(S(\\d+)E(\\d+))$`);
+    let lastTs = 0;
+    Object.keys(prog).forEach(k => {
+      const m = epKeyRe.exec(k);
+      if(!m) return;
+      const en = prog[k];
+      if(!en?.ts || en.ts <= lastTs) return;
+      const tSec = en.t || 0;
+      const dSec = (en.d && isFinite(en.d)) ? en.d : 0;
+      const pct  = dSec > 0 ? tSec / dSec : (en.pct || 0);
+      if(tSec > 10 && pct < 0.95){
+        lastWatched = { code: m[1], sn: m[2], en: m[3], pct, tSec, progK: k };
+        lastTs = en.ts;
+      }
+    });
+  }
+
+  // ── Premier épisode (pour Regarder / Début) ──
+  let firstEp = null, firstSk = null;
+  {
+    const firstSeason = keys[0];
+    if(firstSeason && smap[firstSeason]?.length){
+      firstEp = smap[firstSeason].find(e => !!e.url) || null;
+      firstSk = firstSeason;
+    }
+  }
+
   // ── Rendu HTML complet ──
   panel.innerHTML = `
     <div class="sp-header">
@@ -1314,8 +1345,20 @@ function renderPanel(){
         </div>
       </div>
 
-      <!-- Bouton favoris série -->
+      <!-- Actions série : Reprendre / Début / Regarder + Favoris -->
       <div class="sp-series-actions">
+        ${lastWatched
+          ? `<button id="seriesResumeBtn" class="vod-play-btn" type="button">
+               <span class="vod-play-icon">▶</span>
+               <span>Reprendre · ${lastWatched.code}${lastWatched.pct > 0.01 ? " — " + Math.round(lastWatched.pct * 100) + "%" : ""}</span>
+             </button>
+             ${firstEp ? `<button id="seriesRestartBtn" class="vod-restart-btn" type="button">↩ Depuis le début</button>` : ""}`
+          : (firstEp
+              ? `<button id="seriesPlayBtn" class="vod-play-btn" type="button">
+                   <span class="vod-play-icon">▶</span>
+                   <span>Regarder la série</span>
+                 </button>`
+              : "")}
         <button class="fav-btn-large ${isFav(s) ? "is-fav" : ""}" id="seriesFavBtn" type="button">
           <span class="fav-heart">♥</span>
           <span id="seriesFavLabel">${isFav(s) ? "Favori" : "Ajouter aux favoris"}</span>
@@ -1330,6 +1373,32 @@ function renderPanel(){
     `;
 
   bindClose();
+
+  // Bouton Reprendre série
+  $("seriesResumeBtn")?.addEventListener("click", () => {
+    if(!lastWatched) return;
+    // Retrouver l'objet épisode à partir du code sauvegardé
+    const ep = (smap[lastWatched.sn] || []).find(e => {
+      const c = `S${String(lastWatched.sn).padStart(2,"0")}E${String(e.episode_num).padStart(2,"0")}`;
+      return c === lastWatched.code;
+    });
+    if(ep) playEpisode(s, ep, lastWatched.sn);
+  });
+
+  // Bouton Début série (premier épisode)
+  $("seriesRestartBtn")?.addEventListener("click", () => {
+    if(!firstEp || !firstSk) return;
+    // Effacer la progression avant de relancer depuis le début
+    const prog = getProg();
+    const progK = lastWatched?.progK;
+    if(progK && prog[progK]){ delete prog[progK]; storeSet(STORE.progress, prog); _invalidateCache(); }
+    playEpisode(s, firstEp, firstSk);
+  });
+
+  // Bouton Regarder série (pas de progression, premier épisode)
+  $("seriesPlayBtn")?.addEventListener("click", () => {
+    if(firstEp && firstSk) playEpisode(s, firstEp, firstSk);
+  });
 
   // Lecture directe
   $("spDirectBtn")?.addEventListener("click", () => playItem(s));
