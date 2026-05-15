@@ -1,5 +1,5 @@
 {
-  "apk_version": 18,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v18/PIPSILY.apk",
-  "changes": "Reprendre TV et series corrige · saveProgress series · renderContinueRow scan episodes"
+  "apk_version": 19,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v19/PIPSILY.apk",
+  "changes": "Reprendre corrigé TV+séries+VOD · saveProgress épisodes · renderContinueRow scan clés · TvActivity reportProgress"
 }

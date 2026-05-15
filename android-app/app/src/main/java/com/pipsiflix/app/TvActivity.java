@@ -40,7 +40,7 @@ public class TvActivity extends FragmentActivity {
 
     private static final String TAG         = "PipsilyTV";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "18";
+    private static final String APK_VERSION = "19";
 
     // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
     static WeakReference<TvActivity> sInstance;
