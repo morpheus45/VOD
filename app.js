@@ -103,7 +103,9 @@ const PipPlayer = {
 
       // ── Mémoriser URL(s) → progress_key pour que onAndroidPlayerClosed puisse sauvegarder ──
       if(!window._epUrlMap) window._epUrlMap = {};
-      if(item.progress_key && url) window._epUrlMap[url] = item.progress_key;
+      // VOD sans progress_key : utiliser l'id comme clé de reprise
+      const _progKeyForMap = item.progress_key || String(item.id || item.stream_id || "");
+      if(_progKeyForMap && url) window._epUrlMap[url] = _progKeyForMap;
       if(Array.isArray(item.all_episodes)){
         item.all_episodes.forEach(ep => {
           if(ep.url && ep.progress_key) window._epUrlMap[ep.url] = ep.progress_key;
@@ -2102,10 +2104,8 @@ function render(){
     if(novSect) novSect.hidden = true;
   }
 
-  // Section Favoris uniquement (Continuer à regarder supprimé à la demande)
   renderFavoritesRow();
-  const contSect = $("continueSection");
-  if(contSect) contSect.hidden = true;
+  renderContinueRow();
 
   // Masquer le filtre qualité pour le live (non pertinent)
   if($("qualityPills")) $("qualityPills").style.display = S.type === "live" ? "none" : "";
@@ -2537,12 +2537,43 @@ function renderContinueRow(){
     return 0;
   }
 
-  const all = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const scored = all
-    .map(item => ({ item, pct: _pct(item), ts: _ts(item) }))
-    .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, 20);
+  // ── Construire la liste scored selon le type ──────────────────────
+  // Pour les séries : scanner prog à la recherche de clés "seriesId||SxxExx"
+  // puis retrouver la série parente → évite le mismatch clé épisode vs objet série
+  let scored = [];
+
+  if(S.type === "series"){
+    const seriesIdx = {};
+    S.series.forEach(s => { seriesIdx[String(s.id || s.stream_id || "")] = s; });
+
+    const epKeyRe = /^(.+)\|\|S\d+E\d+$/;
+    const bestBySeries = {};
+    Object.keys(prog).forEach(k => {
+      const m = epKeyRe.exec(k);
+      if(!m) return;
+      const sid = m[1];
+      const entry = prog[k];
+      if(!entry?.ts) return;
+      const pct = (entry.t > 0 && entry.d > 0) ? entry.t / entry.d : (entry.pct || 0);
+      if(pct <= 0.03 || pct >= 0.97) return;
+      if(!bestBySeries[sid] || entry.ts > bestBySeries[sid].ts)
+        bestBySeries[sid] = { pct, ts: entry.ts };
+    });
+
+    scored = Object.keys(bestBySeries)
+      .filter(sid => seriesIdx[sid])
+      .map(sid => ({ item: seriesIdx[sid], pct: bestBySeries[sid].pct, ts: bestBySeries[sid].ts }))
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 20);
+
+  } else {
+    const all = S.type === "vod" ? S.vod : S.live;
+    scored = all
+      .map(item => ({ item, pct: _pct(item), ts: _ts(item) }))
+      .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, 20);
+  }
 
   if(!scored.length){ sect.hidden = true; return; }
   sect.hidden = false;
