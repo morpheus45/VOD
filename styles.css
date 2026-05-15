@@ -323,18 +323,6 @@ button,select,input{ font:inherit }
 }
 .nou-date{ font-size:10px; color:var(--muted); margin-top:2px }
 
-/* ── Carte live dans les rangées Favoris / Continuer : format 16/9 ── */
-.nou-card--live{
-  flex:0 0 170px;   /* plus large que les posters 2:3 */
-}
-.nou-card--live .nou-media{
-  width:170px; height:96px;   /* ratio 16:9 pour les logos TV */
-  background:#06101e;
-}
-.nou-card--live .nou-media img{
-  object-fit:contain;   /* logo TV centré, sans recadrage */
-}
-
 /* ── Grille principale ── */
 .grid{
   display:grid;
@@ -992,7 +980,7 @@ button,select,input{ font:inherit }
   .nrow-card .fav-btn,
   .nou-card .fav-btn{ display:none !important }
 
-  /* ── Focus D-pad TV — halo violet, AUCUN zoom interne (évite le crop overflow:hidden) ── */
+  /* ── Focus D-pad — discret mais visible (pas de méga-glow) ── */
   :focus{
     outline:none !important;
     box-shadow:0 0 0 3px var(--accent), 0 0 0 6px rgba(123,95,232,.18) !important;
@@ -1000,31 +988,23 @@ button,select,input{ font:inherit }
   .nrow-card:focus, .nou-card:focus, .nrow-all-tile:focus, .card:focus{
     outline:none !important; box-shadow:none !important;
   }
-  /* Halo sur le conteneur image — PAS de scale (image rognée sinon) */
   .nrow-card:focus .nrow-media,
   .nrow-card.is-tv-focused .nrow-media,
   .nou-card:focus .nou-media,
   .nou-card.is-tv-focused .nou-media{
-    box-shadow:0 0 0 3px var(--accent), 0 0 0 9px rgba(123,95,232,.28), 0 0 22px rgba(123,95,232,.22);
-    transform:none;                        /* ← supprime le zoom qui coupait l'image */
-    transition:box-shadow .15s;
+    box-shadow:0 0 0 3px var(--accent), 0 0 0 7px rgba(123,95,232,.22), 0 0 18px rgba(123,95,232,.18);
+    transform:scale(1.06);
+    transition:transform .15s, box-shadow .15s;
   }
-  /* Bloquer tout zoom de l'image interne en TV (overflow:hidden la couperait) */
-  .nrow-card:focus .nrow-media img,
-  .nrow-card.is-tv-focused .nrow-media img,
-  .nou-card:focus .nou-media img,
-  .nou-card.is-tv-focused .nou-media img,
-  .card:focus .card-media img{ transform:none !important; }
   .nrow-all-tile:focus .nrow-all-media{
     border-color:var(--accent); border-style:solid;
     background:linear-gradient(135deg,rgba(123,95,232,.45),rgba(56,168,232,.35));
-    transform:none;
-    box-shadow:0 0 0 3px var(--accent), 0 0 0 9px rgba(123,95,232,.28);
+    transform:scale(1.06);
+    box-shadow:0 0 0 3px var(--accent), 0 0 0 7px rgba(123,95,232,.22);
   }
-  /* Carte catalogue : légère élévation + halo, sans scale de l'image */
   .card:focus{
-    transform:translateY(-4px);
-    box-shadow:0 14px 36px rgba(0,0,0,.55), 0 0 0 3px var(--accent), 0 0 0 9px rgba(123,95,232,.28);
+    transform:translateY(-4px) scale(1.03);
+    box-shadow:0 14px 36px rgba(0,0,0,.55), 0 0 0 3px var(--accent), 0 0 0 7px rgba(123,95,232,.22);
     border-color:var(--accent);
   }
   .nav-btn:focus{
@@ -1105,24 +1085,6 @@ html.is-tv .card .fav-btn,
 html.is-tv .nrow-card .nrow-fav,
 html.is-tv .nrow-card .fav-btn,
 html.is-tv .nou-card .fav-btn{ display:none !important }
-/* Failsafe focus TV : même correction anti-crop que le media query */
-html.is-tv .nrow-card:focus .nrow-media,
-html.is-tv .nrow-card.is-tv-focused .nrow-media,
-html.is-tv .nou-card:focus .nou-media,
-html.is-tv .nou-card.is-tv-focused .nou-media{
-  box-shadow:0 0 0 3px var(--accent), 0 0 0 9px rgba(123,95,232,.28), 0 0 22px rgba(123,95,232,.22);
-  transform:none !important;
-}
-html.is-tv .nrow-card:focus .nrow-media img,
-html.is-tv .nrow-card.is-tv-focused .nrow-media img,
-html.is-tv .nou-card:focus .nou-media img,
-html.is-tv .nou-card.is-tv-focused .nou-media img,
-html.is-tv .card:focus .card-media img{ transform:none !important; }
-html.is-tv .card:focus{
-  transform:translateY(-4px) !important;
-  box-shadow:0 14px 36px rgba(0,0,0,.55), 0 0 0 3px var(--accent), 0 0 0 9px rgba(123,95,232,.28) !important;
-  border-color:var(--accent) !important;
-}
 html.is-tv .update-bar   { padding:12px 36px }
 html.is-tv .update-bar__btn{ padding:10px 26px; font-size:13px; min-height:42px }
 html.is-tv .update-bar__date{ display:none }

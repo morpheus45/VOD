@@ -92,26 +92,9 @@ const PipPlayer = {
       : item.title || "Lecture";
     const sub = item.episode_title || item.category_name || "";
 
-    // ── APK : lecteur natif ExoPlayer (téléphones/tablettes non-TV) ──
-    // Sur TV/AndroidTV, on utilise le lecteur interne WebView à la place :
-    // le lecteur overlay sauvegarde la progression toutes les 5s via _saveProgress(),
-    // ce qui garantit le "Reprendre" même si l'APK n'implémente pas onAndroidPlayerClosed.
-    const _isTVCtx = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
-                    (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
-    if(!_isTVCtx && typeof window.AndroidBridge?.openPlayer === "function"){
+    // ── APK : lecteur natif ExoPlayer (HTTP sans mixed content) ────
+    if(typeof window.AndroidBridge?.openPlayer === "function"){
       pushHist(item);
-
-      // ── Mémoriser URL(s) → progress_key pour que onAndroidPlayerClosed puisse sauvegarder ──
-      if(!window._epUrlMap) window._epUrlMap = {};
-      // VOD sans progress_key : utiliser l'id comme clé de reprise
-      const _progKeyForMap = item.progress_key || String(item.id || item.stream_id || "");
-      if(_progKeyForMap && url) window._epUrlMap[url] = _progKeyForMap;
-      if(Array.isArray(item.all_episodes)){
-        item.all_episodes.forEach(ep => {
-          if(ep.url && ep.progress_key) window._epUrlMap[ep.url] = ep.progress_key;
-        });
-      }
-
       // Sérialiser la liste d'épisodes pour Java
       const epsJson = this._epList.length > 1
         ? JSON.stringify(this._epList.map(ep => ({
@@ -205,21 +188,7 @@ const PipPlayer = {
     const isHLS = /\.m3u8/i.test(url) || item.type === "live";
 
     // ── Fallback natif : ouvre le lecteur de l'appareil si la vidéo plante ──
-    const _isTVFallback = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
-                          (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
     const _openNativeFallback = () => {
-      // TV : le lecteur interne a échoué (ex. HTTP bloqué) → ExoPlayer en dernier recours
-      if(_isTVFallback && typeof window.AndroidBridge?.openPlayer === "function"){
-        this._showStatus("⚠️ Basculement vers le lecteur natif…", false);
-        const epListJson = this._epList.length > 1
-          ? JSON.stringify(this._epList.map(ep => ({ url: ep.url || "", title: ep.title || "", episode_label: ep.episode_label || "" })))
-          : "[]";
-        setTimeout(() => {
-          try { window.AndroidBridge.openPlayer(url, this._item?.title || "", "", epListJson, this._epIdx ?? 0); }
-          catch(e){ window.open(url, "_blank", "noopener"); }
-        }, 600);
-        return;
-      }
       if(typeof window.AndroidBridge?.openInVlc === "function"){
         this._showStatus("⚠️ Ouverture du lecteur natif…", false);
         setTimeout(() => {
@@ -396,9 +365,6 @@ const PipPlayer = {
     this._epIdx = idx;
     const s   = String(ep.season || 1).padStart(2,"0");
     const e   = String(ep.episode_num || idx+1).padStart(2,"0");
-    // Calculer la bonne clé de progression pour le nouvel épisode
-    const seriesId   = this._item.series_id || this._item.id;
-    const newProgKey = seriesId ? `${seriesId}||S${s}E${e}` : this._item.progress_key;
     this.open({
       ...this._item,
       id            : ep.id,
@@ -407,7 +373,6 @@ const PipPlayer = {
       plot          : ep.plot || this._item.plot || "",
       episode_label : `S${s}E${e}`,
       episode_title : ep.title || "",
-      progress_key  : newProgKey,
       _epList       : this._epList,
       _epIdx        : idx
     });
@@ -545,24 +510,8 @@ function _getSavedProgressMs(item){
 
 // ── Callback appelé par l'APK Android quand le lecteur ExoPlayer se ferme ──
 // MainActivity.reportProgress() injecte ce JS via webView.evaluateJavascript()
-window.onAndroidPlayerClosed = function(url, rawPos, rawDur){
-  if(!url || !rawPos || rawPos <= 0) return;
-
-  // ── Auto-détection de l'unité : millisecondes ou secondes ──────────
-  // ExoPlayer standard → ms. Certains APKs envoient en secondes.
-  // Si rawPos ou rawDur >= 100 000 c'est forcément en ms (100 000 ms = 100 s,
-  // une durée plausible ; 100 000 s = 27 h, irréaliste). Sinon → secondes.
-  let posMs, durMs;
-  if(rawPos >= 100000 || rawDur >= 100000){
-    posMs = rawPos;
-    durMs = rawDur;
-  } else {
-    // Valeurs "petites" → probablement en secondes, convertir en ms
-    posMs = rawPos * 1000;
-    durMs = rawDur > 0 ? rawDur * 1000 : 0;
-  }
-
-  if(posMs < 30000) return;   // moins de 30s regardées → ignorer
+window.onAndroidPlayerClosed = function(url, posMs, durMs){
+  if(!url || !posMs || posMs < 30000) return;   // moins de 30s regardées → ignorer
 
   const t   = Math.floor(posMs / 1000);
   const d   = (durMs > 0 && isFinite(durMs)) ? Math.floor(durMs / 1000) : 0;
@@ -669,11 +618,6 @@ function cleanTitle(t){
   s = s.replace(/\.(mkv|mp4|ts|m3u8|avi|mov)$/i, "");
   s = s.replace(/\s*\(\d{4}\)\s*$/, "");
   return s.replace(/\s+/g, " ").trim();
-}
-
-// Supprime le préfixe "EU | " ou "EU|" des noms de catégorie Live pour l'affichage
-function displayCat(name){
-  return String(name || "").replace(/^EU\s*\|\s*/i, "").trim();
 }
 
 // "NomSérie - S01E01 - Titre épisode"  →  "Titre épisode"
@@ -1887,7 +1831,7 @@ function renderGrid(reset = false){
       </div>
       <div class="card-info">
         <div class="card-title">${esc(item.title)}</div>
-        <div class="card-cat">${esc(displayCat(item.category_name))}</div>
+        <div class="card-cat">${esc(item.category_name)}</div>
       </div>`;
 
     card.querySelector(".fav-btn").addEventListener("click", e => {
@@ -2104,8 +2048,10 @@ function render(){
     if(novSect) novSect.hidden = true;
   }
 
+  // Section Favoris uniquement (Continuer à regarder supprimé à la demande)
   renderFavoritesRow();
-  renderContinueRow();
+  const contSect = $("continueSection");
+  if(contSect) contSect.hidden = true;
 
   // Masquer le filtre qualité pour le live (non pertinent)
   if($("qualityPills")) $("qualityPills").style.display = S.type === "live" ? "none" : "";
@@ -2117,7 +2063,7 @@ function render(){
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
   const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
-    cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
+    cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(c)}</option>`).join("");
 
   // Pills catégories (Films / Séries)
   renderCatPills(cats);
@@ -2148,7 +2094,7 @@ function renderCatPills(cats){
     `<button class="cat-pill cat-pill--search" data-search="1" aria-label="Rechercher">🔍</button>` +
     `<button class="cat-pill ${!S.cat ? "cat-pill--active" : ""}" data-cat="">Tout</button>` +
     cats.map(c =>
-      `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(displayCat(c))}</button>`
+      `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`
     ).join("");
 
   // ── Bouton recherche : ouvre un overlay plein écran ──
@@ -2166,8 +2112,7 @@ function renderCatPills(cats){
       // Revenir aux rangées Netflix si "Tout" est sélectionné et aucun filtre actif
       const useNetflix = !S.cat && !S.search && !S.quality;
       const g = $("grid");
-      if(g) g.className = useNetflix ? "netflix-rows"
-                        : S.type === "live" ? "grid grid--live" : "grid";
+      if(g) g.className = useNetflix ? "netflix-rows" : "grid";
       if(useNetflix) renderNetflixRows();
       else           renderGrid(true);
     });
@@ -2256,18 +2201,12 @@ function initTV(){
     }
   }
 
-  // ── Helper : focus sur le 1er pill catégorie (ou pill actif) + scroll en haut ──
+  // ── Helper : focus sur le 1er pill catégorie (ou pill actif) ──
   function _focusFirstPill(){
     const pills = $("catPills");
     if(!pills || pills.hidden) return false;
     const target = pills.querySelector(".cat-pill--active") || pills.querySelector(".cat-pill");
-    if(target){
-      target.focus();
-      target.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
-      // Remonter tout en haut de la page pour que les pills soient visibles
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return true;
-    }
+    if(target){ target.focus(); target.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); return true; }
     return false;
   }
 
@@ -2321,7 +2260,6 @@ function initTV(){
       }
       if(k === "ArrowUp"){
         document.querySelector(".nav-btn.active, .nav-btn")?.focus();
-        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
       if(k === "ArrowDown"){
@@ -2369,10 +2307,7 @@ function initTV(){
       if(target){ target.focus(); target.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
     } else {
       // Plus de rangée au-dessus → remonter aux pills ou aux boutons de nav
-      if(!_focusFirstPill()){
-        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
+      if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
     }
   }
 
@@ -2381,17 +2316,6 @@ function initTV(){
     const active   = document.activeElement;
     const isPill   = active?.classList.contains("cat-pill");
     const isNavBtn = active?.classList.contains("nav-btn");
-    const isNouCard = active?.classList.contains("nou-card");
-
-    // ── Helper : première nou-card visible (favoris / continuer) ──
-    const _firstNouCard = () => {
-      for(const row of document.querySelectorAll(".nou-row")){
-        if(row.closest("[hidden]")) continue;
-        const c = row.querySelector(".nou-card");
-        if(c) return c;
-      }
-      return null;
-    };
 
     // ── Sur les nav-btns ──
     if(isNavBtn){
@@ -2401,8 +2325,6 @@ function initTV(){
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
       if(k === "ArrowDown"){
         if(_focusFirstPill()) return;
-        const nou = _firstNouCard();
-        if(nou){ nou.focus(); nou.scrollIntoView({ behavior:"smooth", block:"nearest" }); return; }
         document.querySelector(".card")?.focus();
       }
       return;
@@ -2424,59 +2346,10 @@ function initTV(){
       }
       if(k === "ArrowUp"){
         document.querySelector(".nav-btn.active, .nav-btn")?.focus();
-        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
       if(k === "ArrowDown"){
-        const nou = _firstNouCard();
-        if(nou){ nou.focus(); nou.scrollIntoView({ behavior:"smooth", block:"nearest" }); return; }
         document.querySelector(".card")?.focus();
-        return;
-      }
-      return;
-    }
-
-    // ── Sur une nou-card (favoris / continuer) ──
-    if(isNouCard){
-      const row   = active.closest(".nou-row");
-      const cards = row ? [...row.querySelectorAll(".nou-card")] : [];
-      const ci    = cards.indexOf(active);
-      if(k === "ArrowRight"){
-        const next = cards[ci + 1];
-        if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
-        return;
-      }
-      if(k === "ArrowLeft"){
-        const prev = cards[ci - 1];
-        if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
-        return;
-      }
-      if(k === "ArrowUp"){
-        // Chercher la nou-row précédente, sinon remonter aux pills
-        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
-        const ri = allRows.indexOf(row);
-        if(ri > 0){
-          const prevRow = allRows[ri - 1];
-          const prevCard = prevRow.querySelectorAll(".nou-card")[ci] || prevRow.querySelector(".nou-card");
-          prevCard?.focus(); prevCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
-        } else {
-          if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }
-        return;
-      }
-      if(k === "ArrowDown"){
-        // Passer à la prochaine nou-row ou à la grille principale
-        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
-        const ri = allRows.indexOf(row);
-        if(ri >= 0 && ri < allRows.length - 1){
-          const nextRow  = allRows[ri + 1];
-          const nextCard = nextRow.querySelectorAll(".nou-card")[ci] || nextRow.querySelector(".nou-card");
-          nextCard?.focus(); nextCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
-        } else {
-          const first = document.querySelector(".card");
-          if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
-        }
         return;
       }
       return;
@@ -2497,13 +2370,8 @@ function initTV(){
     else if(k === "ArrowUp")   next = idx - cols;
 
     if(next < 0){
-      // Au-dessus de la 1ère ligne → nou-cards, sinon cat-pills, sinon nav-btns
-      const nou = _firstNouCard();
-      if(nou){ nou.focus(); nou.scrollIntoView({ behavior:"smooth", block:"nearest" }); return; }
-      if(!_focusFirstPill()){
-        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
+      // Au-dessus de la 1ère ligne → cat-pills, sinon nav-btns
+      if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
       return;
     }
     cards[next]?.focus();
@@ -2537,43 +2405,12 @@ function renderContinueRow(){
     return 0;
   }
 
-  // ── Construire la liste scored selon le type ──────────────────────
-  // Pour les séries : scanner prog à la recherche de clés "seriesId||SxxExx"
-  // puis retrouver la série parente → évite le mismatch clé épisode vs objet série
-  let scored = [];
-
-  if(S.type === "series"){
-    const seriesIdx = {};
-    S.series.forEach(s => { seriesIdx[String(s.id || s.stream_id || "")] = s; });
-
-    const epKeyRe = /^(.+)\|\|S\d+E\d+$/;
-    const bestBySeries = {};
-    Object.keys(prog).forEach(k => {
-      const m = epKeyRe.exec(k);
-      if(!m) return;
-      const sid = m[1];
-      const entry = prog[k];
-      if(!entry?.ts) return;
-      const pct = (entry.t > 0 && entry.d > 0) ? entry.t / entry.d : (entry.pct || 0);
-      if(pct <= 0.03 || pct >= 0.97) return;
-      if(!bestBySeries[sid] || entry.ts > bestBySeries[sid].ts)
-        bestBySeries[sid] = { pct, ts: entry.ts };
-    });
-
-    scored = Object.keys(bestBySeries)
-      .filter(sid => seriesIdx[sid])
-      .map(sid => ({ item: seriesIdx[sid], pct: bestBySeries[sid].pct, ts: bestBySeries[sid].ts }))
-      .sort((a, b) => b.ts - a.ts)
-      .slice(0, 20);
-
-  } else {
-    const all = S.type === "vod" ? S.vod : S.live;
-    scored = all
-      .map(item => ({ item, pct: _pct(item), ts: _ts(item) }))
-      .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
-      .sort((a, b) => b.ts - a.ts)
-      .slice(0, 20);
-  }
+  const all = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
+  const scored = all
+    .map(item => ({ item, pct: _pct(item), ts: _ts(item) }))
+    .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, 20);
 
   if(!scored.length){ sect.hidden = true; return; }
   sect.hidden = false;
@@ -2581,8 +2418,7 @@ function renderContinueRow(){
   const frag = document.createDocumentFragment();
   scored.forEach(({ item, pct }) => {
     const card = document.createElement("div");
-    const isLiveCont = item.type === "live";
-    card.className = "nou-card" + (isLiveCont ? " nou-card--live" : "");
+    card.className = "nou-card";
     card.tabIndex  = 0;
     card.innerHTML = `
       <div class="nou-media">
@@ -2634,8 +2470,7 @@ function renderFavoritesRow(){
     if(!item) return;
     const pct  = getWatchPct(item);
     const card = document.createElement("div");
-    const isLiveFav = item.type === "live";
-    card.className = "nou-card" + (isLiveFav ? " nou-card--live" : "");
+    card.className = "nou-card";
     card.tabIndex  = 0;
     const progBar  = (pct > 0.03 && pct < 0.97)
       ? `<div class="card-prog-bar card-prog-bar--nou"><div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div></div>`
