@@ -145,7 +145,7 @@ button,select,input{ font:inherit }
 }
 .update-bar__btn:active{ transform:scale(.96) }
 .update-bar__btn:disabled{ opacity:.45; cursor:default; transform:none }
-.app-shell{ padding-bottom:80px }
+.app-shell{ padding-bottom:max(80px, calc(64px + env(safe-area-inset-bottom, 0px))) }
 
 /* ── Contrôles ── */
 .sticky-controls{
@@ -216,7 +216,8 @@ button,select,input{ font:inherit }
   display:flex; gap:8px;
   overflow-x:auto; overflow-y:hidden;
   padding:14px 0 10px;
-  scroll-snap-type:x mandatory;
+  scroll-snap-type:x proximity;   /* mandatory trop agressif sur iOS touch */
+  touch-action:pan-x;             /* iOS : déléguer les swipes horizontaux */
   -webkit-overflow-scrolling:touch;
   border-bottom:1px solid var(--line);
   margin-bottom:4px;
@@ -265,7 +266,8 @@ button,select,input{ font:inherit }
   align-items:flex-start;
   overflow-x:auto;
   padding:8px 4px 12px;   /* padding haut/bas pour laisser place aux outlines */
-  scroll-snap-type:x mandatory;
+  scroll-snap-type:x proximity;   /* mandatory trop agressif sur iOS touch */
+  touch-action:pan-x;             /* iOS : déléguer les swipes horizontaux */
   -webkit-overflow-scrolling:touch;
 }
 .nou-row::-webkit-scrollbar{ height:3px }
@@ -274,6 +276,8 @@ button,select,input{ font:inherit }
 .nou-card{
   flex:0 0 95px;
   scroll-snap-align:start; cursor:pointer;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
   transition:transform .2s;
 }
 .nou-card:hover,.nou-card:focus{ transform:translateY(-6px) scale(1.03); outline:none }
@@ -373,6 +377,8 @@ button,select,input{ font:inherit }
   background:var(--panel);
   border:1px solid var(--line); border-radius:var(--r);
   overflow:hidden; cursor:pointer;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
   transition:transform .2s ease, box-shadow .2s ease, border-color .2s;
   display:flex; flex-direction:column;
   animation:fadeIn .3s ease both;
@@ -1409,6 +1415,7 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
 /* ── Pilules qualité ── */
 .quality-pills{
   display:flex; gap:6px; align-items:center; flex-wrap:nowrap; overflow-x:auto;
+  touch-action:pan-x;   /* iOS : swipe horizontal dans la barre de filtres */
   scrollbar-width:none;
 }
 .quality-pills::-webkit-scrollbar{ display:none }
