@@ -238,7 +238,7 @@
 
         <!-- Appareils -->
         <div class="card">
-          <div class="card-title">Mes appareils (${devs.length}/${prof.plan==="admin"||prof.plan==="unlimited" ? "∞" : (prof.devices_allowed || 1)})</div>
+          <div class="card-title">Mes appareils (${devs.length}/${prof.plan==="admin" ? "∞" : prof.plan==="unlimited" ? 3 : 1})</div>
           <div id="deviceList">
             ${devs.length === 0 ? '<p style="color:#7a9cc0;font-size:13px">Aucun appareil enregistré.</p>' :
               devs.map(d => `

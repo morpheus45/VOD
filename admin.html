@@ -240,7 +240,8 @@
         return !exp || exp < now;
       });
       const revenue   = calcMonthlyRevenue(users, devices);
-      const connected = (sessions||[]).length;
+      const activeCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const connected = (sessions||[]).filter(s => s.last_seen && s.last_seen > activeCutoff).length;
       // Paiements en attente de confirmation (Wero déclaré par utilisateur)
       const pendingPayments = (payments||[]).filter(p => !p.confirmed_at);
 
@@ -379,11 +380,7 @@
               border-radius:10px;background:rgba(100,220,140,.06);border:1px solid rgba(100,220,140,.15)">
               <div style="flex:1;min-width:0">
                 <div style="font-size:12px;font-weight:700;color:#eef4ff">${_esc(s.device_name||"Appareil")}</div>
-                <div style="font-size:11px;color:#7a9cc0;margin-top:2px;line-height:1.4">
-                  ${[s.city, s.region, s.country].filter(Boolean).map(_esc).join(", ") || "Localisation inconnue"}
-                  ${s.ip ? ` · ${_esc(s.ip)}` : ""}
-                  ${s.isp ? `<br>${_esc(s.isp)}` : ""}
-                </div>
+                <div style="font-size:11px;color:#4a6080;margin-top:2px">${_esc(s.device_id?.slice(0,8)||"") || ""}</div>
                 <div style="font-size:10px;color:#4a6080;margin-top:2px">Vu ${fmtRelative(s.last_seen)}</div>
               </div>
             </div>`).join("")}`;

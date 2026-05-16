@@ -136,59 +136,62 @@ async function checkSubscription(userId){
 // ─────────────────────────────────────────────────────────────────
 //  GÉOLOCALISATION IP SILENCIEUSE (aucune permission requise)
 // ─────────────────────────────────────────────────────────────────
-async function getGeoInfo(){
-  try {
-    const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 5000);
-    const r    = await fetch("https://ipapi.co/json/", { signal: ctrl.signal });
-    clearTimeout(tid);
-    if(!r.ok) return {};
-    const d = await r.json();
-    return {
-      ip      : d.ip            || "",
-      country : d.country_name  || d.country_code || "",
-      city    : d.city          || "",
-      region  : d.region        || "",
-      isp     : d.org           || ""
-    };
-  } catch { return {}; }
-}
-
 // ─────────────────────────────────────────────────────────────────
-//  SESSIONS MULTIPLES — plusieurs appareils simultanés autorisés
-//  Purge automatique des sessions inactives (> 5 min sans heartbeat)
+//  SESSIONS — une ligne par appareil, purge 24h
 // ─────────────────────────────────────────────────────────────────
 
-const SESSION_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours — TV/téléphone ne se déconnectent plus
+const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24h sans heartbeat = session expirée
+const ACTIVE_WINDOW_MS   = 10 * 60 * 1000;       // 10 min = "connecté maintenant"
+
+// Limite de connexions simultanées par plan
+const MAX_CONCURRENT = { admin: Infinity, unlimited: 4, default: 1 };
+// Limite d'appareils enregistrés par plan
+const MAX_DEVICES    = { admin: Infinity, unlimited: 3, default: 1 };
 
 async function registerSession(userId){
-  const token = crypto.randomUUID?.() || ("tok" + Date.now());
+  const token    = crypto.randomUUID?.() || ("tok" + Date.now());
+  const deviceId = getDeviceId();
   localStorage.setItem("pipsily_session_token", token);
-  if(!_supa) return token;
+  if(!_supa) return { token, blocked: false };
   try {
-    // Purger les sessions inactives (last_seen > 5 min) de cet utilisateur
+    // Purge des sessions inactives (> 24h)
     const cutoff = new Date(Date.now() - SESSION_TIMEOUT_MS).toISOString();
-    await _supa.from("sessions").delete()
-      .eq("user_id", userId).lt("last_seen", cutoff);
+    await _supa.from("sessions").delete().eq("user_id", userId).lt("last_seen", cutoff);
 
-    // Géolocalisation silencieuse (parallèle)
-    const geo = await getGeoInfo();
+    // Plan de l'utilisateur
+    const { data: prof } = await _supa.from("profiles").select("plan").eq("id", userId).maybeSingle();
+    const plan = prof?.plan || "active";
+    const maxConcurrent = plan === "admin" ? Infinity
+      : plan === "unlimited" ? MAX_CONCURRENT.unlimited
+      : MAX_CONCURRENT.default;
 
-    await _supa.from("sessions").insert({
-      user_id     : userId,
-      device_id   : getDeviceId(),
-      device_name : getDeviceName(),
-      token,
-      ip          : geo.ip      || null,
-      country     : geo.country || null,
-      city        : geo.city    || null,
-      region      : geo.region  || null,
-      isp         : geo.isp     || null,
-      last_seen   : new Date().toISOString(),
-      created_at  : new Date().toISOString()
-    });
+    // Vérifier les connexions simultanées (autres appareils actifs ces 10 dernières minutes)
+    if(isFinite(maxConcurrent)){
+      const activeCutoff = new Date(Date.now() - ACTIVE_WINDOW_MS).toISOString();
+      const { count: activeCount } = await _supa.from("sessions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .neq("device_id", deviceId)
+        .gt("last_seen", activeCutoff);
+      if((activeCount ?? 0) >= maxConcurrent){
+        return { token: null, blocked: true, reason: "concurrent", maxConcurrent };
+      }
+    }
+
+    // Upsert : une seule ligne par (user_id, device_id)
+    const now = new Date().toISOString();
+    const { data: existing } = await _supa.from("sessions").select("id")
+      .eq("user_id", userId).eq("device_id", deviceId).maybeSingle();
+    if(existing){
+      await _supa.from("sessions").update({ token, last_seen: now }).eq("id", existing.id);
+    } else {
+      await _supa.from("sessions").insert({
+        user_id: userId, device_id: deviceId, device_name: getDeviceName(),
+        token, last_seen: now, created_at: now
+      });
+    }
   } catch(e){ console.warn("[PIPSILY] registerSession:", e.message); }
-  return token;
+  return { token, blocked: false };
 }
 
 async function validateSession(userId){
@@ -263,21 +266,21 @@ async function ensureDevice(userId){
       return { newDevice: false, blocked: false };
     }
 
-    // Nouvel appareil — vérifier la limite
+    // Nouvel appareil — vérifier la limite selon le plan
     const { data: prof } = await _supa
-      .from("profiles").select("devices_allowed, plan").eq("id", userId).maybeSingle();
+      .from("profiles").select("plan").eq("id", userId).maybeSingle();
 
-    if(prof?.plan === "admin" || prof?.plan === "unlimited"){
-      await _supa.from("devices").insert({ user_id: userId, device_id: deviceId, device_name: deviceName, monthly_fee: 0 });
-      return { newDevice: false, blocked: false };
-    }
+    const plan = prof?.plan || "active";
+    const maxDevices = plan === "admin" ? Infinity
+      : plan === "unlimited" ? MAX_DEVICES.unlimited
+      : MAX_DEVICES.default;
 
-    const { count } = await _supa
-      .from("devices").select("*", { count: "exact" }).eq("user_id", userId);
-    const allowed = prof?.devices_allowed ?? 1;
-
-    if((count ?? 0) >= allowed){
-      return { newDevice: true, blocked: true, extra_cost: 1.50, current: count, allowed };
+    if(isFinite(maxDevices)){
+      const { count } = await _supa
+        .from("devices").select("id", { count: "exact", head: true }).eq("user_id", userId);
+      if((count ?? 0) >= maxDevices){
+        return { newDevice: true, blocked: true, plan, current: count, maxDevices };
+      }
     }
 
     await _supa.from("devices").insert({ user_id: userId, device_id: deviceId, device_name: deviceName, monthly_fee: 0 });
@@ -420,8 +423,8 @@ async function authGate(){
       : { ok: true, plan: "active", unlimited: false };
   }
 
-  // ── Admin → accès illimité ──
-  if(session.user.email === ADMIN_EMAIL || sub.plan === "admin" || sub.plan === "unlimited"){
+  // ── Admin → accès illimité sans restriction ──
+  if(session.user.email === ADMIN_EMAIL || sub.plan === "admin"){
     // Créer/mettre à jour le profil admin (fire-and-forget — ne bloque pas)
     if(_supa && (!sub.plan || sub.plan === "free")){
       _supa.from("profiles")
@@ -439,14 +442,19 @@ async function authGate(){
     return null;
   }
 
-  // ── Session + device (tous deux avec fallback si table absente) ──
-  const sessOk = await validateSession(session.user.id).catch(() => true);
-  if(!sessOk) await registerSession(session.user.id).catch(() => {});
+  // ── Vérifier connexions simultanées (unlimited=4 max, autres=1 max) ──
+  const sesResult = await registerSession(session.user.id)
+    .catch(() => ({ token: null, blocked: false }));
+  if(sesResult.blocked){
+    _showConcurrentLimit(sesResult.maxConcurrent);
+    return null;
+  }
 
+  // ── Vérifier limite d'appareils (unlimited=3 max, autres=1 max) ──
   const devResult = await ensureDevice(session.user.id)
     .catch(() => ({ newDevice: false, blocked: false }));
   if(devResult.blocked){
-    _showDeviceLimit(session.user.id, devResult.extra_cost);
+    _showDeviceLimit(sub.plan);
     return null;
   }
 
@@ -496,7 +504,11 @@ function _showPaywall(sub){
     </div>`;
 }
 
-function _showDeviceLimit(userId, extra_cost){
+function _showDeviceLimit(plan){
+  const maxDevices = plan === "unlimited" ? MAX_DEVICES.unlimited : MAX_DEVICES.default;
+  const msg = maxDevices === 1
+    ? "Votre compte autorise un seul appareil enregistré. Déconnectez-vous de l'appareil actuel ou contactez l'administrateur."
+    : `Votre compte autorise ${maxDevices} appareils. Gérez vos appareils depuis la page Mon compte.`;
   document.body.innerHTML = `
     <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;
       background:radial-gradient(ellipse at 50% 0%,rgba(59,124,244,.15),transparent 60%),#05080f;
@@ -505,39 +517,50 @@ function _showDeviceLimit(userId, extra_cost){
         <div style="font-size:56px;margin-bottom:16px">📱</div>
         <div style="font-size:13px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
           color:#7B5FE8;margin-bottom:10px">PIPSILY</div>
-        <h2 style="margin:0 0 12px;font-size:22px;font-weight:800">Nouvel appareil détecté</h2>
-        <p style="color:#7a9cc0;margin:0 0 16px;line-height:1.65;font-size:14px">
-          Vous avez atteint la limite d'appareils inclus dans votre abonnement.
-        </p>
-        <div style="background:rgba(56,168,232,.08);border:1px solid rgba(56,168,232,.25);
-          border-radius:14px;padding:16px;margin-bottom:20px">
-          <div style="font-size:22px;font-weight:900;color:#38A8E8">
-            +${extra_cost.toFixed(2).replace(".", ",")} €/mois
-          </div>
-          <div style="font-size:13px;color:#7a9cc0;margin-top:4px">par appareil supplémentaire</div>
-          <div style="margin-top:12px;font-size:12px;color:#7a9cc0;line-height:1.5">
-            Ce montant s'ajoute à votre abonnement de base et sera prélevé chaque mois.
-            En confirmant, vous acceptez ce supplément.
-          </div>
-        </div>
-        <button id="addDevBtn" style="display:block;width:100%;padding:14px;border-radius:13px;
-          background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;border:none;
-          font-weight:700;font-size:15px;cursor:pointer;margin-bottom:10px">
-          ✓ Ajouter cet appareil (+${extra_cost.toFixed(2).replace(".", ",")} €/mois)
-        </button>
-        <button onclick="location.href='account.html'" style="width:100%;padding:12px;
-          border-radius:12px;border:1px solid rgba(255,255,255,.12);background:transparent;
-          color:#7a9cc0;font-size:13px;cursor:pointer">
+        <h2 style="margin:0 0 12px;font-size:22px;font-weight:800">Limite d'appareils atteinte</h2>
+        <p style="color:#7a9cc0;margin:0 0 24px;line-height:1.65;font-size:14px">${msg}</p>
+        <a href="account.html" style="display:block;padding:14px 24px;border-radius:13px;
+          background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;
+          text-decoration:none;font-weight:700;font-size:15px;margin-bottom:10px">
           Gérer mes appareils
+        </a>
+        <button onclick="window.PIPSILY_AUTH.signOut().then(()=>location.href='login.html')"
+          style="width:100%;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);
+          background:transparent;color:#7a9cc0;font-size:13px;cursor:pointer">
+          Se déconnecter
         </button>
       </div>
     </div>`;
-  document.getElementById("addDevBtn")?.addEventListener("click", async () => {
-    const btn = document.getElementById("addDevBtn");
-    btn.disabled = true; btn.textContent = "Ajout en cours…";
-    await addExtraDevice(userId);
-    location.reload();
-  });
+}
+
+function _showConcurrentLimit(maxConcurrent){
+  const nb = isFinite(maxConcurrent) ? maxConcurrent : 1;
+  const label = nb === 1 ? "une seule connexion simultanée" : `${nb} connexions simultanées`;
+  document.body.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;
+      background:radial-gradient(ellipse at 50% 0%,rgba(232,100,60,.12),transparent 60%),#05080f;
+      color:#eef4ff;font-family:'Segoe UI',system-ui,sans-serif;padding:20px;box-sizing:border-box">
+      <div style="max-width:380px;width:100%;text-align:center">
+        <div style="font-size:56px;margin-bottom:16px">🔒</div>
+        <div style="font-size:13px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+          color:#7B5FE8;margin-bottom:10px">PIPSILY</div>
+        <h2 style="margin:0 0 12px;font-size:22px;font-weight:800">Trop d'appareils connectés</h2>
+        <p style="color:#7a9cc0;margin:0 0 24px;line-height:1.65;font-size:14px">
+          Votre compte autorise ${label}.<br>
+          Déconnectez-vous d'un autre appareil, puis reconnectez-vous ici.
+        </p>
+        <a href="login.html" style="display:block;padding:14px 24px;border-radius:13px;
+          background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;
+          text-decoration:none;font-weight:700;font-size:15px;margin-bottom:10px">
+          Se reconnecter
+        </a>
+        <a href="account.html" style="display:block;padding:12px;border-radius:12px;
+          border:1px solid rgba(255,255,255,.12);color:#7a9cc0;
+          text-decoration:none;font-size:13px">
+          Gérer mes appareils
+        </a>
+      </div>
+    </div>`;
 }
 
 function _showSessionExpired(){
@@ -584,7 +607,6 @@ window.PIPSILY_AUTH = {
   authGate,
   getDeviceId,
   getDeviceName,
-  getGeoInfo,
   startSessionWatcher
 };
 
