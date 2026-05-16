@@ -2,6 +2,7 @@ pipsily-release.jks
 tizen-tv/result/
 tizen-tv/*.wgt
 tizen-tv/.build/
+tizen-tv/developer.p12
 # Fichiers PIPSILY copiés par build.ps1 (artefacts de build)
 tizen-tv/app.js
 tizen-tv/auth.js
