@@ -50,7 +50,10 @@ html,body{
   overscroll-behavior: none;
   /* iOS : empêche le zoom au double-tap */
   touch-action: manipulation;
-  /* Safari < 16 : overflow hidden bloque le scroll élastique global */
+}
+html{
+  /* overflow-x:hidden sur html uniquement — sur body il empêche le scroll tactile iOS
+     (body considéré non-scrollable → seuls les éléments fixed répondent au doigt) */
   overflow-x: hidden;
 }
 /* iOS : empêcher le zoom sur focus des inputs (font-size ≥ 16px obligatoire) */
