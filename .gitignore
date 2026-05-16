@@ -22,3 +22,7 @@ tizen-tv/icons/
 tizen-tv/install-package/sdb/
 tizen-tv/install-package/*.wgt
 tizen-tv/install-package/*.zip
+
+tizen-tv/install-package-mac/sdb/
+tizen-tv/install-package-mac/*.wgt
+tizen-tv/install-package-mac/*.zip
