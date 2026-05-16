@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PIPSILY — Accès illimité à votre divertissement</title>
-  <meta name="description" content="Films, séries, sport en direct. Accès illimité sur tous vos appareils. Abonnez-vous dès 40€/an." />
+  <meta name="description" content="Films, séries, sport en direct. Accès illimité sur tous vos appareils. Abonnez-vous dès 42€/an." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -282,30 +282,6 @@
     .modal-msg.ok { color: #6ef7b0; }
     .modal-msg.err { color: #ff8899; }
 
-    /* ── Modale Wero ── */
-    .wero-step {
-      display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px;
-    }
-    .wero-num {
-      min-width: 28px; height: 28px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--purple), var(--blue));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 800; color: #fff; flex-shrink: 0;
-    }
-    .wero-label { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
-    .wero-sub   { font-size: 12px; color: var(--muted); line-height: 1.5; }
-    .wero-copy-again {
-      margin-top: 6px; padding: 5px 12px; border-radius: 8px;
-      background: rgba(255,255,255,.07); border: 1px solid var(--border);
-      color: var(--muted); font-size: 12px; cursor: pointer; display: none;
-    }
-    .wero-confirm {
-      width: 100%; padding: 14px; border-radius: 13px; border: none;
-      background: linear-gradient(135deg, var(--purple), var(--blue));
-      color: #fff; font-size: 15px; font-weight: 700;
-      cursor: pointer; transition: opacity .2s; margin-top: 4px;
-    }
-    .wero-confirm:hover { opacity: .85; }
   </style>
 </head>
 <body>
@@ -378,8 +354,8 @@
       <!-- Solo -->
       <div class="plan-card">
         <div class="plan-name">Solo</div>
-        <div class="plan-price"><sup>€</sup>40<sub>/an</sub></div>
-        <div class="plan-equiv">soit 3,33 €/mois</div>
+        <div class="plan-price"><sup>€</sup>42<sub>/an</sub></div>
+        <div class="plan-equiv">soit 3,50 €/mois</div>
         <div class="plan-sep"></div>
         <ul class="plan-features">
           <li><span class="check">✓</span><div><strong>1 écran</strong> simultané</div></li>
@@ -387,17 +363,17 @@
           <li><span class="check">✓</span><div>Accès catalogue <strong>complet</strong></div></li>
           <li><span class="check">✓</span><div>Renouvellement annuel</div></li>
         </ul>
-        <button onclick="payerWero('solo')" class="plan-btn plan-btn--ghost" id="btnSolo">
-          Commencer →
-        </button>
+        <a href="https://paypal.me/pipsily/42" target="_blank" rel="noopener" class="plan-btn plan-btn--ghost" id="btnSolo">
+          Payer 42 € →
+        </a>
       </div>
 
       <!-- Multi -->
       <div class="plan-card plan-card--popular">
         <div class="popular-badge">⭐ Le plus populaire</div>
         <div class="plan-name">Multi</div>
-        <div class="plan-price"><sup>€</sup>50<sub>/an</sub></div>
-        <div class="plan-equiv">soit 4,17 €/mois</div>
+        <div class="plan-price"><sup>€</sup>53<sub>/an</sub></div>
+        <div class="plan-equiv">soit 4,42 €/mois</div>
         <div class="plan-sep"></div>
         <ul class="plan-features">
           <li><span class="check">✓</span><div><strong>3 écrans</strong> simultanés</div></li>
@@ -405,9 +381,9 @@
           <li><span class="check">✓</span><div>Accès catalogue <strong>complet</strong></div></li>
           <li><span class="check">✓</span><div>Parfait pour <strong>la famille</strong></div></li>
         </ul>
-        <button onclick="payerWero('multi')" class="plan-btn plan-btn--primary" id="btnMulti">
-          Commencer →
-        </button>
+        <a href="https://paypal.me/pipsily/53" target="_blank" rel="noopener" class="plan-btn plan-btn--primary" id="btnMulti">
+          Payer 53 € →
+        </a>
       </div>
 
     </div>
@@ -426,7 +402,7 @@
     <div class="faq-item">
       <button class="faq-q">Comment accéder après le paiement ? <span class="faq-arrow">▼</span></button>
       <div class="faq-a"><div class="faq-a-inner">
-        Après votre envoi Wero, cliquez sur « J'ai envoyé » puis créez votre compte PIPSILY. Validez votre email, puis votre accès est activé manuellement après vérification du paiement — généralement dans les quelques heures.
+        Après le paiement PayPal, créez votre compte PIPSILY avec la même adresse email et validez le lien de confirmation. Votre accès est activé manuellement après vérification du paiement — généralement en quelques heures.
       </div></div>
     </div>
     <div class="faq-item">
@@ -444,7 +420,7 @@
     <div class="faq-item">
       <button class="faq-q">Quel moyen de paiement est accepté ? <span class="faq-arrow">▼</span></button>
       <div class="faq-a"><div class="faq-a-inner">
-        Virement instantané via <strong>Wero</strong> — directement depuis votre application bancaire. Wero est intégré dans la majorité des banques françaises (BNP, Société Générale, Crédit Agricole, La Banque Postale…). Aucune donnée bancaire ne transite par nos serveurs.
+        Paiement sécurisé via <strong>PayPal</strong>. Vous êtes redirigé vers PayPal pour régler par carte bancaire ou solde PayPal. Vos données bancaires ne transitent jamais par nos serveurs. Les frais de gestion PayPal sont inclus dans le prix affiché.
       </div></div>
     </div>
     <div class="faq-item">
@@ -531,102 +507,7 @@
       btn.textContent = "Envoyer la demande";
     }
 
-    // ── Wero Paiement ──
-    let _weroPlan = "solo";
-
-    function payerWero(plan) {
-      _weroPlan = plan;
-      document.getElementById("weroMontant").textContent = plan === "solo" ? "40€" : "50€";
-      document.getElementById("weroCode").textContent    = plan === "solo" ? "SOLO" : "MULTI";
-      document.getElementById("weroPlan").value          = plan;
-      document.getElementById("weroOverlay").classList.add("open");
-      _copierSilencieux();
-    }
-
-    function _copierSilencieux() {
-      // Email encodé — jamais affiché en clair
-      const contact = atob("Y2VkcmljLmxhZ29AZ21haWwuY29t");
-      if (!navigator.clipboard) { _showCopyBtn(); return; }
-      navigator.clipboard.writeText(contact)
-        .then(() => {
-          document.getElementById("weroCopied").style.display = "inline";
-          document.getElementById("weroCopyBtn").style.display = "none";
-        })
-        .catch(_showCopyBtn);
-    }
-
-    function _showCopyBtn() {
-      document.getElementById("weroCopied").style.display = "none";
-      document.getElementById("weroCopyBtn").style.display = "inline-block";
-    }
-
-    function copierWero() {
-      const contact = atob("Y2VkcmljLmxhZ29AZ21haWwuY29t");
-      if (!navigator.clipboard) return;
-      navigator.clipboard.writeText(contact).then(() => {
-        const btn = document.getElementById("weroCopyBtn");
-        btn.textContent = "✓ Copié !";
-        setTimeout(() => { btn.textContent = "Copier à nouveau"; }, 2000);
-      });
-    }
-
-    function closeWero() {
-      document.getElementById("weroOverlay").classList.remove("open");
-    }
-
-    function confirmerEnvoi() {
-      window.location.href = "./login.html?tab=signup&plan=" + _weroPlan;
-    }
   </script>
-
-  <!-- Modale Wero Paiement -->
-  <div class="modal-overlay" id="weroOverlay" onclick="if(event.target===this)closeWero()">
-    <div class="modal" style="max-width:440px">
-      <button class="modal-close" onclick="closeWero()">✕</button>
-      <div style="font-size:36px;margin-bottom:8px">💚</div>
-      <h3>Paiement par Wero</h3>
-      <p style="margin-bottom:20px">3 étapes depuis votre application bancaire :</p>
-
-      <div class="wero-step">
-        <div class="wero-num">1</div>
-        <div>
-          <div class="wero-label">Ouvrez Wero dans votre banque</div>
-          <div class="wero-sub">Rubrique Wero → Envoyer de l'argent</div>
-        </div>
-      </div>
-
-      <div class="wero-step">
-        <div class="wero-num">2</div>
-        <div style="flex:1">
-          <div class="wero-label">Collez le contact <span id="weroCopied" style="font-size:11px;color:#6ef7b0;margin-left:6px">📋 copié !</span></div>
-          <div class="wero-sub">L'identifiant a été copié dans votre presse-papiers — collez-le dans la recherche Wero.</div>
-          <button class="wero-copy-again" id="weroCopyBtn" onclick="copierWero()">Copier à nouveau</button>
-        </div>
-      </div>
-
-      <div class="wero-step" style="margin-bottom:0">
-        <div class="wero-num">3</div>
-        <div>
-          <div class="wero-label">Envoyez le paiement</div>
-          <div class="wero-sub">
-            Montant : <strong id="weroMontant" style="color:#eef4ff">40€</strong><br>
-            Message : <strong id="weroCode" style="color:#eef4ff;font-family:monospace;font-size:13px">SOLO</strong>
-          </div>
-        </div>
-      </div>
-
-      <input type="hidden" id="weroPlan" value="solo" />
-
-      <div style="height:1px;background:rgba(255,255,255,.08);margin:20px 0 16px"></div>
-
-      <button class="wero-confirm" onclick="confirmerEnvoi()">
-        ✅ J'ai envoyé — Créer mon compte →
-      </button>
-      <p style="margin-top:12px;font-size:11px;color:var(--muted);text-align:center;line-height:1.6">
-        Accès activé manuellement après vérification · Délai : quelques heures
-      </p>
-    </div>
-  </div>
 
   <!-- Supabase CDN (pour la modale illimité) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
