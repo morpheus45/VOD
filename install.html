@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PIPSILY — Guide d'installation</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="./auth.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -182,7 +184,19 @@
     }
   </style>
 </head>
-<body>
+<body style="display:none">
+
+  <!-- Loading -->
+  <div id="authLoader" style="display:flex;align-items:center;justify-content:center;
+    min-height:100vh;background:#05080f;position:fixed;inset:0;z-index:999">
+    <div style="text-align:center">
+      <div style="width:40px;height:40px;border-radius:50%;
+        border:3px solid rgba(123,95,232,.2);border-top-color:#7B5FE8;
+        animation:spin .8s linear infinite;margin:0 auto 16px"></div>
+      <div style="color:#7a9cc0;font-size:13px;font-family:sans-serif">Chargement…</div>
+    </div>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 
   <div class="hero">
     <div class="brand">PIPSILY</div>
@@ -688,6 +702,17 @@
   </div>
 
   <script>
+    // ── Auth guard ──
+    (async () => {
+      const A = window.PIPSILY_AUTH;
+      if(!A){ window.location.href = "./login.html"; return; }
+      const result = await A.authGate().catch(() => null);
+      if(!result){ return; } // authGate redirige ou affiche paywall si non autorisé
+      // Accès OK — afficher le contenu
+      document.getElementById("authLoader").style.display = "none";
+      document.body.style.display = "";
+    })();
+
     // ── Tab switching ──
     const tabs  = document.querySelectorAll(".tab");
     const panels = document.querySelectorAll(".panel");
