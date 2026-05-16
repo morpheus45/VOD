@@ -18,3 +18,7 @@ tizen-tv/admin.html
 tizen-tv/player.html
 tizen-tv/apple.html
 tizen-tv/icons/
+
+tizen-tv/install-package/sdb/
+tizen-tv/install-package/*.wgt
+tizen-tv/install-package/*.zip
