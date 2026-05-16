@@ -66,23 +66,10 @@ function getDeviceName(){
 // ─────────────────────────────────────────────────────────────────
 //  AUTHENTIFICATION
 // ─────────────────────────────────────────────────────────────────
-// ── Session locale pour mode dev (Supabase non configuré) ──
-const _DEV_SESSION_KEY = "pipsily_dev_session";
-
-function _mkDevSession(email){
-  return {
-    user: { id: "dev-" + btoa(email).replace(/=/g,""), email },
-    access_token: "dev-token"
-  };
-}
+const _DEV_SESSION_KEY = "pipsily_dev_session"; // conservé pour le removeItem dans signOut (migration)
 
 async function getSession(){
-  // Mode dev : lire la session locale si pas de Supabase
-  if(!_supa || !_configured){
-    const raw = localStorage.getItem(_DEV_SESSION_KEY);
-    if(raw){ try { return JSON.parse(raw); } catch{} }
-    return null;
-  }
+  if(!_supa || !_configured){ return null; }
   try {
     const { data: { session } } = await _supa.auth.getSession();
     return session;
@@ -302,23 +289,23 @@ async function ensureDevice(userId){
 }
 
 async function addExtraDevice(userId){
+  if(!_supa) return;
   const deviceId   = getDeviceId();
   const deviceName = getDeviceName();
   const extra_cost = 1.50;
-
-  const { data: prof } = await _supa
-    .from("profiles").select("devices_allowed").eq("id", userId).single();
-  const newAllowed = (prof?.devices_allowed ?? 1) + 1;
-
-  await _supa.from("profiles").update({ devices_allowed: newAllowed }).eq("id", userId);
-  await _supa.from("devices").insert({
-    user_id: userId, device_id: deviceId, device_name: deviceName, monthly_fee: extra_cost
-  });
-  // Note dans les paiements (pour suivi admin)
-  await _supa.from("payments").insert({
-    user_id: userId, amount: extra_cost, type: "extra_device",
-    notes: `Appareil supplémentaire : ${deviceName}`
-  });
+  try {
+    const { data: prof } = await _supa
+      .from("profiles").select("devices_allowed").eq("id", userId).single();
+    const newAllowed = (prof?.devices_allowed ?? 1) + 1;
+    await _supa.from("profiles").update({ devices_allowed: newAllowed }).eq("id", userId);
+    await _supa.from("devices").insert({
+      user_id: userId, device_id: deviceId, device_name: deviceName, monthly_fee: extra_cost
+    });
+    await _supa.from("payments").insert({
+      user_id: userId, amount: extra_cost, type: "extra_device",
+      notes: `Appareil supplémentaire : ${deviceName}`
+    });
+  } catch(e){ console.warn("[PIPSILY] addExtraDevice:", e.message); }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -402,13 +389,6 @@ function promptParentalPin(storedPin){
 //  Conçu pour être robuste même si les tables Supabase ne sont pas
 //  encore créées (erreurs DB catchées, jamais de crash silencieux).
 // ─────────────────────────────────────────────────────────────────
-function _devAuth(){
-  // Mode dégradé : Supabase non configuré ou inaccessible
-  return {
-    session : { user: { id: "dev", email: ADMIN_EMAIL } },
-    sub     : { ok: true, plan: "admin", unlimited: true }
-  };
-}
 
 async function authGate(){
   // ── Supabase non configuré → rediriger vers login ──

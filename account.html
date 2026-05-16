@@ -118,6 +118,7 @@
   <script src="./auth.js"></script>
   <script>
     const A = window.PIPSILY_AUTH || {};
+    const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
     if(!A.getSession){ document.body.innerHTML = '<div style="padding:40px;color:#ff8899;font-family:sans-serif">⚠ Service non disponible — rechargez la page.</div>'; throw new Error("PIPSILY_AUTH manquant"); }
 
     async function load(){
@@ -173,7 +174,7 @@
           </div>
           <div class="info-row">
             <span class="info-label">E-mail</span>
-            <span class="info-value">${session.user.email}</span>
+            <span class="info-value">${_esc(session.user.email)}</span>
           </div>
           <div class="info-row">
             <span class="info-label">Plan</span>
@@ -215,13 +216,13 @@
             </div>
             <div style="display:flex;justify-content:space-between">
               <span style="font-size:12px;color:#7a9cc0">Référence à indiquer</span>
-              <span style="font-size:12px;font-weight:700;color:#eef4ff;font-family:monospace">${session.user.email}</span>
+              <span style="font-size:12px;font-weight:700;color:#eef4ff;font-family:monospace">${_esc(session.user.email)}</span>
             </div>
           </div>
           <ol style="font-size:13px;color:#7a9cc0;line-height:1.8;padding-left:18px;margin-bottom:14px">
             <li>Ouvrez l'appli Wero (ou votre banque)</li>
             <li>Envoyez <strong style="color:#6ef7b0">${monthlyTotal.toFixed(2).replace(".",",")} €</strong> au numéro <strong style="color:#38A8E8;font-family:monospace">${A.WERO_PHONE || "06 12 34 56 78"}</strong></li>
-            <li>Indiquez votre e-mail en référence : <strong style="color:#eef4ff">${session.user.email}</strong></li>
+            <li>Indiquez votre e-mail en référence : <strong style="color:#eef4ff">${_esc(session.user.email)}</strong></li>
             <li>Cliquez sur "J'ai payé" ci-dessous</li>
           </ol>
           <button class="btn btn-primary" id="paidBtn" onclick="declarePayment(${monthlyTotal})" style="width:100%">
@@ -244,7 +245,7 @@
                 <div class="device-item">
                   <span class="device-icon">${deviceIcon(d.device_name)}</span>
                   <div class="device-info">
-                    <div class="device-name">${d.device_name || "Appareil"}
+                    <div class="device-name">${_esc(d.device_name) || "Appareil"}
                       ${d.device_id === currentDevice ? '<span class="device-current">● Cet appareil</span>' : ""}
                     </div>
                     <div class="device-meta">Ajouté le ${fmtDate(d.created_at)} · Vu le ${fmtDate(d.last_seen)}</div>

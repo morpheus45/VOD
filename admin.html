@@ -158,6 +158,7 @@
   <script src="./auth.js"></script>
   <script>
     const A = window.PIPSILY_AUTH || {};
+    const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
     if(!A.getSession){ document.getElementById("adminContent").innerHTML = '<div style="text-align:center;padding:60px;color:#ff8899">⚠ Service non disponible — rechargez la page.</div>'; throw new Error("PIPSILY_AUTH manquant"); }
     let _allUsers = [];
     let _session  = null;
@@ -293,9 +294,9 @@
                 border-radius:12px;background:rgba(56,168,232,.08);border:1px solid rgba(56,168,232,.25);
                 flex-wrap:wrap">
                 <div style="flex:1;min-width:180px">
-                  <div style="font-size:13px;font-weight:700;color:#eef4ff">${u?.email || p.user_id}</div>
+                  <div style="font-size:13px;font-weight:700;color:#eef4ff">${_esc(u?.email || p.user_id)}</div>
                   <div style="font-size:11px;color:#7a9cc0;margin-top:3px">
-                    Déclaré ${fmtRelative(p.created_at)} · ${p.notes || ""}
+                    Déclaré ${fmtRelative(p.created_at)} · ${_esc(p.notes)}
                   </div>
                 </div>
                 <div style="font-size:18px;font-weight:900;color:#6ef7b0">${fmtMoney(p.amount)}</div>
@@ -377,11 +378,11 @@
             <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;margin-bottom:6px;
               border-radius:10px;background:rgba(100,220,140,.06);border:1px solid rgba(100,220,140,.15)">
               <div style="flex:1;min-width:0">
-                <div style="font-size:12px;font-weight:700;color:#eef4ff">${s.device_name||"Appareil"}</div>
+                <div style="font-size:12px;font-weight:700;color:#eef4ff">${_esc(s.device_name||"Appareil")}</div>
                 <div style="font-size:11px;color:#7a9cc0;margin-top:2px;line-height:1.4">
-                  ${[s.city, s.region, s.country].filter(Boolean).join(", ") || "Localisation inconnue"}
-                  ${s.ip ? ` · ${s.ip}` : ""}
-                  ${s.isp ? `<br>${s.isp}` : ""}
+                  ${[s.city, s.region, s.country].filter(Boolean).map(_esc).join(", ") || "Localisation inconnue"}
+                  ${s.ip ? ` · ${_esc(s.ip)}` : ""}
+                  ${s.isp ? `<br>${_esc(s.isp)}` : ""}
                 </div>
                 <div style="font-size:10px;color:#4a6080;margin-top:2px">Vu ${fmtRelative(s.last_seen)}</div>
               </div>
@@ -392,7 +393,7 @@
             <div class="user-card__top">
               <div class="user-card__email">
                 ${isOnline ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6ef7b0;margin-right:6px;flex-shrink:0"></span>' : ''}
-                ${u.email||"?"}
+                ${_esc(u.email||"?")}
               </div>
               ${statusBadge(u)}
             </div>

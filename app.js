@@ -1259,7 +1259,8 @@ function renderPanel(){
       eps.forEach((ep, idx) => {
         const code  = `S${String(sel).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`;
         const progK = `${s.id}||${code}`;
-        const pct   = getProg()[progK]?.pct || 0;
+        const _pe   = getProg()[progK] || {};
+        const pct   = _pe.pct || (_pe.t > 0 && _pe.d > 0 ? Math.round(_pe.t / _pe.d * 100) : 0);
         const done  = pct >= 90;
         const hasUrl= !!ep.url;
 
@@ -1297,7 +1298,8 @@ function renderPanel(){
   let lastWatched = null;
   {
     const prog = getProg();
-    const epKeyRe = new RegExp(`^${s.id}\\|\\|(S(\\d+)E(\\d+))$`);
+    const sIdEsc  = String(s.id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const epKeyRe = new RegExp(`^${sIdEsc}\\|\\|(S(\\d+)E(\\d+))$`);
     let lastTs = 0;
     Object.keys(prog).forEach(k => {
       const m = epKeyRe.exec(k);
@@ -3135,7 +3137,8 @@ async function checkApkInstallBanner(){
 
   const vinfo     = await fetchJson("version.json").catch(() => null);
   const remoteVer = Number(vinfo?.apk_version || 0);
-  const url       = vinfo?.apk_url || "https://github.com/morpheus45/VOD/releases/latest";
+  const _rawUrl   = vinfo?.apk_url || "";
+  const url       = /^https:\/\/github\.com\//.test(_rawUrl) ? _rawUrl : "https://github.com/morpheus45/VOD/releases/latest";
 
   // Si une nouvelle version est disponible → ignorer le timer de dismiss
   const dismissedUntil = Number(localStorage.getItem("pf_apk_install_dismiss") || 0);
