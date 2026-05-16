@@ -90,14 +90,8 @@ async function getSession(){
 }
 
 async function signIn(email, password){
-  // Mode dev : accès admin sans Supabase
   if(!_configured || !_supa){
-    if(email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && password === "!Morpheus45!"){
-      const session = _mkDevSession(email);
-      localStorage.setItem(_DEV_SESSION_KEY, JSON.stringify(session));
-      return { data: { session }, error: null };
-    }
-    return { error: { message: "⚙️ Supabase non configuré. Lancez SETUP.bat pour activer les comptes." } };
+    return { error: { message: "⚙️ Service d'authentification indisponible. Vérifiez votre connexion et réessayez." } };
   }
   return _supa.auth.signInWithPassword({ email, password });
 }
@@ -417,10 +411,11 @@ function _devAuth(){
 }
 
 async function authGate(){
-  // ── Supabase non configuré → mode dev (tout passe) ──
+  // ── Supabase non configuré → rediriger vers login ──
   if(!_configured || !_supa){
-    console.warn("[PIPSILY] Supabase non configuré — auth désactivée (mode dev)");
-    return _devAuth();
+    console.warn("[PIPSILY] Supabase non configuré — redirection login");
+    window.location.href = "./login.html";
+    return null;
   }
 
   // ── Lecture session locale (localStorage, pas d'appel réseau) ──

@@ -155,8 +155,9 @@
       if(!isAndroid || isNativeApk) return;
       const dismissed = Number(localStorage.getItem("pf_apk_install_dismiss") || 0);
       if(Date.now() < dismissed) return;
-      const vinfo = await fetch("./version.json").then(r=>r.ok?r.json():null).catch(()=>null);
-      const url   = vinfo?.apk_url || "https://github.com/morpheus45/VOD/releases/latest";
+      const vinfo  = await fetch("./version.json").then(r=>r.ok?r.json():null).catch(()=>null);
+      const rawUrl = vinfo?.apk_url || "";
+      const url    = /^https:\/\/github\.com\//.test(rawUrl) ? rawUrl : "https://github.com/morpheus45/VOD/releases/latest";
       const banner = document.createElement("div");
       banner.style.cssText = [
         "position:fixed;top:0;left:0;right:0;z-index:9998",
@@ -216,10 +217,11 @@
       clearMsg();
     }
 
-    function showMsg(type, text){
+    function showMsg(type, text, isHtml = false){
       const el = document.getElementById("authMsg");
       el.className = `msg msg--${type}`;
-      el.innerHTML = text;
+      if(isHtml) el.innerHTML = text; // uniquement pour les templates HTML statiques connus
+      else el.textContent = text;
       el.style.display = "block";
     }
     function clearMsg(){
@@ -270,7 +272,7 @@
           if(error){ showMsg("error", error.message); return; }
           showMsg("success",
             "✅ Compte créé ! Vérifiez votre e-mail pour confirmer votre inscription.<br>" +
-            "Votre accès sera activé par l'administrateur."
+            "Votre accès sera activé par l'administrateur.", true
           );
         } else {
           const { error, data } = await _A.signIn(email, pw);

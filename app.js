@@ -1308,7 +1308,7 @@ function renderPanel(){
       const dSec = (en.d && isFinite(en.d)) ? en.d : 0;
       const pct  = dSec > 0 ? tSec / dSec : (en.pct || 0);
       if(tSec > 10 && pct < 0.95){
-        lastWatched = { code: m[1], sn: m[2], en: m[3], pct, tSec, progK: k };
+        lastWatched = { code: m[1], sn: String(Number(m[2])), en: m[3], pct, tSec, progK: k };
         lastTs = en.ts;
       }
     });
@@ -2570,7 +2570,8 @@ function renderPoursuivreRow(){
       if(!seriesIdx[sid]) return;
       const e = prog[k];
       if(!e?.ts) return;
-      const pct = (e.t > 0 && e.d > 0) ? e.t / e.d : (e.pct || 0);
+      let pct = (e.t > 0 && e.d > 0) ? e.t / e.d : (e.pct || 0);
+      if(pct > 1) pct /= 100; // normalise format player.js (0-100) → fraction (0-1)
       if(pct <= 0.03 || pct >= 0.97) return;
       if(!best[sid] || e.ts > best[sid].ts) best[sid] = { pct, ts: e.ts };
     });
@@ -2582,7 +2583,8 @@ function renderPoursuivreRow(){
     inProgress = all.map(item => {
       const k1 = itemKey(item), k2 = String(item.id || item.stream_id || "");
       const en = prog[k1] || prog[k2];
-      const pct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
+      const rawPct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
+      const pct = rawPct > 1 ? rawPct / 100 : rawPct; // normalise format player.js (0-100) → fraction
       return { item, pct, ts: en?.ts || 0 };
     }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
@@ -2804,6 +2806,7 @@ async function boot(){
       // Fermer le panneau s'il est ouvert
       if(S.panel?.open){ closePanel?.(); }
       S.type    = btn.dataset.type;
+      S.loading = false;
       S.cat     = "";
       S.search  = "";
       S.quality = "";
@@ -3351,8 +3354,8 @@ function showApkUpdateBanner(vinfo, remoteVer){
   $("apkDismissBtn").onclick = () => {
     banner.remove();
     // Étendre la suppression à 90 jours si l'utilisateur clique explicitement
-    localStorage.setItem("pf_apk_sv", String(remoteVer));
-    localStorage.setItem("pf_apk_su", String(Date.now() + 7776000000)); // 90 jours
+    localStorage.setItem("pf_apk_sv2", String(remoteVer));
+    localStorage.setItem("pf_apk_su2", String(Date.now() + 7776000000)); // 90 jours
   };
 }
 
