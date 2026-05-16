@@ -18,8 +18,8 @@ const ADMIN_EMAIL   = "cedric.lago@gmail.com";
 //  PAIEMENT WERO — modifiez ces valeurs avec VOTRE numéro Wero
 //  (l'utilisateur verra ces infos sur la page "Mon compte")
 // ─────────────────────────────────────────────────────────────────
-const WERO_PHONE = "06 12 34 56 78";   // ← REMPLACEZ par votre vrai numéro
-const WERO_NAME  = "PIPSILY";          // ← Nom du bénéficiaire (visible côté payeur)
+const WERO_PHONE = atob("MDYyMjQ2MTYyNA=="); // encodé — ne jamais afficher en clair
+const WERO_NAME  = "PIPSILY";
 
 // ─────────────────────────────────────────────────────────────────
 //  DÉTECTION CONFIG
