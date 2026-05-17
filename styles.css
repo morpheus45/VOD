@@ -1112,8 +1112,8 @@ html.is-tv .section-block:first-of-type{ margin-top:0 }
 html.is-tv #catalogTitle { display:none }
 html.is-tv .grid         { grid-template-columns:repeat(auto-fill,110px); justify-content:flex-start;
                            gap:14px 10px; padding:0 36px }
-html.is-tv .grid--live   { grid-template-columns:repeat(auto-fill,160px) !important; gap:14px 10px !important }
-html.is-tv .grid--live .card{ max-width:160px }
+html.is-tv .grid--live   { grid-template-columns:repeat(5,minmax(0,1fr)) !important; gap:14px 10px !important }
+html.is-tv .grid--live .card{ max-width:none }
 html.is-tv .grid--live .card-media{ height:auto; aspect-ratio:16/9 }
 html.is-tv .grid--live .card-media img{ object-fit:contain !important; padding:14px !important; background:#06101e; filter:drop-shadow(0 2px 6px rgba(0,0,0,.5)) }
 html.is-tv .card        { max-width:110px; border-radius:8px }

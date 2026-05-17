@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.3 — nav série 2D + no continuer live   ║
+// ║  PIPSILY — app.js v6.4 — TNT first + 5 cols live TV         ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -1641,6 +1641,29 @@ function filtered(){
 
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
   if(S.type === "live") items = groupLiveItems(items);
+
+  // ── Live : TNT France en premier, puis autres catégories ──
+  if(S.type === "live" && !S.cat && !S.search){
+    const _LIVE_CAT_ORDER = {
+      "EU | FRANCE GENERAL":       0,   // TF1, France 2, M6, Arte, Canal+…
+      "EU | FRANCE NEWS":          1,   // BFM TV, CNews, LCI, Franceinfo…
+      "EU | FRANCE ENTERTAINMENT": 2,
+      "EU | FRANCE SPORTS":        3,
+      "EU | FRANCE CINEMA":        4,
+      "EU | FRANCE DOCUMENTAIRE":  5,
+      "EU | FRANCE KIDS":          6,
+      "EU | 24/7 FRENCH":          7,
+      "EU | FRANCE DOM TOM":       8,
+      "EU | FRANCE PLUTO TV":      9,
+      "EU | FRANCE DAZN":         10,
+      "EU | FRANCE LIGUE 1+":     11,
+    };
+    items.sort((a, b) => {
+      const pa = _LIVE_CAT_ORDER[a.category_name] ?? 99;
+      const pb = _LIVE_CAT_ORDER[b.category_name] ?? 99;
+      return pa - pb;
+    });
+  }
 
   // Filtre favoris uniquement (bouton ❤️ dans la barre)
   if(S.favOnly){
