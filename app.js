@@ -45,6 +45,7 @@ const S = {
   search    : "",
   quality   : "",
   region    : localStorage.getItem("pipsily_region") || "",
+  _liveRegionIdx: null,   // construit une fois, resetté si live recharge
   sort      : "title",
   shown     : { vod: 0, series: 0, live: 0 },
   favOnly   : false,
@@ -1660,13 +1661,15 @@ function filtered(){
   else if(S.sort !== "recent")
     items.sort((a,b) => a.title.localeCompare(b.title));
 
-  // ── Live : filtre régional (préférence utilisateur) ──
+  // ── Live : filtre régional (préférence utilisateur, index auto-construit) ──
   if(S.type === "live" && S.region){
-    const rl = S.region.toLowerCase();
+    if(!S._liveRegionIdx) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
+    const { regionSet } = S._liveRegionIdx;
+    const userReg = S.region.toLowerCase();
     items = items.filter(item => {
-      const r = _parseChannelRegion(item.title);
-      if(!r) return true;                       // chaîne non-régionale → toujours visible
-      return r.region.toLowerCase() === rl;     // ne garder que la région choisie
+      const r = _isChannelRegional(_baseLiveName(item.title), regionSet);
+      if(!r) return true;       // non-régionale → toujours visible
+      return r.region === userReg;
     });
   }
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
@@ -1738,42 +1741,70 @@ function _baseLiveName(title){
   return title.replace(_QUAL_RE, "").replace(/\s+/g, " ").trim();
 }
 
-// ── Détection des chaînes régionales ─────────────────────────────────────────
-const _REGIONS_LIST = [
-  // Nouvelles régions administratives (2016+)
-  "Auvergne-Rhône-Alpes","Bourgogne-Franche-Comté","Bretagne",
-  "Centre-Val de Loire","Corse","Grand Est","Hauts-de-France",
-  "Île-de-France","Normandie","Nouvelle-Aquitaine","Occitanie",
-  "Pays de la Loire","Provence-Alpes-Côte d'Azur",
-  // Abréviations IPTV courantes
-  "ARA","BFC","CVL","HDF","IDF","NA","NAQUI","PACA","PDL",
-  // Anciennes régions
-  "Alsace","Aquitaine","Auvergne","Bourgogne","Champagne",
-  "Franche-Comté","Languedoc","Limousin","Lorraine",
-  "Midi-Pyrénées","Nord","Picardie","Poitou-Charentes","Rhône-Alpes",
-  // Grandes villes (BFM etc.)
-  "Paris","Lyon","Marseille","Bordeaux","Toulouse","Lille","Rennes",
-  "Nantes","Strasbourg","Montpellier","Nice","Grenoble","Rouen","Toulon",
-  // DOM-TOM
-  "Guadeloupe","Martinique","Guyane","La Réunion","Réunion","Mayotte",
-  // Divers
-  "Grand Littoral","Alsace-Moselle"
-];
-// Tri par longueur décroissante pour éviter les correspondances partielles
-const _REGION_RE = (() => {
-  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-  const alts = [..._REGIONS_LIST].sort((a,b)=>b.length-a.length).map(esc).join("|");
-  return new RegExp(`\\s+(${alts})\\s*$`,"i");
-})();
+// ── Détection dynamique des chaînes régionales ───────────────────────────────
+// Un suffixe est considéré "région" s'il apparaît à la fin de 2+ chaînes de bases différentes.
+// Ex : "Bretagne" est dans "France 3 Bretagne" ET "BFM Bretagne" → région détectée.
+// Aucune liste codée en dur — fonctionne avec n'importe quel flux IPTV.
 
-/** Retourne {base, region} si le titre est une chaîne régionale, sinon null */
-function _parseChannelRegion(title){
-  const clean = _baseLiveName(title);
-  const m = _REGION_RE.exec(clean);
-  if(!m) return null;
-  const base = clean.slice(0, m.index).trim();
-  if(!base) return null; // le titre EST le nom de région
-  return { base, region: m[1] };
+/**
+ * Construit l'index régional depuis les items live.
+ * Retourne { regionSet: Set<string_lc>, displayNames: Map<lc, string> }
+ */
+function _buildLiveRegionIdx(items){
+  // suffix_lc → Set de bases_lc différentes qui le portent
+  const suffixBases = new Map();
+
+  items.forEach(item => {
+    const clean = _baseLiveName(item.title).trim();
+    const words = clean.split(/\s+/);
+    if(words.length < 2) return;
+    // Essayer des suffixes de 1 à 4 mots (couvre "Île-de-France", "Pays de la Loire"…)
+    for(let n = 1; n <= Math.min(4, words.length - 1); n++){
+      const suf  = words.slice(-n).join(" ").toLowerCase();
+      const base = words.slice(0,  -n).join(" ").toLowerCase();
+      if(!suf || !base) continue;
+      if(!suffixBases.has(suf)) suffixBases.set(suf, new Set());
+      suffixBases.get(suf).add(base);
+    }
+  });
+
+  // Suffixe détecté comme région si présent dans ≥ 2 bases différentes
+  const regionSet = new Set();
+  suffixBases.forEach((bases, suf) => { if(bases.size >= 2) regionSet.add(suf); });
+
+  // Reconstruire les noms d'affichage (casse d'origine) + stocker pour account.html
+  const displayNames = new Map();
+  items.forEach(item => {
+    const clean = _baseLiveName(item.title).trim();
+    const words = clean.split(/\s+/);
+    for(let n = 1; n <= Math.min(4, words.length - 1); n++){
+      const suf  = words.slice(-n).join(" ");
+      const lc   = suf.toLowerCase();
+      if(regionSet.has(lc) && !displayNames.has(lc)) displayNames.set(lc, suf);
+    }
+  });
+
+  try {
+    const names = [...displayNames.values()].sort((a,b) => a.localeCompare(b,"fr"));
+    localStorage.setItem("pipsily_available_regions", JSON.stringify(names));
+  } catch(e){}
+
+  return { regionSet, displayNames };
+}
+
+/**
+ * Retourne {base, region_lc} si le titre est une chaîne régionale selon l'index,
+ * sinon null. Cherche du suffixe le plus long au plus court.
+ */
+function _isChannelRegional(cleanTitle, regionSet){
+  const words = cleanTitle.trim().split(/\s+/);
+  if(words.length < 2) return null;
+  for(let n = Math.min(4, words.length - 1); n >= 1; n--){
+    const suf  = words.slice(-n).join(" ").toLowerCase();
+    const base = words.slice(0,  -n).join(" ");
+    if(regionSet.has(suf) && base) return { base, region: suf };
+  }
+  return null;
 }
 
 function groupLiveItems(items){
@@ -3228,6 +3259,7 @@ async function boot(){
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
     const liveItems = extractArr(liveJson);
+    S._liveRegionIdx = null; // reset index quand les données live changent
     S.live = liveItems.map((x, i) => ({
       id           : x.id || x.stream_id || String(i),
       stream_id    : x.stream_id || x.id || String(i),

@@ -279,42 +279,10 @@
           <label for="regionSelect">Votre région</label>
           <select id="regionSelect" onchange="saveRegion(this.value)">
             <option value="">Toutes les régions</option>
-            <optgroup label="Nouvelles régions (2016+)">
-              <option value="Auvergne-Rhône-Alpes">Auvergne-Rhône-Alpes</option>
-              <option value="Bourgogne-Franche-Comté">Bourgogne-Franche-Comté</option>
-              <option value="Bretagne">Bretagne</option>
-              <option value="Centre-Val de Loire">Centre-Val de Loire</option>
-              <option value="Corse">Corse</option>
-              <option value="Grand Est">Grand Est</option>
-              <option value="Hauts-de-France">Hauts-de-France</option>
-              <option value="Île-de-France">Île-de-France</option>
-              <option value="Normandie">Normandie</option>
-              <option value="Nouvelle-Aquitaine">Nouvelle-Aquitaine</option>
-              <option value="Occitanie">Occitanie</option>
-              <option value="Pays de la Loire">Pays de la Loire</option>
-              <option value="Provence-Alpes-Côte d'Azur">Provence-Alpes-Côte d'Azur</option>
-            </optgroup>
-            <optgroup label="Grandes villes (BFM etc.)">
-              <option value="Paris">Paris</option>
-              <option value="Lyon">Lyon</option>
-              <option value="Marseille">Marseille</option>
-              <option value="Bordeaux">Bordeaux</option>
-              <option value="Toulouse">Toulouse</option>
-              <option value="Lille">Lille</option>
-              <option value="Rennes">Rennes</option>
-              <option value="Nantes">Nantes</option>
-              <option value="Strasbourg">Strasbourg</option>
-              <option value="Montpellier">Montpellier</option>
-              <option value="Nice">Nice</option>
-            </optgroup>
-            <optgroup label="DOM-TOM">
-              <option value="Guadeloupe">Guadeloupe</option>
-              <option value="Martinique">Martinique</option>
-              <option value="Guyane">Guyane</option>
-              <option value="La Réunion">La Réunion</option>
-              <option value="Mayotte">Mayotte</option>
-            </optgroup>
           </select>
+          <p id="regionHint" style="font-size:11px;color:#7a9cc0;margin-top:-8px;margin-bottom:12px;display:none">
+            Ouvrez l'onglet TV Live dans l'app pour détecter les régions disponibles.
+          </p>
           <div class="msg" id="regionMsg"></div>
         </div>
 
@@ -431,11 +399,31 @@
         : "✓ Filtre régional désactivé. Toutes les chaînes seront affichées.");
     }
 
-    // Pré-sélectionner la région déjà choisie
+    // Peupler le select des régions depuis l'index construit par app.js
     function initRegionSelect(){
-      const saved = localStorage.getItem("pipsily_region");
       const sel   = document.getElementById("regionSelect");
-      if(sel && saved) sel.value = saved;
+      const hint  = document.getElementById("regionHint");
+      const saved = localStorage.getItem("pipsily_region");
+      let   names = [];
+      try { names = JSON.parse(localStorage.getItem("pipsily_available_regions") || "[]"); } catch(e){}
+
+      if(names.length > 0){
+        // Régions détectées automatiquement depuis le flux live
+        const frag = document.createDocumentFragment();
+        names.forEach(name => {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name.charAt(0).toUpperCase() + name.slice(1); // capitaliser
+          frag.appendChild(opt);
+        });
+        sel.appendChild(frag);
+        if(hint) hint.style.display = "none";
+      } else {
+        // Pas encore de données — inviter l'utilisateur à ouvrir l'app d'abord
+        if(hint) hint.style.display = "block";
+      }
+      // Pré-sélectionner la région enregistrée
+      if(saved) sel.value = saved;
     }
 
     load();
