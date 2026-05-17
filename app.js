@@ -1714,8 +1714,8 @@ function filtered(){
 // ─────────────────────────────────────────────────────────────────
 //  GROUPAGE LIVE PAR NOM DE BASE — SD/FHD/HEVC etc. → 1 seule carte
 // ─────────────────────────────────────────────────────────────────
-const _QUAL_ORDER = ["4K","UHD","FHD","HD","HEVC","SD"];
-const _QUAL_RE    = /[\s\[\(]+(SD|HD|FHD|UHD|4K|8K|HEVC|H\.?265|H\.?264|1080p?|720p?|2160p?)\b\]?\)?/gi;
+const _QUAL_ORDER = ["4K","UHD","FHD","HDR","HDTV","HD","HEVC","SD"];
+const _QUAL_RE    = /[\s\[\(]+(HDR\+?|HDTV|FHD|UHD|4K|8K|HEVC|H\.?265|H\.?264|1080p?|720p?|2160p?|HD|SD)\b\]?\)?/gi;
 
 function _parseLiveQuality(title){
   if(!title) return null;
@@ -1764,6 +1764,8 @@ function groupLiveItems(items){
 // ── Sélecteur de qualité Live (overlay) ──
 function openLivePicker(group){
   if(document.getElementById("livePicker")) return;
+  // Pousse un état dans l'historique → Back TV/Android ferme le picker, pas l'app
+  history.pushState({pip:"picker"}, "");
   const ov = document.createElement("div");
   ov.id = "livePicker";
   ov.className = "live-picker";
@@ -1840,10 +1842,13 @@ function openLivePicker(group){
     else if(which === 1 && c) c.focus();
   };
 
-  const close = () => {
+  const close = (fromPopstate = false) => {
     document.removeEventListener("keydown", onKey, true);
     ov.remove();
+    if(!fromPopstate && history.state?.pip === "picker") history.back();
   };
+  // Exposer close pour le popstate handler (closure inaccessible autrement)
+  ov._closePicker = close;
 
   // Listener en phase CAPTURE sur document — intercepte AVANT la nav spatiale Android TV WebView
   function onKey(e) {
@@ -3084,6 +3089,8 @@ async function boot(){
 
   // ── Retour Android / Échap : ferme le panneau ouvert (sans quitter l'app) ──
   window.addEventListener("popstate", () => {
+    const picker = document.getElementById("livePicker");
+    if(picker){ picker._closePicker?.(true); return; }
     if(S.panel.open && S.panel.isVod) { closeVodPanel(true);  return; }
     if(S.panel.open)                  { closePanel(true);      return; }
     if($("pip-player")?.classList.contains("pip-open")) { PipPlayer.close(); }
