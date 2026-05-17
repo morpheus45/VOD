@@ -466,10 +466,10 @@
 
       const saved = localStorage.getItem("pipsily_region") || "";
 
-      // Régions disponibles : flux analysé en priorité, sinon liste statique
-      let names = [];
-      try { names = JSON.parse(localStorage.getItem("pipsily_available_regions") || "[]"); } catch(e){}
-      const list = names.length > 0 ? names : _STATIC_REGIONS;
+      // Toujours utiliser la liste statique dans Mon compte.
+      // pipsily_available_regions peut contenir des noms de chaînes corrompus
+      // si le flux IPTV a des préfixes "- ". La liste statique est toujours fiable.
+      const list = _STATIC_REGIONS;
 
       // Dédupliquer
       const seen = new Set();
