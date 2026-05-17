@@ -2504,12 +2504,19 @@ function render(){
   // Section Poursuivre — En cours + Favoris fusionnés (persiste via localStorage)
   renderPoursuivreRow();
 
-  // Masquer le filtre qualité pour le live (non pertinent)
-  if($("qualityPills")) $("qualityPills").style.display = S.type === "live" ? "none" : "";
-  // Mettre à jour la pilule active
-  document.querySelectorAll(".quality-pill").forEach(p =>
-    p.classList.toggle("quality-pill--active", p.dataset.q === S.quality)
-  );
+  // Basculer qualité ↔ région selon l'onglet
+  const _qp = $("qualityPills");
+  const _rp = $("regionPills");
+  if(S.type === "live"){
+    if(_qp) _qp.style.display = "none";
+    _renderRegionPills(_rp);
+  } else {
+    if(_qp) _qp.style.display = "";
+    if(_rp) _rp.hidden = true;
+    document.querySelectorAll(".quality-pill").forEach(p =>
+      p.classList.toggle("quality-pill--active", p.dataset.q === S.quality)
+    );
+  }
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
   const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
@@ -2530,6 +2537,41 @@ function render(){
   S.shown[S.type] = PER_PAGE;
   if(useNetflix) renderNetflixRows();
   else           renderGrid(true);
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  PILLS RÉGION (onglet TV Live)
+// ─────────────────────────────────────────────────────────────────
+
+function _renderRegionPills(container){
+  if(!container) return;
+  container.hidden = false;
+
+  // Récupérer les régions détectées depuis le flux live
+  let regions = [];
+  try { regions = JSON.parse(localStorage.getItem("pipsily_available_regions") || "[]"); } catch(e){}
+
+  const cur = S.region.toLowerCase();
+
+  // Pill "Tout" + une pill par région détectée
+  container.innerHTML =
+    `<button class="quality-pill ${!S.region ? "quality-pill--active" : ""}" data-rgn="">🌍 Tout</button>` +
+    regions.map(r => {
+      const lc = r.toLowerCase();
+      return `<button class="quality-pill ${lc === cur ? "quality-pill--active" : ""}" data-rgn="${esc(lc)}">${esc(r.charAt(0).toUpperCase()+r.slice(1))}</button>`;
+    }).join("");
+
+  // Gestionnaire de clic sur chaque pill
+  container.querySelectorAll("[data-rgn]").forEach(btn => {
+    btn.onclick = () => {
+      const val = btn.dataset.rgn;
+      S.region = val;
+      S._liveRegionIdx = null; // forcer recalcul
+      if(val) localStorage.setItem("pipsily_region", val);
+      else    localStorage.removeItem("pipsily_region");
+      renderUI();
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -3486,7 +3528,7 @@ async function boot(){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
     const liveItems = extractArr(liveJson);
     S._liveRegionIdx = null; // reset index quand les données live changent
-    S.live = liveItems.map((x, i) => ({
+    S.live = liveItems.map((x, i) => ({  // normalisation
       id           : x.id || x.stream_id || String(i),
       stream_id    : x.stream_id || x.id || String(i),
       title        : x.title || x.name || "Sans titre",
@@ -3499,6 +3541,9 @@ async function boot(){
       type         : "live",
       quality      : ""
     }));
+    // Construire l'index régional immédiatement → peupler pipsily_available_regions
+    // pour que les pills de région soient disponibles dès le premier affichage du live.
+    if(S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
   }
 
   // ── Afficher date dernière mise à jour dans la barre fixe ──

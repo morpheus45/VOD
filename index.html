@@ -94,6 +94,8 @@
           <button class="quality-pill" data-q="Autres">Autres</button>
           <button class="quality-pill fav-pill" id="favFilterBtn">❤️ Favoris</button>
         </div>
+        <!-- Pills région — visibles uniquement sur l'onglet TV Live -->
+        <div id="regionPills" class="quality-pills" hidden></div>
         <select id="sortSelect">
           <option value="title">Titre A→Z</option>
           <option value="category">Catégorie</option>
@@ -222,7 +224,7 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" onerror="console.warn('HLS.js indisponible')"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./auth.js"></script>
-  <script src="app.js?v=147"></script>
+  <script src="app.js?v=148"></script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {
