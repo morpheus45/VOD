@@ -1831,6 +1831,74 @@ function _isChannelRegional(cleanTitle, regionSet){
   return null;
 }
 
+// ── Logos de repli pour les chaînes sans icône dans le flux ─────────────────
+// Wikimedia Commons Special:FilePath → redirige vers l'image réelle (CORS ok).
+// ?width=160 force la conversion SVG → PNG 160 px.
+const _LW = "?width=160";
+const _LB = "https://commons.wikimedia.org/wiki/Special:FilePath/";
+const _LOGO_MAP = {
+  // France Télévisions ───────────────────────────────────────────────────────
+  "france 2":            _LB+"France_2_logo.svg"+_LW,
+  "france 3":            _LB+"France_3.svg"+_LW,
+  "france 4":            _LB+"France_4_logo.svg"+_LW,
+  "france 5":            _LB+"France_5_logo.svg"+_LW,
+  "franceinfo":          _LB+"Franceinfo_logo.svg"+_LW,
+  "france info":         _LB+"Franceinfo_logo.svg"+_LW,
+  // TF1 Groupe ──────────────────────────────────────────────────────────────
+  "tf1":                 _LB+"TF1_logo.svg"+_LW,
+  "tmc":                 _LB+"TMC_logo.svg"+_LW,
+  "tfx":                 _LB+"TFX.svg"+_LW,
+  "tf1 series films":    _LB+"TF1_S%C3%A9ries_Films.svg"+_LW,
+  "tf1 séries films":    _LB+"TF1_S%C3%A9ries_Films.svg"+_LW,
+  "tf1 series":          _LB+"TF1_S%C3%A9ries_Films.svg"+_LW,
+  "tf1 séries":          _LB+"TF1_S%C3%A9ries_Films.svg"+_LW,
+  "lci":                 _LB+"LCI_logo.svg"+_LW,
+  // M6 Groupe ───────────────────────────────────────────────────────────────
+  "m6":                  _LB+"M6_logo.svg"+_LW,
+  "w9":                  _LB+"W9.svg"+_LW,
+  "6ter":                _LB+"6ter.svg"+_LW,
+  // Arte / Canal+ ───────────────────────────────────────────────────────────
+  "arte":                _LB+"Arte_Logo.svg"+_LW,
+  "canal+":              _LB+"Canal%2B.svg"+_LW,
+  "canal plus":          _LB+"Canal%2B.svg"+_LW,
+  // Info / News ─────────────────────────────────────────────────────────────
+  "bfmtv":               _LB+"BFMTV.svg"+_LW,
+  "bfm tv":              _LB+"BFMTV.svg"+_LW,
+  "bfm":                 _LB+"BFMTV.svg"+_LW,         // couvre BFM Paris, BFM Lyon…
+  "cnews":               _LB+"CNews.svg"+_LW,
+  // Divertissement TNT ──────────────────────────────────────────────────────
+  "c8":                  _LB+"C8.svg"+_LW,
+  "cstar":               _LB+"CStar.svg"+_LW,
+  "c star":              _LB+"CStar.svg"+_LW,
+  "gulli":               _LB+"Gulli.svg"+_LW,
+  "nrj12":               _LB+"NRJ_12.svg"+_LW,
+  "nrj 12":              _LB+"NRJ_12.svg"+_LW,
+  "neon":                _LB+"Neon_TV.svg"+_LW,
+  "chérie 25":           _LB+"Ch%C3%A9rie_25.svg"+_LW,
+  "cherie 25":           _LB+"Ch%C3%A9rie_25.svg"+_LW,
+  "l'equipe":            _LB+"L%27%C3%89quipe_TV.svg"+_LW,
+  "l equipe":            _LB+"L%27%C3%89quipe_TV.svg"+_LW,
+  "rmc story":           _LB+"RMC_Story.svg"+_LW,
+  "rmc decouverte":      _LB+"RMC_D%C3%A9couverte.svg"+_LW,
+  "rmc découverte":      _LB+"RMC_D%C3%A9couverte.svg"+_LW,
+  "paramount":           _LB+"Paramount_Network.svg"+_LW,
+};
+// Clés triées du plus long au plus court → préfixe le plus précis gagne
+const _LOGO_KEYS = Object.keys(_LOGO_MAP).sort((a,b)=>b.length-a.length);
+
+/**
+ * Retourne l'URL du logo de repli pour un titre de chaîne, sinon "".
+ * Couvre les variantes régionales : "France 3 Bretagne" → logo France 3.
+ */
+function _getLogoFallback(title){
+  if(!title) return "";
+  const key = _baseLiveName(title).toLowerCase();
+  for(const k of _LOGO_KEYS){
+    if(key === k || key.startsWith(k+" ")) return _LOGO_MAP[k];
+  }
+  return "";
+}
+
 function groupLiveItems(items){
   const groups = new Map();
   items.forEach(item => {
@@ -2062,7 +2130,7 @@ function renderGrid(reset = false){
 
     const isSeries = item.type === "series";
     const isLive   = item.type === "live";
-    const poster   = item.stream_icon || "";
+    const poster   = item.stream_icon || (isLive ? _getLogoFallback(item.title) : "");
     const badgeCls = isLive ? "card-badge--live" : isSeries ? "card-badge--s" : "card-badge--f";
     const badgeTxt = isLive ? "📡 Live" : isSeries ? "Série" : "Film";
     const pct      = isLive ? 0 : getWatchPct(item);
@@ -2134,7 +2202,7 @@ function makeNrowCard(item){
   card.className   = "nrow-card" + (isLive ? " nrow-card--live" : "");
   card.tabIndex    = 0;
   card.dataset.key = itemKey(item);
-  const poster   = item.stream_icon || "";
+  const poster   = item.stream_icon || (isLive ? _getLogoFallback(item.title) : "");
   const isSeries = item.type === "series";
 
   card.innerHTML = `
