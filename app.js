@@ -1686,7 +1686,7 @@ function filtered(){
       "RMC STORY","RMC DECOUVERTE","RMC DÉCOUVERTE","6TER","PARAMOUNT"
     ];
     const _tntIdx = title => {
-      const u = title.toUpperCase().replace(/[◉★\s]+$/, "").trim();
+      const u = title.replace(_DECO_RE," ").toUpperCase().replace(/\s+/g," ").trim();
       for(let i = 0; i < _TNT.length; i++) if(u.startsWith(_TNT[i])) return i;
       return -1;
     };
@@ -1736,9 +1736,14 @@ function _parseLiveQuality(title){
   for(const q of _QUAL_ORDER) if(matches.includes(q)) return q;
   return matches[0] || null;
 }
+// Caractères décoratifs utilisés par certains fournisseurs IPTV (ex: "TF1•", "◉ M6")
+const _DECO_RE = /[◉★►•·✦✧▶⬤●❶-❿①-⑳]+/g;
 function _baseLiveName(title){
   if(!title) return "";
-  return title.replace(_QUAL_RE, "").replace(/\s+/g, " ").trim();
+  return title
+    .replace(_DECO_RE, " ")    // supprimer les décoratifs (TF1• → TF1, ◉ TF1 → TF1)
+    .replace(_QUAL_RE, "")     // supprimer les tags qualité (HD, FHD, HDR…)
+    .replace(/\s+/g, " ").trim();
 }
 
 // ── Détection dynamique des chaînes régionales ───────────────────────────────
@@ -1746,31 +1751,50 @@ function _baseLiveName(title){
 // Ex : "Bretagne" est dans "France 3 Bretagne" ET "BFM Bretagne" → région détectée.
 // Aucune liste codée en dur — fonctionne avec n'importe quel flux IPTV.
 
+// Mots qui ne sont PAS des noms géographiques — évite les faux positifs
+const _NON_GEO = new Set([
+  "séries","series","films","cinéma","cinema","sport","sports","info","kids",
+  "jeunesse","comedy","action","thriller","music","news","live","direct","replay",
+  "plus","one","two","max","go","box","play","vod","premium","extra","family",
+  "classic","vintage","gold","select","club","tv","web","mobile","app"
+]);
+
 /**
  * Construit l'index régional depuis les items live.
+ * Un suffixe est une région si :
+ *   (A) il apparaît dans ≥ 2 bases différentes  → "Bretagne" dans France3 + BFM
+ *   (B) la même base a ≥ 3 suffixes différents  → "France 3" avec 13 régions
  * Retourne { regionSet: Set<string_lc>, displayNames: Map<lc, string> }
  */
 function _buildLiveRegionIdx(items){
-  // suffix_lc → Set de bases_lc différentes qui le portent
-  const suffixBases = new Map();
+  const baseSuffixes = new Map(); // base_lc → Set<suf_lc>
+  const suffixBases  = new Map(); // suf_lc  → Set<base_lc>
 
   items.forEach(item => {
     const clean = _baseLiveName(item.title).trim();
     const words = clean.split(/\s+/);
     if(words.length < 2) return;
-    // Essayer des suffixes de 1 à 4 mots (couvre "Île-de-France", "Pays de la Loire"…)
     for(let n = 1; n <= Math.min(4, words.length - 1); n++){
       const suf  = words.slice(-n).join(" ").toLowerCase();
       const base = words.slice(0,  -n).join(" ").toLowerCase();
-      if(!suf || !base) continue;
-      if(!suffixBases.has(suf)) suffixBases.set(suf, new Set());
+      if(!suf || !base || _NON_GEO.has(suf)) continue;
+      if(!baseSuffixes.has(base)) baseSuffixes.set(base, new Set());
+      baseSuffixes.get(base).add(suf);
+      if(!suffixBases.has(suf))  suffixBases.set(suf, new Set());
       suffixBases.get(suf).add(base);
     }
   });
 
-  // Suffixe détecté comme région si présent dans ≥ 2 bases différentes
   const regionSet = new Set();
+
+  // (A) Même suffixe dans ≥ 2 bases → région transversale (BFM Bretagne + France3 Bretagne)
   suffixBases.forEach((bases, suf) => { if(bases.size >= 2) regionSet.add(suf); });
+
+  // (B) Même base avec ≥ 3 suffixes → la chaîne a ses propres variantes régionales
+  //     (France 3 Bretagne, France 3 Normandie, France 3 Occitanie…)
+  baseSuffixes.forEach((suffixes, _base) => {
+    if(suffixes.size >= 3) suffixes.forEach(suf => regionSet.add(suf));
+  });
 
   // Reconstruire les noms d'affichage (casse d'origine) + stocker pour account.html
   const displayNames = new Map();
