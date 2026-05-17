@@ -2186,12 +2186,15 @@ function renderGrid(reset = false){
   if(reset) grid.innerHTML = "";
 
   const frag = document.createDocumentFragment();
+  let _staggerIdx = 0;
   items.slice(grid.children.length).forEach(item => {
     const card = document.createElement("div");
     const key  = itemKey(item);
     card.className   = "card";
     card.tabIndex    = 0;
     card.dataset.key  = key;
+    // taste-skill : stagger animation (max 18 pour éviter les délais trop longs)
+    card.style.setProperty("--i", Math.min(_staggerIdx++, 18));
 
     const isSeries = item.type === "series";
     const isLive   = item.type === "live";

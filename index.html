@@ -15,6 +15,10 @@
   <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
   <title>PIPSILY</title>
   <link rel="manifest" href="./manifest.webmanifest" />
+  <!-- Typographie premium (taste-skill) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" />
   <link rel="icon" href="./icons/icon-192.png" type="image/png" />
   <link rel="shortcut icon" href="./icons/icon-192.png" type="image/png" />
   <!-- Icône iOS (180×180 recommandé) -->
@@ -48,7 +52,7 @@
   <link rel="apple-touch-startup-image"
         media="(device-width:1024px) and (device-height:1366px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)"
         href="./icons/splash/splash-2048x2732.png" />
-  <link rel="stylesheet" href="styles.css?v=98" />
+  <link rel="stylesheet" href="styles.css?v=99" />
   <script>
     /* Détection TV précoce — avant le 1er rendu, pour éviter tout flash */
     if(/AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||
@@ -218,7 +222,7 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" onerror="console.warn('HLS.js indisponible')"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./auth.js"></script>
-  <script src="app.js?v=142"></script>
+  <script src="app.js?v=143"></script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {
