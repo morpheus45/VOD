@@ -1755,6 +1755,34 @@ function filtered(){
       if(r.region === userReg) return true;   // variante de la région → visible
       return fallbackSet.has(item);            // repli général si aucune variante ne correspond
     });
+
+    // ── Filet de sécurité : dédoublonnage final ─────────────────────────────
+    // Si plusieurs variantes de la même base ont échappé au filtre ci-dessus
+    // (ex : détection tardive via fallback mot-par-mot), on n'en garde qu'une :
+    //   1. Variante de la région  →  priorité absolue
+    //   2. Chaîne générale sans suffixe (France 3)  →  repli préféré
+    //   3. Première variante trouvée  →  dernier recours
+    {
+      const baseBest = new Map(); // base_lc → { score, item }
+      items.forEach(item => {
+        const clean = _baseLiveName(item.title);
+        const r = _isChannelRegional(clean, regionSet);
+        if(!r) return;                                // les "généraux" sont hors concours
+        const base  = r.base.toLowerCase();
+        const score = r.region === userReg ? 2 : 0;
+        if(!baseBest.has(base) || score > baseBest.get(base).score)
+          baseBest.set(base, { score, item });
+      });
+      if(baseBest.size){
+        const keepRegional = new Set([...baseBest.values()].map(v => v.item));
+        items = items.filter(item => {
+          const clean = _baseLiveName(item.title);
+          const r = _isChannelRegional(clean, regionSet);
+          if(!r) return true;                         // général : toujours conservé
+          return keepRegional.has(item);
+        });
+      }
+    }
   }
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
   if(S.type === "live") items = groupLiveItems(items);
@@ -1958,15 +1986,33 @@ function _buildLiveRegionIdx(items){
  * Retourne {base, region_lc} si le titre est une chaîne régionale, sinon null.
  * Consulte d'abord l'index dynamique, puis la liste statique _GEO_NAMES.
  * Cherche du suffixe le plus long au plus court (priorité aux noms multi-mots).
+ *
+ * Fallback : si aucun suffixe reconnu, scanne les mots du titre un par un.
+ * Permet de détecter "France 3 Corse Via Stella" → base="France 3", région="corse"
+ * même quand "Via Stella" est accroché à la fin et masque le nom géographique.
  */
 function _isChannelRegional(cleanTitle, regionSet){
   const words = cleanTitle.trim().split(/\s+/);
   if(words.length < 2) return null;
+
+  // ── Étape 1 : suffixes de longueur décroissante (4 → 1 mots) ──
   for(let n = Math.min(4, words.length - 1); n >= 1; n--){
     const suf  = words.slice(-n).join(" ").toLowerCase();
     const base = words.slice(0,  -n).join(" ");
     if((regionSet.has(suf) || _GEO_NAMES.has(suf)) && base) return { base, region: suf };
   }
+
+  // ── Étape 2 : scan mot par mot (géo-nom en milieu de titre) ──
+  // Gère les cas comme "France 3 Corse Via Stella" où le nom de région
+  // n'est pas le dernier mot mais est reconnu dans _GEO_NAMES.
+  for(let i = 1; i < words.length; i++){
+    const word = words[i].toLowerCase();
+    if(_GEO_NAMES.has(word)){
+      const base = words.slice(0, i).join(" ");
+      if(base) return { base, region: word };
+    }
+  }
+
   return null;
 }
 
