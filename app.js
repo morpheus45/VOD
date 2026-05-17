@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.4 — TNT first + 5 cols live TV         ║
+// ║  PIPSILY — app.js v6.5 — TNT LCN + focus restore + userBtns ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -948,6 +948,7 @@ function getExt(url){
 }
 
 function openVodPanel(item){
+  S.panel.lastFocus = document.activeElement;
   S.panel.open     = true;
   S.panel.series   = item;
   S.panel.isVod    = true;
@@ -1120,7 +1121,16 @@ function closeVodPanel(_fromPopstate){
   S.panel.isVod = false;
   $("seriesPanel").hidden = true;
   document.body.style.overflow = "";
-  if(needBack) history.back(); // nettoie le pushState
+  // Restaurer le focus sur la vignette d'origine
+  const prev = S.panel.lastFocus;
+  S.panel.lastFocus = null;
+  if(prev && prev.isConnected){
+    requestAnimationFrame(() => {
+      prev.focus({ preventScroll: true });
+      prev.scrollIntoView({ behavior:"smooth", block:"nearest" });
+    });
+  }
+  if(needBack) history.back();
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1128,6 +1138,7 @@ function closeVodPanel(_fromPopstate){
 // ─────────────────────────────────────────────────────────────────
 
 function openPanel(series){
+  S.panel.lastFocus  = document.activeElement;
   S.panel.open       = true;
   S.panel.series     = series;
   S.panel.seasonsMap = {};
@@ -1158,6 +1169,15 @@ function closePanel(_fromPopstate){
   S.panel.open = false;
   $("seriesPanel").hidden = true;
   document.body.style.overflow = "";
+  // Restaurer le focus sur la vignette d'origine
+  const prev = S.panel.lastFocus;
+  S.panel.lastFocus = null;
+  if(prev && prev.isConnected){
+    requestAnimationFrame(() => {
+      prev.focus({ preventScroll: true });
+      prev.scrollIntoView({ behavior:"smooth", block:"nearest" });
+    });
+  }
   if(needBack) history.back();
 }
 
@@ -1642,26 +1662,43 @@ function filtered(){
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
   if(S.type === "live") items = groupLiveItems(items);
 
-  // ── Live : TNT France en premier, puis autres catégories ──
+  // ── Live : TNT France d'abord (ordre LCN officiel), puis catégories ──
   if(S.type === "live" && !S.cat && !S.search){
-    const _LIVE_CAT_ORDER = {
-      "EU | FRANCE GENERAL":       0,   // TF1, France 2, M6, Arte, Canal+…
-      "EU | FRANCE NEWS":          1,   // BFM TV, CNews, LCI, Franceinfo…
+    // Ordre officiel des chaînes TNT gratuites françaises (numéro logique LCN)
+    const _TNT = [
+      "TF1","FRANCE 2","FRANCE 3","CANAL+","FRANCE 5","M6","ARTE",
+      "C8","W9","TMC","TFX","TF1 SERIES","TF1 SÉRIES","LCI","FRANCE 4",
+      "FRANCEINFO","FRANCE INFO","BFM TV","BFMTV","CNEWS","CSTAR","C STAR",
+      "GULLI","NRJ12","NEON","CHERIE 25","CHÉRIE 25","L'EQUIPE","L EQUIPE",
+      "RMC STORY","RMC DECOUVERTE","RMC DÉCOUVERTE","6TER","PARAMOUNT"
+    ];
+    const _tntIdx = title => {
+      const u = title.toUpperCase().replace(/[◉★\s]+$/, "").trim();
+      for(let i = 0; i < _TNT.length; i++) if(u.startsWith(_TNT[i])) return i;
+      return -1;
+    };
+    const _CAT_PRI = {
+      "EU | FRANCE GENERAL":       0,
+      "EU | FRANCE NEWS":          1,
       "EU | FRANCE ENTERTAINMENT": 2,
       "EU | FRANCE SPORTS":        3,
       "EU | FRANCE CINEMA":        4,
       "EU | FRANCE DOCUMENTAIRE":  5,
       "EU | FRANCE KIDS":          6,
-      "EU | 24/7 FRENCH":          7,
-      "EU | FRANCE DOM TOM":       8,
+      "EU | FRANCE DOM TOM":       7,
+      "EU | 24/7 FRENCH":          8,
       "EU | FRANCE PLUTO TV":      9,
       "EU | FRANCE DAZN":         10,
       "EU | FRANCE LIGUE 1+":     11,
     };
     items.sort((a, b) => {
-      const pa = _LIVE_CAT_ORDER[a.category_name] ?? 99;
-      const pb = _LIVE_CAT_ORDER[b.category_name] ?? 99;
-      return pa - pb;
+      const ai = _tntIdx(a.title), bi = _tntIdx(b.title);
+      if(ai >= 0 && bi >= 0) return ai - bi;   // deux TNT → ordre LCN
+      if(ai >= 0) return -1;                    // a=TNT, b=autre → a devant
+      if(bi >= 0) return  1;                    // b=TNT, a=autre → b devant
+      const pa = _CAT_PRI[a.category_name] ?? 99;
+      const pb = _CAT_PRI[b.category_name] ?? 99;
+      return pa - pb;                           // aucun TNT → ordre catégorie
     });
   }
 
@@ -2470,10 +2507,31 @@ function initTV(){
       const ni = navBtns.indexOf(active);
       if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
+      if(k === "ArrowUp"){
+        // Remonter vers les boutons utilisateur (Admin / Compte / Install)
+        const uBtns = [...document.querySelectorAll("#topbarUserBtns a, #topbarUserBtns button")]
+          .filter(el => getComputedStyle(el).display !== "none");
+        if(uBtns.length) { uBtns[0].focus(); return; }
+      }
       if(k === "ArrowDown"){
         if(_focusFirstPill()) return;
         const first = allRows[0]?.querySelector(CARD);
         if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
+      }
+      return;
+    }
+
+    // ── Sur les boutons utilisateur (Admin / Compte / Install) ──
+    const isUserBtn = active?.closest("#topbarUserBtns") !== null;
+    if(isUserBtn){
+      const uBtns = [...document.querySelectorAll("#topbarUserBtns a, #topbarUserBtns button")]
+        .filter(el => getComputedStyle(el).display !== "none");
+      const ui = uBtns.indexOf(active);
+      if(k === "ArrowRight" && ui < uBtns.length-1){ uBtns[ui+1].focus(); return; }
+      if(k === "ArrowLeft"  && ui > 0)             { uBtns[ui-1].focus(); return; }
+      if(k === "ArrowDown"){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        return;
       }
       return;
     }
@@ -2570,9 +2628,29 @@ function initTV(){
       const ni = navBtns.indexOf(active);
       if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
+      if(k === "ArrowUp"){
+        const uBtns = [...document.querySelectorAll("#topbarUserBtns a, #topbarUserBtns button")]
+          .filter(el => getComputedStyle(el).display !== "none");
+        if(uBtns.length) { uBtns[0].focus(); return; }
+      }
       if(k === "ArrowDown"){
         if(_focusFirstPill()) return;
         document.querySelector(".card")?.focus();
+      }
+      return;
+    }
+
+    // ── Sur les boutons utilisateur (Admin / Compte / Install) ──
+    const isUserBtn2 = active?.closest("#topbarUserBtns") !== null;
+    if(isUserBtn2){
+      const uBtns = [...document.querySelectorAll("#topbarUserBtns a, #topbarUserBtns button")]
+        .filter(el => getComputedStyle(el).display !== "none");
+      const ui = uBtns.indexOf(active);
+      if(k === "ArrowRight" && ui < uBtns.length-1){ uBtns[ui+1].focus(); return; }
+      if(k === "ArrowLeft"  && ui > 0)             { uBtns[ui-1].focus(); return; }
+      if(k === "ArrowDown"){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        return;
       }
       return;
     }
