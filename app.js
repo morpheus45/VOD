@@ -1696,14 +1696,40 @@ function filtered(){
     items.sort((a,b) => a.title.localeCompare(b.title));
 
   // ── Live : filtre régional (préférence utilisateur, index auto-construit) ──
+  // Logique : si une variante régionale correspond → on la montre.
+  // Si AUCUNE variante ne correspond (ex : France 3 sans Roussillon),
+  // on affiche en repli la variante "Paris" si elle existe, sinon la première trouvée.
   if(S.type === "live" && S.region){
     if(!S._liveRegionIdx) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
     const { regionSet } = S._liveRegionIdx;
     const userReg = S.region.toLowerCase();
+
+    // Phase 1 — identifier les bases ayant une variante correspondant à la région,
+    //            et préparer un repli Paris/premier pour celles qui n'en ont pas.
+    const basesWithMatch = new Set();
+    const baseFallback   = new Map(); // base_lc → item de repli
+
+    items.forEach(item => {
+      const r = _isChannelRegional(_baseLiveName(item.title), regionSet);
+      if(!r) return;
+      const base = r.base.toLowerCase();
+      if(r.region === userReg) basesWithMatch.add(base);
+      // Repli : priorité à la variante "paris", sinon première variante trouvée
+      if(!baseFallback.has(base) || r.region === "paris")
+        baseFallback.set(base, item);
+    });
+
+    // Phase 2 — items de repli pour les bases sans correspondance
+    const fallbackSet = new Set();
+    baseFallback.forEach((item, base) => {
+      if(!basesWithMatch.has(base)) fallbackSet.add(item);
+    });
+
     items = items.filter(item => {
       const r = _isChannelRegional(_baseLiveName(item.title), regionSet);
-      if(!r) return true;       // non-régionale → toujours visible
-      return r.region === userReg;
+      if(!r)                return true;  // non-régionale → toujours visible
+      if(r.region === userReg) return true;  // correspond à la région → visible
+      return fallbackSet.has(item);          // repli Paris/premier si pas de match
     });
   }
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
