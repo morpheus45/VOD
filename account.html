@@ -72,6 +72,14 @@
     .device-fee{ font-size:12px; color:#38A8E8; font-weight:600; flex-shrink:0 }
     label{ display:block; font-size:12px; font-weight:600; color:#7a9cc0;
       margin-bottom:6px; letter-spacing:.03em; text-transform:uppercase }
+    select{
+      width:100%; padding:12px 14px; border-radius:11px;
+      border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.06);
+      color:#eef4ff; font-size:15px; outline:none; margin-bottom:12px;
+      transition:border-color .2s; appearance:none; cursor:pointer;
+    }
+    select:focus{ border-color:#7B5FE8; box-shadow:0 0 0 3px rgba(123,95,232,.2) }
+    select option{ background:#0c1422; color:#eef4ff }
     input[type=password], input[type=text]{
       width:100%; padding:12px 14px; border-radius:11px;
       border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.06);
@@ -260,6 +268,56 @@
           </p>` : ""}
         </div>
 
+        <!-- Ma région -->
+        <div class="card">
+          <div class="card-title">Ma région (TV Live)</div>
+          <p style="font-size:13px;color:#7a9cc0;margin-bottom:14px;line-height:1.5">
+            Choisissez votre région pour n'afficher que les chaînes régionales
+            correspondantes (ex : France 3 Bretagne, BFM Paris…).
+            Laissez sur <strong style="color:#eef4ff">Toutes les régions</strong> pour tout voir.
+          </p>
+          <label for="regionSelect">Votre région</label>
+          <select id="regionSelect" onchange="saveRegion(this.value)">
+            <option value="">Toutes les régions</option>
+            <optgroup label="Nouvelles régions (2016+)">
+              <option value="Auvergne-Rhône-Alpes">Auvergne-Rhône-Alpes</option>
+              <option value="Bourgogne-Franche-Comté">Bourgogne-Franche-Comté</option>
+              <option value="Bretagne">Bretagne</option>
+              <option value="Centre-Val de Loire">Centre-Val de Loire</option>
+              <option value="Corse">Corse</option>
+              <option value="Grand Est">Grand Est</option>
+              <option value="Hauts-de-France">Hauts-de-France</option>
+              <option value="Île-de-France">Île-de-France</option>
+              <option value="Normandie">Normandie</option>
+              <option value="Nouvelle-Aquitaine">Nouvelle-Aquitaine</option>
+              <option value="Occitanie">Occitanie</option>
+              <option value="Pays de la Loire">Pays de la Loire</option>
+              <option value="Provence-Alpes-Côte d'Azur">Provence-Alpes-Côte d'Azur</option>
+            </optgroup>
+            <optgroup label="Grandes villes (BFM etc.)">
+              <option value="Paris">Paris</option>
+              <option value="Lyon">Lyon</option>
+              <option value="Marseille">Marseille</option>
+              <option value="Bordeaux">Bordeaux</option>
+              <option value="Toulouse">Toulouse</option>
+              <option value="Lille">Lille</option>
+              <option value="Rennes">Rennes</option>
+              <option value="Nantes">Nantes</option>
+              <option value="Strasbourg">Strasbourg</option>
+              <option value="Montpellier">Montpellier</option>
+              <option value="Nice">Nice</option>
+            </optgroup>
+            <optgroup label="DOM-TOM">
+              <option value="Guadeloupe">Guadeloupe</option>
+              <option value="Martinique">Martinique</option>
+              <option value="Guyane">Guyane</option>
+              <option value="La Réunion">La Réunion</option>
+              <option value="Mayotte">Mayotte</option>
+            </optgroup>
+          </select>
+          <div class="msg" id="regionMsg"></div>
+        </div>
+
         <!-- Code parental -->
         <div class="card">
           <div class="card-title">Code parental</div>
@@ -293,6 +351,9 @@
       A.getParentalPin(session.user.id).then(pin => {
         if(pin) document.getElementById("pinInput").placeholder = "Code enregistré (modifier)";
       });
+
+      // Pré-sélectionner la région
+      initRegionSelect();
 
       window._userId = session.user.id;
     }
@@ -359,6 +420,22 @@
       el.textContent = text;
       el.style.display = "block";
       setTimeout(() => { el.style.display = "none"; }, 4000);
+    }
+
+    function saveRegion(value){
+      if(value) localStorage.setItem("pipsily_region", value);
+      else      localStorage.removeItem("pipsily_region");
+      const msg = document.getElementById("regionMsg");
+      showMsg(msg, "success", value
+        ? `✓ Région enregistrée : ${value}. Relancez l'app pour appliquer.`
+        : "✓ Filtre régional désactivé. Toutes les chaînes seront affichées.");
+    }
+
+    // Pré-sélectionner la région déjà choisie
+    function initRegionSelect(){
+      const saved = localStorage.getItem("pipsily_region");
+      const sel   = document.getElementById("regionSelect");
+      if(sel && saved) sel.value = saved;
     }
 
     load();

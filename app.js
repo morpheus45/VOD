@@ -44,6 +44,7 @@ const S = {
   cat       : "",
   search    : "",
   quality   : "",
+  region    : localStorage.getItem("pipsily_region") || "",
   sort      : "title",
   shown     : { vod: 0, series: 0, live: 0 },
   favOnly   : false,
@@ -1659,6 +1660,15 @@ function filtered(){
   else if(S.sort !== "recent")
     items.sort((a,b) => a.title.localeCompare(b.title));
 
+  // ── Live : filtre régional (préférence utilisateur) ──
+  if(S.type === "live" && S.region){
+    const rl = S.region.toLowerCase();
+    items = items.filter(item => {
+      const r = _parseChannelRegion(item.title);
+      if(!r) return true;                       // chaîne non-régionale → toujours visible
+      return r.region.toLowerCase() === rl;     // ne garder que la région choisie
+    });
+  }
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
   if(S.type === "live") items = groupLiveItems(items);
 
@@ -1726,6 +1736,44 @@ function _parseLiveQuality(title){
 function _baseLiveName(title){
   if(!title) return "";
   return title.replace(_QUAL_RE, "").replace(/\s+/g, " ").trim();
+}
+
+// ── Détection des chaînes régionales ─────────────────────────────────────────
+const _REGIONS_LIST = [
+  // Nouvelles régions administratives (2016+)
+  "Auvergne-Rhône-Alpes","Bourgogne-Franche-Comté","Bretagne",
+  "Centre-Val de Loire","Corse","Grand Est","Hauts-de-France",
+  "Île-de-France","Normandie","Nouvelle-Aquitaine","Occitanie",
+  "Pays de la Loire","Provence-Alpes-Côte d'Azur",
+  // Abréviations IPTV courantes
+  "ARA","BFC","CVL","HDF","IDF","NA","NAQUI","PACA","PDL",
+  // Anciennes régions
+  "Alsace","Aquitaine","Auvergne","Bourgogne","Champagne",
+  "Franche-Comté","Languedoc","Limousin","Lorraine",
+  "Midi-Pyrénées","Nord","Picardie","Poitou-Charentes","Rhône-Alpes",
+  // Grandes villes (BFM etc.)
+  "Paris","Lyon","Marseille","Bordeaux","Toulouse","Lille","Rennes",
+  "Nantes","Strasbourg","Montpellier","Nice","Grenoble","Rouen","Toulon",
+  // DOM-TOM
+  "Guadeloupe","Martinique","Guyane","La Réunion","Réunion","Mayotte",
+  // Divers
+  "Grand Littoral","Alsace-Moselle"
+];
+// Tri par longueur décroissante pour éviter les correspondances partielles
+const _REGION_RE = (() => {
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  const alts = [..._REGIONS_LIST].sort((a,b)=>b.length-a.length).map(esc).join("|");
+  return new RegExp(`\\s+(${alts})\\s*$`,"i");
+})();
+
+/** Retourne {base, region} si le titre est une chaîne régionale, sinon null */
+function _parseChannelRegion(title){
+  const clean = _baseLiveName(title);
+  const m = _REGION_RE.exec(clean);
+  if(!m) return null;
+  const base = clean.slice(0, m.index).trim();
+  if(!base) return null; // le titre EST le nom de région
+  return { base, region: m[1] };
 }
 
 function groupLiveItems(items){
