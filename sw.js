@@ -1,5 +1,5 @@
 // sw.js — PIPSILY v5.0 — mise à jour automatique + notification
-const CACHE = "pipsily-v162";
+const CACHE = "pipsily-v163";
 const SHELL = ["./","./index.html","./login.html","./account.html","./player.html","./install.html","./vitrine.html","./merci.html","./samsung-tv.html","./styles.css?v=99","./player.css","./app.js?v=148","./auth.js","./player.js?v=51","./manifest.webmanifest","./logo.svg","./icons/icon-192.png","./icons/icon-512.png","./version.json","./icons/splash/splash-750x1334.png","./icons/splash/splash-1170x2532.png","./icons/splash/splash-1179x2556.png","./icons/splash/splash-1290x2796.png","./icons/splash/splash-1320x2868.png","./icons/splash/splash-1668x2388.png","./icons/splash/splash-2048x2732.png"];
 
 // ── Installation : vider anciens caches + mettre en cache le shell ──
