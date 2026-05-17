@@ -500,11 +500,22 @@ let _cacheP = null; // cache progression
 let _cacheF = null; // cache favoris
 
 function getProg(){
-  if(!_cacheP) _cacheP = storeGet(STORE.progress, {});
+  if(!_cacheP || typeof _cacheP !== "object" || Array.isArray(_cacheP)){
+    const raw = storeGet(STORE.progress, {});
+    _cacheP = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw : {};
+  }
   return _cacheP;
 }
 function getFavs(){
-  if(!_cacheF) _cacheF = storeGet(STORE.favorites, []);
+  if(!Array.isArray(_cacheF)){
+    const raw = storeGet(STORE.favorites, []);
+    _cacheF = Array.isArray(raw) ? raw : [];
+    // Nettoyage préventif si le format est corrompu (null, objet, string…)
+    if(!Array.isArray(raw)){
+      console.warn("[PIPSILY] Favoris corrompus en localStorage — réinitialisation.");
+      storeSet(STORE.favorites, []);
+    }
+  }
   return _cacheF;
 }
 function _invalidateCache(){ _cacheP = null; _cacheF = null; }
@@ -3148,6 +3159,9 @@ function initTV(){
 // ─────────────────────────────────────────────────────────────────
 
 function renderPoursuivreRow(){
+  try { _renderPoursuivreRowInner(); } catch(e){ console.error("[PIPSILY] renderPoursuivreRow:", e); }
+}
+function _renderPoursuivreRowInner(){
   const sect = $("poursuivreSection");
   const row  = $("poursuivreRow");
   if(!sect || !row) return;
