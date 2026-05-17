@@ -1759,11 +1759,41 @@ const _NON_GEO = new Set([
   "classic","vintage","gold","select","club","tv","web","mobile","app"
 ]);
 
+// ── Liste de garantie : noms géographiques toujours reconnus comme régions ──
+// Complète la détection dynamique pour les flux avec peu de variantes régionales.
+const _GEO_NAMES = new Set([
+  // Nouvelles régions administratives
+  "auvergne-rhône-alpes","bourgogne-franche-comté","bretagne",
+  "centre-val de loire","corse","grand est","hauts-de-france",
+  "île-de-france","normandie","nouvelle-aquitaine","occitanie",
+  "pays de la loire","provence-alpes-côte d'azur",
+  // Anciennes régions (encore très utilisées dans les flux IPTV)
+  "alsace","aquitaine","auvergne","bourgogne",
+  "champagne","champagne-ardenne","franche-comté",
+  "languedoc","languedoc-roussillon","limousin","lorraine",
+  "midi-pyrénées","nord-pas-de-calais","picardie",
+  "poitou-charentes","rhône-alpes",
+  // Abréviations courantes
+  "ara","bfc","cvl","hdf","idf","na","npc","paca","pdl",
+  // Grandes villes (BFM régionales, etc.)
+  "paris","lyon","marseille","bordeaux","toulouse","lille",
+  "rennes","nantes","strasbourg","montpellier","nice",
+  "grenoble","rouen","toulon","perpignan","nancy",
+  // DOM-TOM
+  "guadeloupe","martinique","guyane","la réunion","réunion","mayotte",
+  // Variantes sans accents / avec espaces (orthographes alternatives dans les flux)
+  "ile-de-france","hauts de france","ile de france",
+  "rhone-alpes","franche comte","pays-de-la-loire",
+  // Autres suffixes régionaux fréquents
+  "grand littoral","alsace-moselle","nord picardie"
+]);
+
 /**
  * Construit l'index régional depuis les items live.
  * Un suffixe est une région si :
  *   (A) il apparaît dans ≥ 2 bases différentes  → "Bretagne" dans France3 + BFM
- *   (B) la même base a ≥ 3 suffixes différents  → "France 3" avec 13 régions
+ *   (B) la même base a ≥ 2 suffixes non-NON_GEO → "France 3" avec 2+ régions
+ * En plus, _GEO_NAMES garantit la détection même avec 1 seule occurrence.
  * Retourne { regionSet: Set<string_lc>, displayNames: Map<lc, string> }
  */
 function _buildLiveRegionIdx(items){
@@ -1790,10 +1820,10 @@ function _buildLiveRegionIdx(items){
   // (A) Même suffixe dans ≥ 2 bases → région transversale (BFM Bretagne + France3 Bretagne)
   suffixBases.forEach((bases, suf) => { if(bases.size >= 2) regionSet.add(suf); });
 
-  // (B) Même base avec ≥ 3 suffixes → la chaîne a ses propres variantes régionales
-  //     (France 3 Bretagne, France 3 Normandie, France 3 Occitanie…)
+  // (B) Même base avec ≥ 2 suffixes → la chaîne a des variantes régionales
+  //     (France 3 Bretagne + France 3 Normandie suffit)
   baseSuffixes.forEach((suffixes, _base) => {
-    if(suffixes.size >= 3) suffixes.forEach(suf => regionSet.add(suf));
+    if(suffixes.size >= 2) suffixes.forEach(suf => regionSet.add(suf));
   });
 
   // Reconstruire les noms d'affichage (casse d'origine) + stocker pour account.html
@@ -1817,8 +1847,9 @@ function _buildLiveRegionIdx(items){
 }
 
 /**
- * Retourne {base, region_lc} si le titre est une chaîne régionale selon l'index,
- * sinon null. Cherche du suffixe le plus long au plus court.
+ * Retourne {base, region_lc} si le titre est une chaîne régionale, sinon null.
+ * Consulte d'abord l'index dynamique, puis la liste statique _GEO_NAMES.
+ * Cherche du suffixe le plus long au plus court (priorité aux noms multi-mots).
  */
 function _isChannelRegional(cleanTitle, regionSet){
   const words = cleanTitle.trim().split(/\s+/);
@@ -1826,7 +1857,7 @@ function _isChannelRegional(cleanTitle, regionSet){
   for(let n = Math.min(4, words.length - 1); n >= 1; n--){
     const suf  = words.slice(-n).join(" ").toLowerCase();
     const base = words.slice(0,  -n).join(" ");
-    if(regionSet.has(suf) && base) return { base, region: suf };
+    if((regionSet.has(suf) || _GEO_NAMES.has(suf)) && base) return { base, region: suf };
   }
   return null;
 }
