@@ -1316,7 +1316,7 @@ function renderPanel(){
     }
   }
 
-  // ── Trouver le dernier épisode en cours pour cette série ──
+  // ── Trouver le dernier épisode regardé (en cours ou terminé) ──
   let lastWatched = null;
   {
     const prog = getProg();
@@ -1331,7 +1331,8 @@ function renderPanel(){
       const tSec = en.t || 0;
       const dSec = (en.d && isFinite(en.d)) ? en.d : 0;
       const pct  = dSec > 0 ? tSec / dSec : (en.pct || 0);
-      if(tSec > 10 && pct < 0.95){
+      // Inclut aussi les épisodes terminés (pct ≥ 0.95) pour proposer le suivant
+      if(tSec > 10){
         lastWatched = { code: m[1], sn: String(Number(m[2])), en: m[3], pct, tSec, progK: k };
         lastTs = en.ts;
       }
@@ -1374,7 +1375,10 @@ function renderPanel(){
         ${lastWatched
           ? `<button id="seriesResumeBtn" class="vod-play-btn" type="button">
                <span class="vod-play-icon">▶</span>
-               <span>Reprendre · ${lastWatched.code}${lastWatched.pct > 0.01 ? " — " + Math.round(lastWatched.pct * 100) + "%" : ""}</span>
+               <span>${lastWatched.pct >= 0.95
+                 ? "Épisode suivant · " + lastWatched.code
+                 : "Reprendre · " + lastWatched.code + (lastWatched.pct > 0.01 ? " — " + Math.round(lastWatched.pct * 100) + "%" : "")
+               }</span>
              </button>
              ${firstEp ? `<button id="seriesRestartBtn" class="vod-restart-btn" type="button">↩ Depuis le début</button>` : ""}`
           : (firstEp
@@ -1398,15 +1402,45 @@ function renderPanel(){
 
   bindClose();
 
-  // Bouton Reprendre série
+  // ── Helper : retrouve {ep, sk} par numéro de saison+épisode (robuste aux clés "2" vs "02") ──
+  function _findEpBySE(targetSn, targetEn){
+    for(const [sk, epList] of Object.entries(smap)){
+      if(Number(sk) !== targetSn) continue;
+      const ep = epList.find(e => Number(e.episode_num) === targetEn);
+      if(ep) return { ep, sk };
+    }
+    return null;
+  }
+
+  // ── Helper : liste ordonnée de tous les épisodes ──
+  function _allEpsOrdered(){
+    const arr = [];
+    Object.keys(smap).sort((a,b)=>Number(a)-Number(b)).forEach(sk =>
+      (smap[sk]||[]).forEach(ep => arr.push({ sk, ep })));
+    return arr;
+  }
+
+  // Bouton Reprendre / Épisode suivant
   $("seriesResumeBtn")?.addEventListener("click", () => {
     if(!lastWatched) return;
-    // Retrouver l'objet épisode à partir du code sauvegardé
-    const ep = (smap[lastWatched.sn] || []).find(e => {
-      const c = `S${String(lastWatched.sn).padStart(2,"0")}E${String(e.episode_num).padStart(2,"0")}`;
-      return c === lastWatched.code;
-    });
-    if(ep) playEpisode(s, ep, lastWatched.sn);
+    const targetSn = Number(lastWatched.sn);
+    const targetEn = Number(lastWatched.en);
+
+    if(lastWatched.pct >= 0.95){
+      // Épisode terminé → chercher le suivant dans la liste ordonnée
+      const all = _allEpsOrdered();
+      const curIdx = all.findIndex(({sk, ep}) =>
+        Number(sk) === targetSn && Number(ep.episode_num) === targetEn);
+      if(curIdx >= 0 && curIdx + 1 < all.length){
+        const next = all[curIdx + 1];
+        if(next.ep.url){ playEpisode(s, next.ep, next.sk); return; }
+      }
+      // Fin de série ou pas d'épisode suivant : reprise de l'épisode en cours
+    }
+
+    // Reprendre l'épisode en cours (ou dernier si fin de série)
+    const found = _findEpBySE(targetSn, targetEn);
+    if(found) playEpisode(s, found.ep, found.sk);
   });
 
   // Bouton Début série (premier épisode)
