@@ -190,7 +190,7 @@ const PipPlayer = {
     video.removeAttribute("src"); video.load();
     if(this._hls){ this._hls.destroy(); this._hls = null; }
 
-    const url = secureUrl((item.url || item.stream_url || "").trim());
+    const url = secureUrl(preparePlutoUrl((item.url || item.stream_url || "").trim()));
     if(!url){ this._showStatus("❌ Aucune URL de lecture disponible.", true); return; }
 
     const isHLS = /\.m3u8/i.test(url) || item.type === "live";
@@ -569,6 +569,21 @@ function secureUrl(url){
   if(location.protocol === "https:" && /^http:\/\//i.test(url))
     return url.replace(/^http:\/\//i, "https://");
   return url;
+}
+
+/**
+ * Ajoute les paramètres obligatoires aux URLs de streaming Pluto TV.
+ * Sans ces params le serveur retourne HTTP 400 (deviceModel manquant, etc.).
+ * Appelé juste avant la lecture — les URLs stockées restent propres.
+ */
+function preparePlutoUrl(url){
+  if(!url || !url.includes("pluto.tv/stitch/hls/channel/")) return url;
+  const base = url.split("?")[0];
+  return base +
+    "?advertisingId=&appName=web&appVersion=unknown&clientTime=0" +
+    "&deviceDNT=0&deviceId=pipsily&deviceLat=0&deviceLon=0" +
+    "&deviceMake=web&deviceModel=web&deviceType=web&deviceVersion=unknown" +
+    "&includeExtendedEvents=false&marketingRegion=FR&sid=&userId=";
 }
 function isFav(item){ return getFavs().some(x => x.key === itemKey(item)); }
 
