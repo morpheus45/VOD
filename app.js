@@ -1896,7 +1896,14 @@ const _NON_GEO = new Set([
   // Suffixes IPTV courants (pas des noms géographiques)
   "²","2","fr","be","ch","lu","ca","us",
   "event","event only","only","vip","iptv","adult","adults",
-  "rue","ter","bis"
+  "rue","ter","bis",
+  // Suffixes de chaînes thématiques (Canal+, L'Équipe, BeIN...)
+  "action","animation","aventure","cinema","cinéma","comedie","comédie",
+  "crime","decouvertes","découvertes","drame","enquetes","enquêtes","famille",
+  "gaming","horreur","investigation","jeunesse","kids","life","nature",
+  "polar","romance","sci-fi","scifi","serie","séries","thriller","western",
+  "event only","event","only","a+","+1","+2","+3","+4","+5",
+  "max","one","two","three","four","five","six","seven","eight","nine","ten"
 ]);
 
 // ── Liste de garantie : noms géographiques toujours reconnus comme régions ──
@@ -1961,6 +1968,9 @@ function _buildLiveRegionIdx(items){
       // (ex : "6ter", "24/7", "²", "a$$3$" ne sont pas des régions)
       if(!suf || !base || _NON_GEO.has(suf) || suf.length < 2 || base.length < 2) continue;
       if(/\d|[²³¹$&@!%#^*]/.test(suf)) continue;
+      // Rejeter les suffixes qui commencent par un tiret ou contiennent des parenthèses
+      // (ex : "- (EVENT ONLY)", "(EVENT ONLY)", "- A+", "- ACTION")
+      if(/^[-–—]/.test(suf) || /[()[\]]/.test(suf)) continue;
       if(!baseSuffixes.has(base)) baseSuffixes.set(base, new Set());
       baseSuffixes.get(base).add(suf);
       if(!suffixBases.has(suf))  suffixBases.set(suf, new Set());
@@ -3349,7 +3359,12 @@ async function boot(){
   try {
     const cached = JSON.parse(localStorage.getItem("pipsily_available_regions") || "[]");
     // Si la liste contient des entrées avec des chiffres ou des tirets initiaux → corrompue
-    const corrupted = cached.some(r => /^\d|[-–]|\d/.test(r) || r.length > 30);
+    const corrupted = cached.some(r =>
+      /^\d|^[-–]/.test(r) ||            // commence par chiffre ou tiret
+      /[()[\]\d]/.test(r) ||             // contient parenthèses, crochets ou chiffres
+      r.length > 35 ||                   // trop long pour être un nom de région
+      /event|only|action|cinema|sport|series|kids|gaming/i.test(r) // mots thématiques
+    );
     if(corrupted) localStorage.removeItem("pipsily_available_regions");
   } catch(e){ localStorage.removeItem("pipsily_available_regions"); }
 
