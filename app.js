@@ -1705,24 +1705,40 @@ function filtered(){
     const userReg = S.region.toLowerCase();
 
     // Phase 1 — identifier les bases ayant une variante correspondant à la région,
-    //            et préparer un repli Paris/premier pour celles qui n'en ont pas.
-    const basesWithMatch = new Set();
-    const baseFallback   = new Map(); // base_lc → item de repli
+    //            et préparer un repli pour celles qui n'en ont pas.
+    // Ordre de priorité du repli :
+    //   1. Chaîne générale sans suffixe ("France 3")
+    //   2. Variante "Paris" ("France 3 Paris")
+    //   3. Première variante disponible
+    const basesWithMatch  = new Set();
+    const baseGeneral     = new Map(); // base_lc → item sans suffixe régional
+    const baseFallback    = new Map(); // base_lc → item de repli (Paris ou premier)
 
     items.forEach(item => {
-      const r = _isChannelRegional(_baseLiveName(item.title), regionSet);
-      if(!r) return;
-      const base = r.base.toLowerCase();
-      if(r.region === userReg) basesWithMatch.add(base);
-      // Repli : priorité à la variante "paris", sinon première variante trouvée
-      if(!baseFallback.has(base) || r.region === "paris")
-        baseFallback.set(base, item);
+      const clean = _baseLiveName(item.title);
+      const r = _isChannelRegional(clean, regionSet);
+      if(r){
+        const base = r.base.toLowerCase();
+        if(r.region === userReg) basesWithMatch.add(base);
+        // Repli régional : priorité à "paris", sinon premier trouvé
+        if(!baseFallback.has(base) || r.region === "paris")
+          baseFallback.set(base, item);
+      } else {
+        // Chaîne sans suffixe → peut servir de repli général pour une base du même nom
+        const key = clean.toLowerCase();
+        if(!baseGeneral.has(key)) baseGeneral.set(key, item);
+      }
     });
 
     // Phase 2 — items de repli pour les bases sans correspondance
     const fallbackSet = new Set();
     baseFallback.forEach((item, base) => {
-      if(!basesWithMatch.has(base)) fallbackSet.add(item);
+      if(basesWithMatch.has(base)) return; // une variante correspond → pas de repli
+      // 1. Chaîne générale ("France 3") si elle existe dans le flux
+      const general = baseGeneral.get(base);
+      if(general){ fallbackSet.add(general); return; }
+      // 2. Sinon : Paris ou première variante
+      fallbackSet.add(item);
     });
 
     items = items.filter(item => {
