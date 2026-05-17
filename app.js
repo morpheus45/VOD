@@ -1786,11 +1786,17 @@ function _baseLiveName(title){
 // Aucune liste codée en dur — fonctionne avec n'importe quel flux IPTV.
 
 // Mots qui ne sont PAS des noms géographiques — évite les faux positifs
+// IMPORTANT : inclure les chiffres pour éviter que "France 2", "RMC 2"… soient
+// traités comme chaînes régionales (suffixe "2" détecté dans 2+ bases → faux positif).
 const _NON_GEO = new Set([
   "séries","series","films","cinéma","cinema","sport","sports","info","kids",
   "jeunesse","comedy","action","thriller","music","news","live","direct","replay",
   "plus","one","two","max","go","box","play","vod","premium","extra","family",
-  "classic","vintage","gold","select","club","tv","web","mobile","app"
+  "classic","vintage","gold","select","club","tv","web","mobile","app",
+  // Chiffres — empêchent France 2 / Canal 2 / RMC 2… d'être classés "régionaux"
+  "2","3","4","5","6","7","8","9","10","11","12",
+  // Qualités vidéo — jamais des noms de régions
+  "hd","sd","4k","uhd","fhd","hdr"
 ]);
 
 // ── Liste de garantie : noms géographiques toujours reconnus comme régions ──
@@ -1818,8 +1824,18 @@ const _GEO_NAMES = new Set([
   // Variantes sans accents / avec espaces (orthographes alternatives dans les flux)
   "ile-de-france","hauts de france","ile de france",
   "rhone-alpes","franche comte","pays-de-la-loire",
+  // Variantes SANS tirets (providers qui utilisent des espaces)
+  "nord pas de calais","nouvelle aquitaine","auvergne rhone alpes",
+  "bourgogne franche comte","centre val de loire","provence alpes cote d azur",
+  "pays de loire",
   // Autres suffixes régionaux fréquents
-  "grand littoral","alsace-moselle","nord picardie"
+  "grand littoral","alsace-moselle","nord picardie",
+  // Sous-régions / bassins France 3 (apparaissent dans certains flux)
+  "alpes","alpes du sud","côte d azur","cote d azur",
+  "poitou","charentes","berry","limousin","auvergne",
+  "bourgogne","franche-comte","franche comté","lorraine",
+  "champagne ardenne","picardie","haute normandie","basse normandie",
+  "centre","ardennes","moselle","alsace"
 ]);
 
 /**
@@ -1841,7 +1857,7 @@ function _buildLiveRegionIdx(items){
     for(let n = 1; n <= Math.min(4, words.length - 1); n++){
       const suf  = words.slice(-n).join(" ").toLowerCase();
       const base = words.slice(0,  -n).join(" ").toLowerCase();
-      if(!suf || !base || _NON_GEO.has(suf)) continue;
+      if(!suf || !base || _NON_GEO.has(suf) || suf.length < 2) continue;
       if(!baseSuffixes.has(base)) baseSuffixes.set(base, new Set());
       baseSuffixes.get(base).add(suf);
       if(!suffixBases.has(suf))  suffixBases.set(suf, new Set());
