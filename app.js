@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.2 — quality picker TV fix              ║
+// ║  PIPSILY — app.js v6.3 — nav série 2D + no continuer live   ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -2270,17 +2270,81 @@ function initTV(){
   function _navPanel(k){
     const panel = $("seriesPanel");
     if(!panel) return;
-    const items = [...panel.querySelectorAll(
-      ".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct," +
-      ".vod-play-btn, .vod-restart-btn, .fav-btn-large," +
-      ".sp-resume-play, .sp-resume-restart, .sp-resume-dismiss"
-    )].filter(el => !el.closest("[hidden]"));
-    const idx = items.indexOf(document.activeElement);
-    if(idx < 0){ items[0]?.focus(); return; }
-    if(k === "ArrowDown" || k === "ArrowRight"){
-      items[Math.min(idx + 1, items.length - 1)]?.focus();
-    } else if(k === "ArrowUp" || k === "ArrowLeft"){
-      items[Math.max(idx - 1, 0)]?.focus();
+
+    // ── Panneau Film (VOD) : navigation linéaire simple ──
+    if(S.panel.isVod){
+      const items = [...panel.querySelectorAll(
+        ".vod-play-btn, .vod-restart-btn, .fav-btn-large, .sp-close," +
+        ".sp-resume-play, .sp-resume-restart, .sp-resume-dismiss"
+      )].filter(el => !el.closest("[hidden]"));
+      const idx = items.indexOf(document.activeElement);
+      if(idx < 0){ items[0]?.focus(); return; }
+      if(k === "ArrowDown" || k === "ArrowRight") items[Math.min(idx+1, items.length-1)]?.focus();
+      else if(k === "ArrowUp" || k === "ArrowLeft") items[Math.max(idx-1, 0)]?.focus();
+      return;
+    }
+
+    // ── Panneau Série : navigation 2D ──
+    // Onglets saisons (horizontal) → ← →
+    // Liste épisodes  (vertical)   → ↑ ↓
+    const active  = document.activeElement;
+    const isTab   = active?.classList.contains("sp-tab");
+    const isEp    = active?.classList.contains("sp-ep");
+    const isResume = active?.classList.contains("sp-resume-play") ||
+                     active?.classList.contains("sp-resume-restart") ||
+                     active?.classList.contains("sp-resume-dismiss");
+
+    const tabs = [...panel.querySelectorAll(".sp-tab")]
+                   .filter(el => !el.closest("[hidden]"));
+    const eps  = [...panel.querySelectorAll(".sp-ep:not([disabled])")]
+                   .filter(el => !el.closest("[hidden]"));
+
+    // Focus initial
+    if(!isTab && !isEp && !isResume){ (eps[0] || tabs[0])?.focus(); return; }
+
+    // Modal reprise (3 boutons linéaires)
+    if(isResume){
+      const rItems = [...panel.querySelectorAll(
+        ".sp-resume-play, .sp-resume-restart, .sp-resume-dismiss"
+      )].filter(el => !el.closest("[hidden]"));
+      const ri = rItems.indexOf(active);
+      if(k === "ArrowRight" || k === "ArrowDown") rItems[Math.min(ri+1, rItems.length-1)]?.focus();
+      else if(k === "ArrowLeft" || k === "ArrowUp") rItems[Math.max(ri-1, 0)]?.focus();
+      return;
+    }
+
+    // Onglets saisons : ← → entre les onglets, ↓ vers les épisodes
+    if(isTab){
+      const ti = tabs.indexOf(active);
+      if(k === "ArrowRight" && ti < tabs.length-1){ tabs[ti+1].focus(); return; }
+      if(k === "ArrowLeft"  && ti > 0)            { tabs[ti-1].focus(); return; }
+      if(k === "ArrowDown") { (eps[0])?.focus(); return; }
+      return;
+    }
+
+    // Épisodes : ↑ ↓ dans la liste, ↑ sur le premier → retour aux onglets
+    if(isEp){
+      const ei = eps.indexOf(active);
+      if(k === "ArrowDown"){
+        if(ei < eps.length-1){
+          eps[ei+1].focus();
+          eps[ei+1].scrollIntoView({ behavior:"smooth", block:"nearest" });
+        }
+        return;
+      }
+      if(k === "ArrowUp"){
+        if(ei > 0){
+          eps[ei-1].focus();
+          eps[ei-1].scrollIntoView({ behavior:"smooth", block:"nearest" });
+        } else {
+          // Premier épisode → remonter aux onglets saisons
+          (tabs[0])?.focus();
+          panel.scrollTo?.({ top:0, behavior:"smooth" });
+        }
+        return;
+      }
+      // ← → ignorés dans la liste épisodes (pas d'ambiguïté)
+      return;
     }
   }
 
@@ -2553,6 +2617,9 @@ function renderPoursuivreRow(){
   const sect = $("poursuivreSection");
   const row  = $("poursuivreRow");
   if(!sect || !row) return;
+
+  // Onglet TV (live) : section non pertinente, masquée
+  if(S.type === "live"){ sect.hidden = true; return; }
 
   const prog = getProg();
   const type = S.type;
