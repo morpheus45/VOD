@@ -7,7 +7,7 @@ html,body{
   background:radial-gradient(circle at top left,rgba(42,167,255,.18),transparent 22%),
     linear-gradient(180deg,#05101f,#08182e 55%,#07111f);
   color:#fff;
-  font-family:'Segoe UI','Inter',system-ui,-apple-system,sans-serif;
+  font-family:'Outfit','Segoe UI',system-ui,-apple-system,sans-serif;
 }
 
 *{ box-sizing:border-box }
