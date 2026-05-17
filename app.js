@@ -2306,10 +2306,10 @@ function initTV(){
   document.addEventListener("keydown", e => {
     const k = e.key;
 
-    // Retour / Fermeture panneau
+    // Retour / Fermeture panneau — toujours preventDefault pour ne pas quitter l'app
     if(["Escape","GoBack","Back","BrowserBack"].includes(k)){
+      e.preventDefault();
       if(!$("seriesPanel")?.hidden){
-        e.preventDefault();
         if(S.panel.isVod) closeVodPanel(); else closePanel();
       }
       return;
