@@ -1742,10 +1742,18 @@ function filtered(){
     });
 
     items = items.filter(item => {
-      const r = _isChannelRegional(_baseLiveName(item.title), regionSet);
-      if(!r)                return true;  // non-régionale → toujours visible
-      if(r.region === userReg) return true;  // correspond à la région → visible
-      return fallbackSet.has(item);          // repli Paris/premier si pas de match
+      const clean = _baseLiveName(item.title);
+      const r = _isChannelRegional(clean, regionSet);
+
+      if(!r){
+        // Chaîne sans suffixe régional (ex : "France 3")
+        // La masquer si une variante de la région la remplace déjà
+        // (évite "France 3" + "France 3 Bretagne" en même temps)
+        return !basesWithMatch.has(clean.toLowerCase());
+      }
+
+      if(r.region === userReg) return true;   // variante de la région → visible
+      return fallbackSet.has(item);            // repli général si aucune variante ne correspond
     });
   }
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
