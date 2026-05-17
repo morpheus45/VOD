@@ -1825,8 +1825,9 @@ const _DECO_RE = /[◉★►•·✦✧▶⬤●❶-❿①-⑳]+/g;
 function _baseLiveName(title){
   if(!title) return "";
   return title
-    .replace(_DECO_RE, " ")    // supprimer les décoratifs (TF1• → TF1, ◉ TF1 → TF1)
-    .replace(_QUAL_RE, "")     // supprimer les tags qualité (HD, FHD, HDR…)
+    .replace(_DECO_RE, " ")          // supprimer les décoratifs (TF1• → TF1, ◉ TF1 → TF1)
+    .replace(_QUAL_RE, "")           // supprimer les tags qualité (HD, FHD, HDR…)
+    .replace(/^[\s\-–—|:]+/, "")    // supprimer les préfixes "- ", "| ", ": " courants dans les flux IPTV
     .replace(/\s+/g, " ").trim();
 }
 
@@ -1846,7 +1847,11 @@ const _NON_GEO = new Set([
   // Chiffres — empêchent France 2 / Canal 2 / RMC 2… d'être classés "régionaux"
   "2","3","4","5","6","7","8","9","10","11","12",
   // Qualités vidéo — jamais des noms de régions
-  "hd","sd","4k","uhd","fhd","hdr"
+  "hd","sd","4k","uhd","fhd","hdr",
+  // Suffixes IPTV courants (pas des noms géographiques)
+  "²","2","fr","be","ch","lu","ca","us",
+  "event","event only","only","vip","iptv","adult","adults",
+  "rue","ter","bis"
 ]);
 
 // ── Liste de garantie : noms géographiques toujours reconnus comme régions ──
@@ -1907,7 +1912,10 @@ function _buildLiveRegionIdx(items){
     for(let n = 1; n <= Math.min(4, words.length - 1); n++){
       const suf  = words.slice(-n).join(" ").toLowerCase();
       const base = words.slice(0,  -n).join(" ").toLowerCase();
-      if(!suf || !base || _NON_GEO.has(suf) || suf.length < 2) continue;
+      // Rejeter si le suffixe contient des chiffres ou des caractères spéciaux
+      // (ex : "6ter", "24/7", "²", "a$$3$" ne sont pas des régions)
+      if(!suf || !base || _NON_GEO.has(suf) || suf.length < 2 || base.length < 2) continue;
+      if(/\d|[²³¹$&@!%#^*]/.test(suf)) continue;
       if(!baseSuffixes.has(base)) baseSuffixes.set(base, new Set());
       baseSuffixes.get(base).add(suf);
       if(!suffixBases.has(suf))  suffixBases.set(suf, new Set());
@@ -3272,6 +3280,15 @@ function renderHero(item){
 // ─────────────────────────────────────────────────────────────────
 
 async function boot(){
+
+  // ── Purger le cache région corrompu (noms de chaînes au lieu de régions) ──
+  // Les anciennes versions stockaient n'importe quel suffixe ; on purge pour reconstruire proprement.
+  try {
+    const cached = JSON.parse(localStorage.getItem("pipsily_available_regions") || "[]");
+    // Si la liste contient des entrées avec des chiffres ou des tirets initiaux → corrompue
+    const corrupted = cached.some(r => /^\d|[-–]|\d/.test(r) || r.length > 30);
+    if(corrupted) localStorage.removeItem("pipsily_available_regions");
+  } catch(e){ localStorage.removeItem("pipsily_available_regions"); }
 
   // ── Classe CSS TV (failsafe si le media query ne se déclenche pas) ──
   if(window.PIPSILY_NATIVE === "android_tv" || window.PIPSIFLIX_NATIVE === "android_tv" ||
