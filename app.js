@@ -94,7 +94,9 @@ const PipPlayer = {
     this._epList = item._epList || [];
     this._epIdx  = item._epIdx  ?? -1;
 
-    const url   = item.url || item.stream_url || "";
+    // preparePlutoUrl() injecte les params requis par Pluto TV (deviceModel, etc.)
+    // doit s'appliquer ici, AVANT AndroidBridge, iOS AVPlayer et le WebView player.
+    const url   = preparePlutoUrl(item.url || item.stream_url || "");
     const label = item.episode_label
       ? `${item.title} — ${item.episode_label}`
       : item.title || "Lecture";
