@@ -1,4 +1,4 @@
-#Requires -Version 5.0
+﻿﻿#Requires -Version 5.0
 # installer.ps1 — PIPSILY TV — Installateur Samsung Smart TV
 # Usage : lancé automatiquement par INSTALLER.bat
 
