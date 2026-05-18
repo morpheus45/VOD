@@ -438,12 +438,16 @@ public class PlayerActivity extends FragmentActivity {
         if (player != null && !currentUrl.isEmpty()) {
             long posMs = player.getCurrentPosition();
             long durMs = player.getDuration();
-            if (durMs > 0 && posMs > 0) {
-                // Essayer MainActivity d'abord (phone/tablet), puis TvActivity (AndroidTV)
+            // Correction : pour les flux HLS (séries), getDuration() retourne
+            // Long.MIN_VALUE (TIME_UNSET) si non encore connu → durMs > 0 échoue.
+            // On rapporte dès 30s regardées ; on passe durMs=0 si inconnue
+            // (le JS gère le cas durée=0 via un pct de secours).
+            long safeDur = (durMs > 0 && durMs != Long.MIN_VALUE) ? durMs : 0;
+            if (posMs > 30000) {
                 if (MainActivity.sInstance != null && MainActivity.sInstance.get() != null) {
-                    MainActivity.reportProgress(currentUrl, posMs, durMs);
+                    MainActivity.reportProgress(currentUrl, posMs, safeDur);
                 } else {
-                    TvActivity.reportProgress(currentUrl, posMs, durMs);
+                    TvActivity.reportProgress(currentUrl, posMs, safeDur);
                 }
             }
             player.release();

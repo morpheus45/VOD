@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.8 — fix _epUrlMap TV + PipPlayer APK    ║
+// ║  PIPSILY — app.js v6.9 — fix durée HLS inconnue (d=0)        ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -572,7 +572,10 @@ function _getSeriesPctMap(){
     const m = re.exec(k);
     if(!m || !e?.ts) continue;
     const sid = m[1];
-    const pct = (e.t > 0 && e.d > 0) ? e.t / e.d : (e.pct || 0);
+    // Priorité : ratio t/d si les deux sont connus, sinon pct stocké (fallback HLS),
+    // sinon estimation 0.5 si t>30 (durée inconnue mais visionnage confirmé)
+    const pct = (e.t > 0 && e.d > 0) ? e.t / e.d
+              : (e.pct > 0 ? e.pct : (e.t > 30 ? 0.5 : 0));
     if(pct <= 0) continue;
     if(!map[sid] || e.ts > map[sid].ts) map[sid] = { pct: Math.min(pct, 1), ts: e.ts };
   }
@@ -602,7 +605,10 @@ window.onAndroidPlayerClosed = function(url, posMs, durMs){
   // ── Épisodes de série : URL connue via _epUrlMap ────────────────
   const epKey = window._epUrlMap?.[url];
   if(epKey){
-    prog[epKey] = { t, d, ts: Date.now() };
+    // Si durée inconnue (d=0, typique HLS séries), stocker pct=0.5 comme
+    // valeur de secours pour que la barre rouge et "Reprendre" restent visibles.
+    const savePct = d > 0 ? pct : 0.5;
+    prog[epKey] = { t, d, pct: savePct, ts: Date.now() };
     storeSet(STORE.progress, prog);
     _invalidateCache();
     if(typeof renderContinueRow === "function") renderContinueRow();
@@ -1413,7 +1419,8 @@ function renderPanel(){
         const code  = `S${String(sel).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`;
         const progK = `${s.id}||${code}`;
         const _pe   = getProg()[progK] || {};
-        const pct   = _pe.pct || (_pe.t > 0 && _pe.d > 0 ? Math.round(_pe.t / _pe.d * 100) : 0);
+        const pct   = (_pe.t > 0 && _pe.d > 0) ? Math.round(_pe.t / _pe.d * 100)
+                    : (_pe.pct > 0 ? Math.round(_pe.pct * 100) : (_pe.t > 30 ? 50 : 0));
         const done  = pct >= 90;
         const hasUrl= !!ep.url;
 
@@ -3346,7 +3353,8 @@ function _renderPoursuivreRowInner(){
       if(!seriesIdx[sid]) return;
       const e = prog[k];
       if(!e?.ts) return;
-      let pct = (e.t > 0 && e.d > 0) ? e.t / e.d : (e.pct || 0);
+      let pct = (e.t > 0 && e.d > 0) ? e.t / e.d
+              : (e.pct > 0 ? e.pct : (e.t > 30 ? 0.5 : 0));
       if(pct > 1) pct /= 100; // normalise format player.js (0-100) → fraction (0-1)
       if(pct <= 0.03 || pct >= 0.97) return;
       if(!best[sid] || e.ts > best[sid].ts) best[sid] = { pct, ts: e.ts };
