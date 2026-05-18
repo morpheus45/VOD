@@ -536,7 +536,27 @@ function getFavs(){
   }
   return _cacheF;
 }
-function _invalidateCache(){ _cacheP = null; _cacheF = null; }
+function _invalidateCache(){ _cacheP = null; _cacheF = null; _cacheSeriesPct = null; }
+
+// ── Index de progression par série (construit une seule fois par cycle, clé = series.id) ──
+let _cacheSeriesPct = null;
+function _getSeriesPctMap(){
+  if(_cacheSeriesPct) return _cacheSeriesPct;
+  const prog = getProg();
+  const map  = {};
+  const re   = /^(.+)\|\|S\d+E\d+$/;
+  for(const [k, e] of Object.entries(prog)){
+    const m = re.exec(k);
+    if(!m || !e?.ts) continue;
+    const sid = m[1];
+    const pct = (e.t > 0 && e.d > 0) ? e.t / e.d : (e.pct || 0);
+    if(pct <= 0) continue;
+    // Garder le plus récent
+    if(!map[sid] || e.ts > map[sid].ts) map[sid] = { pct: Math.min(pct, 1), ts: e.ts };
+  }
+  _cacheSeriesPct = map;
+  return map;
+}
 
 // ── Retourne la position sauvegardée en ms (pour Android openPlayerAt) ──
 function _getSavedProgressMs(item){
@@ -623,8 +643,10 @@ function getWatchPct(item){
   const prog = getProg();
   const k1   = itemKey(item);                              // clé AVPlayer iOS
   if(prog[k1]?.pct > 0) return prog[k1].pct;
-  const k2 = String(item.id || item.stream_id || "");     // clé PipPlayer
+  const k2 = String(item.id || item.stream_id || "");     // clé PipPlayer VOD
   if(k2 && prog[k2]?.t > 0 && prog[k2]?.d > 0) return prog[k2].t / prog[k2].d;
+  // Séries : progression du dernier épisode regardé (stockée sous "seriesId||SxxExx")
+  if(item.type === "series" && k2) return _getSeriesPctMap()[k2]?.pct || 0;
   return 0;
 }
 
@@ -2463,6 +2485,10 @@ function makeNrowCard(item){
   card.dataset.key = itemKey(item);
   const poster   = item.stream_icon || (isLive ? _getLogoFallback(item.title) : "");
   const isSeries = item.type === "series";
+  const pct      = isLive ? 0 : getWatchPct(item);
+  const progBar  = (pct > 0.03 && pct < 0.97)
+    ? `<div class="card-prog-bar"><div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div></div>`
+    : "";
 
   card.innerHTML = `
     <div class="nrow-media">
@@ -2472,6 +2498,7 @@ function makeNrowCard(item){
       ${item.quality ? `<span class="nrow-qual">${esc(item.quality)}</span>` : ""}
       <div class="nrow-overlay"><span class="nrow-play">▶</span></div>
       <button class="nrow-fav ${isFav(item) ? "is-fav" : ""}" type="button" aria-label="Favori">♥</button>
+      ${progBar}
     </div>
     <div class="nrow-info">
       <div class="nrow-name">${esc(item.title)}</div>
