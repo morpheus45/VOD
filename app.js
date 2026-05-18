@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.7 — fix APK onAndroidPlayerClosed       ║
+// ║  PIPSILY — app.js v6.8 — fix _epUrlMap TV + PipPlayer APK    ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -105,6 +105,20 @@ const PipPlayer = {
     // ── APK : lecteur natif ExoPlayer (HTTP sans mixed content) ────
     if(typeof window.AndroidBridge?.openPlayer === "function"){
       pushHist(item);
+      // Alimenter _epUrlMap pour tous les épisodes (TV + non-TV)
+      // afin que onAndroidPlayerClosed puisse sauvegarder sous "seriesId||SxxExx"
+      if(item.type === "series" && this._epList.length > 0){
+        const sid = String(item.series_id || item.id || "");
+        if(sid){
+          if(!window._epUrlMap) window._epUrlMap = {};
+          this._epList.forEach(ep => {
+            if(!ep.url) return;
+            const s = String(ep.season || 1).padStart(2,"0");
+            const e = String(ep.episode_num || 1).padStart(2,"0");
+            window._epUrlMap[ep.url] = ep.progress_key || `${sid}||S${s}E${e}`;
+          });
+        }
+      }
       // Sérialiser la liste d'épisodes pour Java
       const epsJson = this._epList.length > 1
         ? JSON.stringify(this._epList.map(ep => ({
@@ -1749,20 +1763,23 @@ function playEpisode(series, ep, season){
     current_ep_index : curIdx
   };
 
-  // APK Android (non-TV) : ExoPlayer (openPlayerAt) avec reprise de position
+  // APK Android (TV ou non-TV) : pré-alimenter _epUrlMap pour TOUS les épisodes
+  // Indispensable avant tout appel AndroidBridge, quelle que soit la détection TV.
+  // PipPlayer.open() peut aussi lancer ExoPlayer sur TV — _epUrlMap doit être prêt.
+  if(typeof window.AndroidBridge !== "undefined"){
+    if(!window._epUrlMap) window._epUrlMap = {};
+    playerItem.all_episodes.forEach(epItem => {
+      if(epItem.url) window._epUrlMap[epItem.url] = epItem.progress_key;
+    });
+  }
+
+  // APK Android (non-TV) : ExoPlayer direct depuis playEpisode (openPlayerAt)
   const _isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
                 (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
   if(!_isTV && typeof window.AndroidBridge !== "undefined"){
     const epTitle  = `${series.title} — ${code}${ep.title ? " " + ep.title : ""}`;
     const epsJson  = JSON.stringify(playerItem.all_episodes);
     const savedMs  = _getSavedProgressMs({ progress_key: progKey });
-
-    // Mémoriser TOUTES les URLs de la série → progress_key
-    // (ExoPlayer peut enchaîner automatiquement les épisodes suivants)
-    if(!window._epUrlMap) window._epUrlMap = {};
-    playerItem.all_episodes.forEach(epItem => {
-      if(epItem.url) window._epUrlMap[epItem.url] = epItem.progress_key;
-    });
 
     if(typeof window.AndroidBridge.openPlayerAt === "function"){
       try { window.AndroidBridge.openPlayerAt(ep.url, series.title, epTitle, epsJson, curIdx, savedMs); return; }
