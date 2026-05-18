@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.5 — TNT LCN + focus restore + userBtns ║
+// ║  PIPSILY — app.js v6.6 — diagnostic progression + fix pct   ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -1433,7 +1433,9 @@ function renderPanel(){
     const sIdEsc  = String(s.id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const epKeyRe = new RegExp(`^${sIdEsc}\\|\\|(S(\\d+)E(\\d+))$`);
     let lastTs = 0;
-    Object.keys(prog).forEach(k => {
+    const progKeys = Object.keys(prog).filter(k => epKeyRe.test(k));
+    console.log(`[PIPSILY] Série "${s.title}" (id=${s.id}) — clés progression:`, progKeys.length ? progKeys : "(aucune)");
+    progKeys.forEach(k => {
       const m = epKeyRe.exec(k);
       if(!m) return;
       const en = prog[k];
@@ -1441,12 +1443,14 @@ function renderPanel(){
       const tSec = en.t || 0;
       const dSec = (en.d && isFinite(en.d)) ? en.d : 0;
       const pct  = dSec > 0 ? tSec / dSec : (en.pct || 0);
-      // Inclut aussi les épisodes terminés (pct ≥ 0.95) pour proposer le suivant
-      if(tSec > 10){
+      console.log(`  ${k} →`, { t: tSec, d: dSec, pct: Math.round(pct*100)+"%" });
+      // Accepte les deux formats : {t,d,ts} (PipPlayer) et {pct,ts} (AVPlayer/ancien)
+      if(tSec > 10 || pct > 0.01){
         lastWatched = { code: m[1], sn: String(Number(m[2])), en: m[3], pct, tSec, progK: k };
         lastTs = en.ts;
       }
     });
+    console.log(`[PIPSILY] lastWatched:`, lastWatched || "(aucun)");
   }
 
   // ── Premier épisode (pour Regarder / Début) ──
