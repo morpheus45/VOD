@@ -162,9 +162,19 @@ const PipPlayer = {
     $("pip-player").classList.remove("pip-open");
     document.body.style.overflow = "";
     document.title = "PIPSILY";
+
+    // Rafraîchir après fermeture AVANT de nullifier _item
+    const closedItem = this._item;
     this._item = null;
-    // Rafraîchir "Continuer à regarder" après fermeture
+
+    // 1. Rafraîchir "Continuer à regarder" (section en cours + favoris)
     if(typeof renderContinueRow === "function") renderContinueRow();
+
+    // 2. Rafraîchir le panneau série si ouvert (bouton Reprendre, barres épisodes)
+    if(S.panel.open && !S.panel.isVod && typeof renderPanel === "function") renderPanel();
+
+    // 3. Mettre à jour les barres de progression sur les vignettes de la grille
+    if(closedItem) _refreshCardProgress(closedItem);
   },
 
   // ── Sélection automatique de la piste audio française ──────────
@@ -536,13 +546,12 @@ function getFavs(){
   }
   return _cacheF;
 }
-function _invalidateCache(){ _cacheP = null; _cacheF = null; _cacheSeriesPct = null; }
+function _invalidateCache(){ _cacheP = null; _cacheF = null; }
 
-// ── Index de progression par série (construit une seule fois par cycle, clé = series.id) ──
-let _cacheSeriesPct = null;
+// ── Index de progression par série — toujours frais depuis _cacheP (pas de cache séparé) ──
+// _cacheP est déjà en mémoire : Object.entries dessus = ~0ms, pas besoin de double-cache.
 function _getSeriesPctMap(){
-  if(_cacheSeriesPct) return _cacheSeriesPct;
-  const prog = getProg();
+  const prog = getProg(); // lit _cacheP (in-memory), pas localStorage
   const map  = {};
   const re   = /^(.+)\|\|S\d+E\d+$/;
   for(const [k, e] of Object.entries(prog)){
@@ -551,10 +560,8 @@ function _getSeriesPctMap(){
     const sid = m[1];
     const pct = (e.t > 0 && e.d > 0) ? e.t / e.d : (e.pct || 0);
     if(pct <= 0) continue;
-    // Garder le plus récent
     if(!map[sid] || e.ts > map[sid].ts) map[sid] = { pct: Math.min(pct, 1), ts: e.ts };
   }
-  _cacheSeriesPct = map;
   return map;
 }
 
@@ -612,6 +619,41 @@ function saveProg(key, pct){
 
 function itemKey(item){
   return `${item.type || S.type}||${item.id || ""}||${item.title || ""}`;
+}
+
+// ── Met à jour la barre de progression sur toutes les vignettes d'un item ──
+// Appelé par PipPlayer.close() pour rafraîchir les cartes sans re-rendre toute la grille.
+function _refreshCardProgress(playedItem){
+  // Pour un épisode de série, l'item qui nous intéresse est la série parente
+  const isSeries = playedItem.type === "series" || !!playedItem.series_id;
+  let targetItem = null;
+  if(isSeries){
+    const sid = String(playedItem.series_id || playedItem.id || "");
+    targetItem = (S.series || []).find(s => String(s.id || s.stream_id || "") === sid);
+  } else {
+    targetItem = playedItem;
+  }
+  if(!targetItem) return;
+
+  const key = itemKey(targetItem);
+  const pct = getWatchPct(targetItem);
+  document.querySelectorAll(`[data-key="${CSS.escape(key)}"]`).forEach(card => {
+    // Chercher la zone image (card-media, nrow-media, nou-media)
+    const media = card.querySelector(".card-media, .nrow-media, .nou-media");
+    if(!media) return;
+    let bar = media.querySelector(".card-prog-bar");
+    if(pct > 0.03 && pct < 0.97){
+      if(!bar){
+        bar = document.createElement("div");
+        bar.className = "card-prog-bar";
+        bar.innerHTML = `<div class="card-prog-fill"></div>`;
+        media.appendChild(bar);
+      }
+      bar.querySelector(".card-prog-fill").style.width = Math.round(pct * 100) + "%";
+    } else if(bar){
+      bar.remove();
+    }
+  });
 }
 
 // Upgrade HTTP → HTTPS si la page est servie en HTTPS (évite mixed content sur Android)
