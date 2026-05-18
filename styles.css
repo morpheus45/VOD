@@ -701,6 +701,7 @@ button,select,input{ font:inherit }
   box-shadow:0 6px 24px rgba(123,95,232,.35);
 }
 .vod-play-btn:active{ transform:scale(.96) }
+.vod-play-btn:focus{ outline:2px solid var(--accent2); outline-offset:3px }
 .vod-play-icon{ font-size:20px }
 .vod-restart-btn{
   display:flex; align-items:center; justify-content:center;
@@ -710,12 +711,14 @@ button,select,input{ font:inherit }
 }
 .vod-restart-btn:hover{ color:var(--fg); border-color:rgba(255,255,255,.25) }
 .vod-restart-btn:active{ transform:scale(.96) }
+.vod-restart-btn:focus{ outline:2px solid var(--accent); outline-offset:3px }
 .fav-btn-large{
   display:flex; align-items:center; gap:8px;
   padding:14px 18px; border-radius:16px; border:1px solid var(--line);
   background:var(--panel2); color:var(--muted); cursor:pointer;
   font-size:14px; font-weight:600; transition:all .15s;
 }
+.fav-btn-large:focus{ outline:2px solid var(--accent); outline-offset:3px }
 .fav-btn-large.is-fav{ color:var(--accent); border-color:var(--accent) }
 .fav-btn-large .fav-heart{ font-size:18px }
 
