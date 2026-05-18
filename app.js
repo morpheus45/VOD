@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.6 — diagnostic progression + fix pct   ║
+// ║  PIPSILY — app.js v6.7 — fix APK onAndroidPlayerClosed       ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -592,6 +592,13 @@ window.onAndroidPlayerClosed = function(url, posMs, durMs){
     storeSet(STORE.progress, prog);
     _invalidateCache();
     if(typeof renderContinueRow === "function") renderContinueRow();
+    // Rafraîchir la vignette de la série dans la grille + le panneau si ouvert
+    const sid = epKey.split("||")[0];
+    const seriesItem = (S.series || []).find(s => String(s.id || s.stream_id || "") === sid);
+    if(seriesItem){
+      if(typeof _refreshCardProgress === "function") _refreshCardProgress(seriesItem);
+    }
+    if(S.panel.open && !S.panel.isVod && typeof renderPanel === "function") renderPanel();
     return;
   }
 
@@ -607,8 +614,8 @@ window.onAndroidPlayerClosed = function(url, posMs, durMs){
   }
   storeSet(STORE.progress, prog);
   _invalidateCache();
-
   if(typeof renderContinueRow === "function") renderContinueRow();
+  if(item && typeof _refreshCardProgress === "function") _refreshCardProgress(item);
 };
 
 function getHist()  { return storeGet(STORE.history, []); }
@@ -1750,9 +1757,12 @@ function playEpisode(series, ep, season){
     const epsJson  = JSON.stringify(playerItem.all_episodes);
     const savedMs  = _getSavedProgressMs({ progress_key: progKey });
 
-    // Mémoriser l'URL → progress_key pour que onAndroidPlayerClosed puisse sauvegarder
+    // Mémoriser TOUTES les URLs de la série → progress_key
+    // (ExoPlayer peut enchaîner automatiquement les épisodes suivants)
     if(!window._epUrlMap) window._epUrlMap = {};
-    window._epUrlMap[ep.url] = progKey;
+    playerItem.all_episodes.forEach(epItem => {
+      if(epItem.url) window._epUrlMap[epItem.url] = epItem.progress_key;
+    });
 
     if(typeof window.AndroidBridge.openPlayerAt === "function"){
       try { window.AndroidBridge.openPlayerAt(ep.url, series.title, epTitle, epsJson, curIdx, savedMs); return; }
