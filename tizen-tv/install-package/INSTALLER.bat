@@ -1,5 +1,12 @@
 @echo off
 chcp 65001 >nul 2>&1
+
+:: ── Si lancé depuis PowerShell, se relancer automatiquement en CMD ──
+if defined PSModulePath (
+  cmd /c "%~f0" %*
+  exit /b
+)
+
 color 0B
 cls
 
@@ -13,7 +20,7 @@ echo.
 :: Vérifier si PowerShell est disponible
 powershell -Command "exit 0" >nul 2>&1
 if errorlevel 1 (
-  echo  [ERREUR] PowerShell requis. Mise à jour Windows nécessaire.
+  echo  [ERREUR] PowerShell requis. Mise a jour Windows necessaire.
   pause
   exit /b 1
 )
