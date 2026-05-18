@@ -272,11 +272,16 @@ const PipPlayer = {
   _restoreProgress(){
     const video = $("pip-video");
     if(!video || !this._item) return;
-    const prog  = storeGet(STORE.progress, {});
+    const prog  = getProg(); // utilise le cache (au lieu de storeGet brut)
     const key   = this._item.progress_key || String(this._item.id || this._item.stream_id || "");
     const saved = prog[key];
-    if(saved?.t > 10 && saved.t < (video.duration || Infinity) - 30){
+    if(!saved) return;
+    // Format {t, d, ts} (PipPlayer) — priorité
+    if(saved.t > 10 && saved.t < (video.duration || Infinity) - 30){
       video.currentTime = saved.t;
+    // Format {pct, ts} (iOS AVPlayer / ancien) — repli
+    } else if(saved.pct > 0.01 && saved.pct < 0.97 && video.duration && isFinite(video.duration)){
+      video.currentTime = saved.pct * video.duration;
     }
   },
 
@@ -454,20 +459,33 @@ const PipPlayer = {
       try { vid.webkitEnterFullscreen(); } catch(e) { console.warn("[AVP]", e); }
     }
 
-    // Sauvegarde progression
+    // Sauvegarde progression — utilise progress_key pour les séries, itemKey sinon
     let _pt;
     vid.addEventListener("timeupdate", () => {
       clearTimeout(_pt);
       _pt = setTimeout(() => {
-        const pct = vid.duration ? vid.currentTime / vid.duration : 0;
-        if(pct > 0.01 && pct < 0.98) saveProg(itemKey(item), pct);
+        if(vid.currentTime < 5) return;
+        const k = item.progress_key || itemKey(item);
+        const t = Math.floor(vid.currentTime);
+        const d = (vid.duration && isFinite(vid.duration)) ? Math.floor(vid.duration) : 0;
+        const pct = d > 0 ? t / d : 0;
+        if(pct > 0.01 && pct < 0.98){
+          const p = getProg();
+          p[k] = { t, d, ts: Date.now() };
+          storeSet(STORE.progress, p);
+        }
       }, 5000);
     });
 
-    // Reprendre depuis la progression sauvegardée
+    // Reprendre depuis la progression sauvegardée (supporte les deux formats)
     vid.addEventListener("loadedmetadata", () => {
-      const saved = getProg()[itemKey(item)];
-      if(saved?.pct && vid.duration) vid.currentTime = saved.pct * vid.duration;
+      const k     = item.progress_key || itemKey(item);
+      const saved = getProg()[k];
+      if(!saved) return;
+      if(saved.t > 10 && saved.t < (vid.duration || Infinity) - 30)
+        vid.currentTime = saved.t;
+      else if(saved.pct > 0.01 && vid.duration && isFinite(vid.duration))
+        vid.currentTime = saved.pct * vid.duration;
     }, { once: true });
 
     // Nettoyage à la fermeture du lecteur natif + rafraîchissement "Continuer"
@@ -1377,6 +1395,19 @@ function renderPanel(){
     }
   }
 
+  // ── Prochain épisode à afficher sur le bouton (si lastWatched est terminé) ──
+  let nextEpCode = null;
+  if(lastWatched?.pct >= 0.95){
+    const _orderedAll = [];
+    keys.forEach(sk => (smap[sk]||[]).forEach(ep => _orderedAll.push({ sk, ep })));
+    const _curI = _orderedAll.findIndex(({sk, ep}) =>
+      Number(sk) === Number(lastWatched.sn) && Number(ep.episode_num) === Number(lastWatched.en));
+    if(_curI >= 0 && _curI + 1 < _orderedAll.length){
+      const nxt = _orderedAll[_curI + 1];
+      nextEpCode = `S${String(nxt.sk).padStart(2,"0")}E${String(nxt.ep.episode_num).padStart(2,"0")}`;
+    }
+  }
+
   // ── Rendu HTML complet ──
   panel.innerHTML = `
     <div class="sp-header">
@@ -1404,7 +1435,7 @@ function renderPanel(){
           ? `<button id="seriesResumeBtn" class="vod-play-btn" type="button">
                <span class="vod-play-icon">▶</span>
                <span>${lastWatched.pct >= 0.95
-                 ? "Épisode suivant · " + lastWatched.code
+                 ? "Épisode suivant · " + (nextEpCode || lastWatched.code)
                  : "Reprendre · " + lastWatched.code + (lastWatched.pct > 0.01 ? " — " + Math.round(lastWatched.pct * 100) + "%" : "")
                }</span>
              </button>
@@ -1474,10 +1505,12 @@ function renderPanel(){
   // Bouton Début série (premier épisode)
   $("seriesRestartBtn")?.addEventListener("click", () => {
     if(!firstEp || !firstSk) return;
-    // Effacer la progression avant de relancer depuis le début
-    const prog = getProg();
-    const progK = lastWatched?.progK;
-    if(progK && prog[progK]){ delete prog[progK]; storeSet(STORE.progress, prog); _invalidateCache(); }
+    // Supprimer TOUTE la progression de cette série (tous les épisodes déjà vus)
+    const prog   = getProg();
+    const prefix = String(s.id) + "||";
+    Object.keys(prog).forEach(k => { if(k.startsWith(prefix)) delete prog[k]; });
+    storeSet(STORE.progress, prog);
+    _invalidateCache();
     playEpisode(s, firstEp, firstSk);
   });
 
