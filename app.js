@@ -2709,6 +2709,48 @@ function renderNetflixRows(){
     if(rowIdx < rowsArr.length){
       requestAnimationFrame(_renderBatch);
     } else {
+      // ── Rangée FOR ADULT tout en bas (Films uniquement) ──────────────
+      if(S.type === "vod" && S.vodAdult && S.vodAdult.length > 0 && !S.cat && !S.search){
+        const adultRow = document.createElement("div");
+        adultRow.className = "nrow nrow--adult";
+        adultRow.innerHTML = `
+          <div class="nrow-hdr">
+            <h3 class="nrow-title nrow-title--adult">🔞 For Adult</h3>
+          </div>
+          <div class="nrow-adult-locked" id="adultLocked">
+            <button class="adult-unlock-btn" id="adultUnlockBtn">
+              <span>🔒</span><span>Afficher le contenu adulte</span>
+            </button>
+          </div>
+          <div class="nrow-strip" id="adultStrip" style="display:none"></div>`;
+        grid.appendChild(adultRow);
+        totalItems += S.vodAdult.length;
+
+        document.getElementById("adultUnlockBtn")?.addEventListener("click", () => {
+          const strip = document.getElementById("adultStrip");
+          const locked = document.getElementById("adultLocked");
+          if(!strip || !locked) return;
+          locked.style.display = "none";
+          strip.style.display  = "";
+          if(strip.childElementCount === 0){
+            S.vodAdult.slice(0, NROW_MAX).forEach(item => strip.appendChild(makeNrowCard(item)));
+            // Tuile "Voir tout"
+            if(S.vodAdult.length > NROW_MAX){
+              const all = document.createElement("button");
+              all.className = "nrow-card nrow-all-tile";
+              all.type = "button";
+              all.innerHTML = `<div class="nrow-media nrow-all-media"><span class="nrow-all-arrow">→</span><span class="nrow-all-label">Voir tout</span><span class="nrow-all-count">(${S.vodAdult.length})</span></div>`;
+              all.addEventListener("click", () => {
+                S.cat = S.vodAdult[0]?.category_name || "";
+                const g = $("grid"); if(g) g.className = "grid";
+                S.shown[S.type] = PER_PAGE;
+                renderGrid(true);
+              });
+              strip.appendChild(all);
+            }
+          }
+        });
+      }
       $("catalogCount").textContent = `${totalItems} éléments · ${rowsArr.length} catégories`;
     }
   }
@@ -3809,9 +3851,10 @@ async function boot(){
 
   // Filtrer VOSTFR et catégories adult/porno
   const noVostfr = t => !/\[vostfr\]/i.test(t || "");
-  const noAdult  = c => !/adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
-  S.vod    = S.vod.filter(x => noVostfr(x.title) && noAdult(x.category_name));
-  S.series = S.series.filter(x => noVostfr(x.title) && noAdult(x.category_name));
+  const isAdultCatFn = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
+  S.vodAdult = S.vod.filter(x => noVostfr(x.title) && isAdultCatFn(x.category_name));
+  S.vod    = S.vod.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
+  S.series = S.series.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
 
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
