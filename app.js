@@ -2756,7 +2756,13 @@ function render(){
   }
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
+  const _last = c => /adult|adulte|\+18|xxx|erot|for adult|action.*war/i.test(c || "");
+  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))]
+    .sort((a, b) => {
+      const la = _last(a), lb = _last(b);
+      if(la !== lb) return la ? 1 : -1;
+      return a.localeCompare(b);
+    });
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
     cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
 
@@ -3364,13 +3370,14 @@ function _renderPoursuivreRowInner(){
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   } else {
     const all = type === "vod" ? S.vod : S.live;
+    const _hideCat = c => /adult|adulte|\+18|xxx|erot|for adult|action.*war/i.test(c || "");
     inProgress = all.map(item => {
       const k1 = itemKey(item), k2 = String(item.id || item.stream_id || "");
       const en = prog[k1] || prog[k2];
       const rawPct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
       const pct = rawPct > 1 ? rawPct / 100 : rawPct; // normalise format player.js (0-100) → fraction
       return { item, pct, ts: en?.ts || 0 };
-    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+    }).filter(x => !_hideCat(x.item?.category_name) && x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
 
@@ -3799,6 +3806,11 @@ async function boot(){
     const seriesM3u = await fetchText("series.m3u");
     if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); }
   }
+
+  // Filtrer VOSTFR
+  const noVostfr = t => !/\[vostfr\]/i.test(t || "");
+  S.vod    = S.vod.filter(x => noVostfr(x.title));
+  S.series = S.series.filter(x => noVostfr(x.title));
 
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
