@@ -3807,10 +3807,11 @@ async function boot(){
     if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); }
   }
 
-  // Filtrer VOSTFR
+  // Filtrer VOSTFR et catégories adult/porno
   const noVostfr = t => !/\[vostfr\]/i.test(t || "");
-  S.vod    = S.vod.filter(x => noVostfr(x.title));
-  S.series = S.series.filter(x => noVostfr(x.title));
+  const noAdult  = c => !/adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
+  S.vod    = S.vod.filter(x => noVostfr(x.title) && noAdult(x.category_name));
+  S.series = S.series.filter(x => noVostfr(x.title) && noAdult(x.category_name));
 
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
