@@ -2756,7 +2756,7 @@ function render(){
   }
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const _last = c => /adult|adulte|\+18|xxx|erot|for adult|action.*war/i.test(c || "");
+  const _last = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
   const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))]
     .sort((a, b) => {
       const la = _last(a), lb = _last(b);
@@ -3370,7 +3370,7 @@ function _renderPoursuivreRowInner(){
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   } else {
     const all = type === "vod" ? S.vod : S.live;
-    const _hideCat = c => /adult|adulte|\+18|xxx|erot|for adult|action.*war/i.test(c || "");
+    const _hideCat = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
     inProgress = all.map(item => {
       const k1 = itemKey(item), k2 = String(item.id || item.stream_id || "");
       const en = prog[k1] || prog[k2];
