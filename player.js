@@ -278,8 +278,14 @@ function playHls(video, url, storedPct){
     hlsInst = new Hls({ enableWorker: true, lowLatencyMode: true });
     hlsInst.loadSource(url);
     hlsInst.attachMedia(video);
-    hlsInst.on(Hls.Events.MANIFEST_PARSED, () => {
+    hlsInst.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
       setStatus("");
+      // Sélectionner la piste audio française si disponible
+      const tracks = hlsInst.audioTracks || [];
+      const frIdx = tracks.findIndex(t =>
+        /^fr/i.test(t.lang || "") || /fran[cç]/i.test(t.name || "") || t.lang === "fre"
+      );
+      if(frIdx >= 0) hlsInst.audioTrack = frIdx;
       if(storedPct > 2 && video.duration)
         video.currentTime = video.duration * storedPct / 100;
       video.play().catch(() => setStatus("Appuyez sur ▶ pour démarrer"));

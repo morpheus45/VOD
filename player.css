@@ -53,6 +53,11 @@ video{
   height:min(72vh, calc(100vh - 200px));
   background:#02060d; object-fit:contain;
 }
+/* Masquer les overlays natifs webkit/TV (bouton pause jaune, etc.) */
+video::-webkit-media-controls-overlay-play-button{ display:none!important }
+video::-webkit-media-controls-play-button{ display:none!important }
+video::-webkit-media-controls{ display:none!important }
+video::--webkit-media-controls-panel{ display:none!important }
 .overlay{
   position:absolute; inset:0;
   display:flex; align-items:center; justify-content:center;
