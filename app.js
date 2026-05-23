@@ -3852,9 +3852,11 @@ async function boot(){
   // Filtrer VOSTFR et catégories adult/porno
   const noVostfr = t => !/\[vostfr\]/i.test(t || "");
   const isAdultCatFn = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
-  S.vodAdult = S.vod.filter(x => noVostfr(x.title) && isAdultCatFn(x.category_name));
+  const _adultItems = S.vod.filter(x => noVostfr(x.title) && isAdultCatFn(x.category_name));
   S.vod    = S.vod.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
   S.series = S.series.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
+  // Non-énumérable : n'apparaît pas dans Object.keys(S) ni console globale
+  Object.defineProperty(S, 'vodAdult', { value: _adultItems, writable: true, enumerable: false, configurable: true });
 
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère

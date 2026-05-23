@@ -2,9 +2,12 @@
 """
 sign_wgt.py — Signe un package Tizen .wgt avec W3C Widget Digital Signatures
 Crée author-signature.xml + signature1.xml identiques à ceux de Tizen Studio.
+
+Usage:
+  python sign_wgt.py --duid <DUID> --input <wgt_in> --output <wgt_out>
 """
 
-import os, sys, zipfile, hashlib, base64, datetime
+import os, sys, zipfile, hashlib, base64, datetime, argparse
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
@@ -24,12 +27,18 @@ def b64(data: bytes) -> str:
 def sha256b64(data: bytes) -> str:
     return b64(hashlib.sha256(data).digest())
 
-def generate_key_and_cert(cn="PIPSILY TV Developer", org="Morpheus45", country="CA"):
+def generate_key_and_cert(duid: str):
+    """
+    Génère une clé RSA-2048 + certificat auto-signé.
+    Le DUID est inclus dans le CN du certificat distributeur.
+    """
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    # Le CN contient le DUID — c'est ce que Samsung vérifie en mode développeur
+    cn = duid if duid else "PIPSILY TV Developer"
     name = x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME,        cn),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME,  org),
-        x509.NameAttribute(NameOID.COUNTRY_NAME,       country),
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME,  "PIPSILY TV"),
+        x509.NameAttribute(NameOID.COUNTRY_NAME,       "CA"),
     ])
     now = datetime.datetime.now(datetime.timezone.utc)
     cert = (
@@ -137,19 +146,19 @@ def build_signature(sig_id: str, refs: list, cert, key, signing_time: str) -> by
                           xml_declaration=True, encoding="UTF-8")
 
 
-def sign_wgt(wgt_in: str, wgt_out: str, p12_out: str | None = None):
-    print(f"[1/4] Génération clé RSA-2048 + certificat auto-signé...")
-    key, cert = generate_key_and_cert()
+def sign_wgt(wgt_in: str, wgt_out: str, duid: str = "", p12_out: str | None = None):
+    print(f"[1/4] Generation cle RSA-2048 + certificat (DUID: {duid or 'non specifie'})...")
+    key, cert = generate_key_and_cert(duid)
 
     if p12_out:
         p12_data = pkcs12.serialize_key_and_certificates(
-            name=b"PIPSILY TV Developer",
+            name=b"PIPSILY TV",
             key=key, cert=cert, cas=None,
             encryption_algorithm=serialization.BestAvailableEncryption(b"pipsily-dev")
         )
         with open(p12_out, "wb") as f:
             f.write(p12_data)
-        print(f"    Certificat sauvegardé : {p12_out}")
+        print(f"    Certificat sauvegarde : {p12_out}")
 
     signing_time = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -159,20 +168,22 @@ def sign_wgt(wgt_in: str, wgt_out: str, p12_out: str | None = None):
             n for n in zf.namelist()
             if n not in ("author-signature.xml", "signature1.xml")
         )
+        if any(n.startswith('/') or '..' in n for n in names):
+            print("ERREUR : entrées zip invalides détectées (path traversal)", file=sys.stderr)
+            sys.exit(1)
         contents = {n: zf.read(n) for n in names}
 
     refs = [(n, sha256b64(contents[n])) for n in names]
+    print(f"    {len(names)} fichiers a signer")
 
-    print(f"    {len(names)} fichiers à signer")
-
-    print("[3/4] Création author-signature.xml...")
+    print("[3/4] Creation author-signature.xml...")
     author_xml = build_signature("AuthorSignature", refs, cert, key, signing_time)
 
-    print("[3/4] Création signature1.xml (distributeur)...")
+    print("[3/4] Creation signature1.xml (distributeur avec DUID)...")
     dist_refs  = refs + [("author-signature.xml", sha256b64(author_xml))]
     dist_xml   = build_signature("DistributorSignature", dist_refs, cert, key, signing_time)
 
-    print(f"[4/4] Écriture WGT signé : {wgt_out}")
+    print(f"[4/4] Ecriture WGT signe : {wgt_out}")
     with zipfile.ZipFile(wgt_out, "w", zipfile.ZIP_DEFLATED) as zf:
         for n in names:
             zf.writestr(n, contents[n])
@@ -180,17 +191,19 @@ def sign_wgt(wgt_in: str, wgt_out: str, p12_out: str | None = None):
         zf.writestr("signature1.xml", dist_xml)
 
     size = os.path.getsize(wgt_out) / 1024
-    print(f"\nSUCCES — PIPSILY-TV-signed.wgt ({size:.0f} Ko)")
-    print("Contenu :")
-    with zipfile.ZipFile(wgt_out, "r") as zf:
-        for info in zf.infolist():
-            print(f"  {info.filename:40s} {info.file_size:>8} octets")
+    print(f"\nSUCCES — WGT signe ({size:.0f} Ko)")
 
 
 if __name__ == "__main__":
-    BASE    = r"C:\Users\cedri\OneDrive\Desktop\VOD-push\tizen-tv"
-    wgt_in  = os.path.join(BASE, "result", "PIPSILY-TV.wgt")
-    wgt_out = os.path.join(BASE, "result", "PIPSILY-TV-signed.wgt")
-    p12_out = os.path.join(BASE, "developer.p12")
+    parser = argparse.ArgumentParser(description="Signe un .wgt Tizen avec le DUID de la TV")
+    parser.add_argument("--duid",   required=True,  help="DUID de la TV Samsung (ex: 1ABCD1234567EF)")
+    parser.add_argument("--input",  required=True,  help="Chemin du .wgt non-signe (PIPSILY-TV.wgt)")
+    parser.add_argument("--output", required=True,  help="Chemin du .wgt signe en sortie")
+    parser.add_argument("--p12",    default=None,   help="Optionnel : sauvegarder le .p12")
+    args = parser.parse_args()
 
-    sign_wgt(wgt_in, wgt_out, p12_out)
+    if not os.path.isfile(args.input):
+        print(f"ERREUR : fichier introuvable : {args.input}", file=sys.stderr)
+        sys.exit(1)
+
+    sign_wgt(args.input, args.output, duid=args.duid, p12_out=args.p12)
