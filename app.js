@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.9 — fix durée HLS inconnue (d=0)        ║
+// ║  PIPSILY — app.js v7.0 — EPG D-pad + HTTPS + layout           ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -2402,8 +2402,10 @@ function _epgDecode(str){
 
 async function _epgFetch(creds, streamId){
   if(_epgCache[streamId]) return _epgCache[streamId];
+  // GitHub Pages est HTTPS → forcer HTTPS pour éviter le mixed-content
+  const safeBase = creds.base.replace(/^http:/i, "https:");
   try {
-    const url = `${creds.base}/player_api.php`
+    const url = `${safeBase}/player_api.php`
       + `?username=${encodeURIComponent(creds.username)}`
       + `&password=${encodeURIComponent(creds.password)}`
       + `&action=get_short_epg&stream_id=${streamId}&limit=10`;
@@ -2411,6 +2413,7 @@ async function _epgFetch(creds, streamId){
     const tid  = setTimeout(() => ctrl.abort(), 8000);
     const r = await fetch(url, { credentials:"omit", signal: ctrl.signal });
     clearTimeout(tid);
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     const items = (d?.epg_listings || []).map(e => ({
       title : _epgDecode(e.title) || "—",
@@ -2421,7 +2424,11 @@ async function _epgFetch(creds, streamId){
     })).filter(e => e.end > e.start);
     _epgCache[streamId] = items;
     return items;
-  } catch { return []; }
+  } catch(err) {
+    // Stocker null pour ne pas réessayer à chaque scroll
+    _epgCache[streamId] = null;
+    return null;
+  }
 }
 
 function _epgFmt(ts){
@@ -2430,6 +2437,10 @@ function _epgFmt(ts){
 }
 
 function _epgRenderRow(row, items, winStart){
+  if(items === null){
+    row.innerHTML = `<div class="epg-empty epg-empty--err">⚠ EPG indisponible</div>`;
+    return;
+  }
   if(!items.length){
     row.innerHTML = `<div class="epg-empty">Aucun programme disponible</div>`;
     return;
@@ -2545,16 +2556,52 @@ function openEPG(){
     if(right) right.scrollTo({ left: Math.max(0, nowPx - right.clientWidth*0.3), behavior:"smooth" });
   });
 
-  // Fermeture par Escape
+  // ── Navigation clavier / télécommande TV ──────────────────────
+  let _epgFocusIdx = -1; // -1 = pas encore de focus sur une chaîne
+
+  const _epgChanCells = () => [...ov.querySelectorAll(".epg-chan-cell")];
+
+  const _epgMoveFocus = (delta) => {
+    const cells = _epgChanCells();
+    if(!cells.length) return;
+    _epgFocusIdx = Math.max(0, Math.min((_epgFocusIdx < 0 ? 0 : _epgFocusIdx) + delta, cells.length - 1));
+    cells.forEach((c,i) => c.classList.toggle("epg-chan--focused", i === _epgFocusIdx));
+    cells[_epgFocusIdx].scrollIntoView({ block:"nearest", behavior:"smooth" });
+  };
+
   const _onKey = e => {
     if(["Escape","GoBack","BrowserBack","Back"].includes(e.key)){
-      e.stopPropagation(); e.preventDefault(); closeEPG();
+      e.stopPropagation(); e.preventDefault(); closeEPG(); return;
+    }
+    const right = document.getElementById("epgRight");
+    if(!right) return;
+    if(e.key === "ArrowDown"){ e.preventDefault(); _epgMoveFocus(+1); }
+    else if(e.key === "ArrowUp"){ e.preventDefault(); _epgMoveFocus(-1); }
+    else if(e.key === "ArrowRight"){ e.preventDefault(); right.scrollBy({ left: EPG_PX_MIN * 30, behavior:"smooth" }); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); right.scrollBy({ left: -EPG_PX_MIN * 30, behavior:"smooth" }); }
+    else if(e.key === "Enter"){
+      e.preventDefault();
+      const cells = _epgChanCells();
+      if(cells[_epgFocusIdx]) cells[_epgFocusIdx].click();
     }
   };
   document.addEventListener("keydown", _onKey, true);
   ov._onKey = _onKey;
 
-  // Lazy-load EPG par chaîne (IntersectionObserver)
+  // Clic sur une chaîne → lance le lecteur Live
+  ov.querySelector("#epgChanCol")?.addEventListener("click", e => {
+    const cell = e.target.closest(".epg-chan-cell");
+    if(!cell) return;
+    const sid = cell.dataset.id;
+    const ch  = (S.live||[]).find(c => String(c.stream_id||c.id||"") === String(sid));
+    if(!ch) return;
+    closeEPG();
+    // Si le groupe a plusieurs qualités, ouvrir le picker ; sinon lancer directement
+    if(ch._group?._variants?.length > 1) openLivePicker(ch._group);
+    else playItem(ch);
+  });
+
+  // Lazy-load EPG par chaîne visible (root = epgRight = le conteneur qui scrolle)
   const obs = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       if(!entry.isIntersecting) return;
@@ -2566,7 +2613,7 @@ function openEPG(){
       if(!sid) return;
       _epgFetch(creds, sid).then(items => _epgRenderRow(row, items, winStart));
     });
-  }, { root: document.getElementById("epgGrid"), rootMargin: "400px 0px" });
+  }, { root: document.getElementById("epgRight"), rootMargin: "400px 0px" });
 
   document.querySelectorAll(".epg-row[data-stream-id]").forEach(r => obs.observe(r));
 
