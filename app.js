@@ -244,6 +244,8 @@ const PipPlayer = {
         this._setFrenchAudio();
         video.play().catch(() => {});
       });
+      // Certains flux publient les pistes audio après le manifest → on réessaie
+      this._hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => this._setFrenchAudio());
       this._hls.on(Hls.Events.ERROR, (_, d) => {
         if(d.fatal){
           this._hls.destroy(); this._hls = null;
@@ -2295,6 +2297,231 @@ function groupLiveItems(items){
   return [...groups.values()];
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  EPG — Grille Guide TV
+// ═══════════════════════════════════════════════════════════════
+
+const EPG_PX_MIN    = 5;      // pixels par minute
+const EPG_WIN_PAST  = 60;     // minutes avant maintenant visibles
+const EPG_WIN_FUTUR = 240;    // minutes après maintenant
+const EPG_WIN_TOTAL = EPG_WIN_PAST + EPG_WIN_FUTUR; // 300 min = 5h
+const _epgCache     = {};     // streamId → [{title,start,end,live}]
+
+function _epgCreds(){
+  // Extrait les credentials Xtream depuis la première chaîne live
+  for(const ch of (S.live||[])){
+    const url = ch.url || ch.stream_url || "";
+    if(!url) continue;
+    try {
+      const u = new URL(url);
+      const p = u.pathname.split("/").filter(Boolean);
+      if((p[0]==="live"||p[0]==="movie"||p[0]==="series") && p.length>=3)
+        return { base: u.origin, username: p[1], password: p[2] };
+      const usr = u.searchParams.get("username");
+      const pwd = u.searchParams.get("password");
+      if(usr && pwd) return { base: u.origin, username: usr, password: pwd };
+      if(p.length>=2 && !p[0].includes("."))
+        return { base: u.origin, username: p[0], password: p[1] };
+    } catch {}
+  }
+  return null;
+}
+
+function _epgDecode(str){
+  if(!str) return "";
+  try { return decodeURIComponent(escape(atob(str))).trim(); } catch {}
+  try { return atob(str).trim(); } catch {}
+  return String(str).trim();
+}
+
+async function _epgFetch(creds, streamId){
+  if(_epgCache[streamId]) return _epgCache[streamId];
+  try {
+    const url = `${creds.base}/player_api.php`
+      + `?username=${encodeURIComponent(creds.username)}`
+      + `&password=${encodeURIComponent(creds.password)}`
+      + `&action=get_short_epg&stream_id=${streamId}&limit=10`;
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch(url, { credentials:"omit", signal: ctrl.signal });
+    clearTimeout(tid);
+    const d = await r.json();
+    const items = (d?.epg_listings || []).map(e => ({
+      title : _epgDecode(e.title) || "—",
+      desc  : _epgDecode(e.description),
+      start : Number(e.start_timestamp||0) * 1000,
+      end   : Number(e.stop_timestamp||0)  * 1000,
+      live  : !!e.now_playing,
+    })).filter(e => e.end > e.start);
+    _epgCache[streamId] = items;
+    return items;
+  } catch { return []; }
+}
+
+function _epgFmt(ts){
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+}
+
+function _epgRenderRow(row, items, winStart){
+  if(!items.length){
+    row.innerHTML = `<div class="epg-empty">Aucun programme disponible</div>`;
+    return;
+  }
+  let html = "";
+  for(const p of items){
+    const now = Date.now();
+    if(p.end <= winStart) continue;
+    const s    = Math.max(p.start, winStart);
+    const e    = p.end;
+    const left = (s - winStart) / 60000 * EPG_PX_MIN;
+    const wid  = Math.max(4, (e - s)   / 60000 * EPG_PX_MIN - 2);
+    const dur  = Math.round((p.end - p.start) / 60000);
+    const isLive = p.live || (p.start <= now && p.end > now);
+    const pct  = isLive ? Math.min(100, Math.round((now - p.start)/(p.end - p.start)*100)) : 0;
+    html += `<div class="epg-prog${isLive?" epg-prog--live":""}"
+      style="left:${Math.round(left)}px;width:${Math.round(wid)}px"
+      title="${esc(p.title)} · ${_epgFmt(p.start)}–${_epgFmt(p.end)} (${dur} min)${p.desc?"\n"+p.desc:""}">
+      <span class="epg-prog-time">${_epgFmt(p.start)}</span>
+      <span class="epg-prog-title">${esc(p.title)}</span>
+      ${isLive?`<div class="epg-prog-bar" style="width:${pct}%"></div>`:""}
+    </div>`;
+  }
+  row.innerHTML = html || `<div class="epg-empty">Aucun programme</div>`;
+}
+
+function openEPG(){
+  if(document.getElementById("epg-overlay")) return;
+  const creds = _epgCreds();
+  if(!creds){
+    alert("Impossible de récupérer les identifiants. Lance d'abord une chaîne TV.");
+    return;
+  }
+
+  const now      = Date.now();
+  const winStart = now - EPG_WIN_PAST  * 60000;
+  const nowPx    = EPG_WIN_PAST * EPG_PX_MIN; // px depuis le bord gauche
+  const totalPx  = EPG_WIN_TOTAL * EPG_PX_MIN;
+
+  // ── En-tête temporel ──
+  let timeHtml = "";
+  // Première marque alignée sur le demi-heure passé
+  const startRound = Math.floor(winStart / 1800000) * 1800000;
+  for(let t = startRound; t <= winStart + EPG_WIN_TOTAL*60000; t += 1800000){
+    const left = (t - winStart) / 60000 * EPG_PX_MIN;
+    if(left < 0) continue;
+    timeHtml += `<div class="epg-slot-label" style="left:${Math.round(left)}px">${_epgFmt(t)}</div>`;
+  }
+
+  // ── Lignes de grille verticales ──
+  let gridLineHtml = "";
+  for(let t = startRound; t <= winStart + EPG_WIN_TOTAL*60000; t += 1800000){
+    const left = (t - winStart) / 60000 * EPG_PX_MIN;
+    if(left < 0) continue;
+    gridLineHtml += `<div class="epg-grid-line" style="left:${Math.round(left)}px"></div>`;
+  }
+
+  const channels = (S.live || []).slice(0, 200);
+
+  const ov = document.createElement("div");
+  ov.id = "epg-overlay";
+  ov.className = "epg-overlay";
+  ov.innerHTML = `
+    <div class="epg-topbar">
+      <button class="epg-close" id="epgClose">✕ Fermer</button>
+      <div class="epg-topbar-title">📅 Guide TV</div>
+      <button class="epg-now-btn" id="epgNowJump">◎ Maintenant</button>
+    </div>
+    <div class="epg-body">
+      <div class="epg-chan-col" id="epgChanCol">
+        <div class="epg-chan-top-spacer"></div>
+        ${channels.map(ch => `
+          <div class="epg-chan-cell" data-id="${ch.stream_id||ch.id||""}">
+            ${ch.stream_icon?`<img src="${esc(ch.stream_icon)}" class="epg-chan-img" alt="" loading="lazy" onerror="this.style.display='none'">`:""}
+            <span class="epg-chan-name">${esc(ch.title||"")}</span>
+          </div>`).join("")}
+      </div>
+      <div class="epg-right" id="epgRight">
+        <div class="epg-time-header" style="width:${totalPx}px">
+          ${timeHtml}
+        </div>
+        <div class="epg-grid" id="epgGrid" style="width:${totalPx}px">
+          ${gridLineHtml}
+          ${channels.map(ch => `
+            <div class="epg-row" id="epg-row-${ch.stream_id||ch.id||""}"
+                 data-stream-id="${ch.stream_id||ch.id||""}">
+              <div class="epg-row-loading">…</div>
+            </div>`).join("")}
+          <div class="epg-now-line" id="epgNowLine" style="left:${nowPx}px"></div>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(ov);
+  history.pushState({ epg: true }, "");
+
+  // Scroll initial → "maintenant" centré
+  requestAnimationFrame(() => {
+    const right = document.getElementById("epgRight");
+    if(right) right.scrollLeft = Math.max(0, nowPx - right.clientWidth * 0.3);
+
+    // Sync scroll vertical entre colonne chaînes et grille
+    const chanCol = document.getElementById("epgChanCol");
+    right?.addEventListener("scroll", () => {
+      if(chanCol) chanCol.scrollTop = right.scrollTop;
+    });
+  });
+
+  // Boutons
+  document.getElementById("epgClose")?.addEventListener("click", closeEPG);
+  document.getElementById("epgNowJump")?.addEventListener("click", () => {
+    const right = document.getElementById("epgRight");
+    if(right) right.scrollTo({ left: Math.max(0, nowPx - right.clientWidth*0.3), behavior:"smooth" });
+  });
+
+  // Fermeture par Escape
+  const _onKey = e => {
+    if(["Escape","GoBack","BrowserBack","Back"].includes(e.key)){
+      e.stopPropagation(); e.preventDefault(); closeEPG();
+    }
+  };
+  document.addEventListener("keydown", _onKey, true);
+  ov._onKey = _onKey;
+
+  // Lazy-load EPG par chaîne (IntersectionObserver)
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if(!entry.isIntersecting) return;
+      const row = entry.target;
+      if(row.dataset.loaded) return;
+      row.dataset.loaded = "1";
+      obs.unobserve(row);
+      const sid = row.dataset.streamId;
+      if(!sid) return;
+      _epgFetch(creds, sid).then(items => _epgRenderRow(row, items, winStart));
+    });
+  }, { root: document.getElementById("epgGrid"), rootMargin: "400px 0px" });
+
+  document.querySelectorAll(".epg-row[data-stream-id]").forEach(r => obs.observe(r));
+
+  // Mise à jour ligne "maintenant" chaque minute
+  const _timer = setInterval(() => {
+    const line = document.getElementById("epgNowLine");
+    if(!line){ clearInterval(_timer); return; }
+    const drift = (Date.now() - now) / 60000 * EPG_PX_MIN;
+    line.style.left = (nowPx + drift) + "px";
+  }, 60000);
+  ov._timer = _timer;
+}
+
+function closeEPG(){
+  const ov = document.getElementById("epg-overlay");
+  if(!ov) return;
+  clearInterval(ov._timer);
+  if(ov._onKey) document.removeEventListener("keydown", ov._onKey, true);
+  ov.remove();
+}
+
 // ── Sélecteur de qualité Live (overlay) ──
 function openLivePicker(group){
   if(document.getElementById("livePicker")) return;
@@ -3825,6 +4052,27 @@ async function boot(){
     else if(k === "n" || k === "N" || k === "ChannelUp")  { e.preventDefault(); PipPlayer.goNext(); }
     else if(k === "p" || k === "P" || k === "ChannelDown"){ e.preventDefault(); PipPlayer.goPrev(); }
   }, true);
+
+  // ── Bouton Guide TV (EPG) — visible uniquement sur l'onglet TV ──
+  (function(){
+    const btn = document.createElement("button");
+    btn.id = "epgOpenBtn";
+    btn.className = "epg-open-btn";
+    btn.innerHTML = "📅 Guide TV";
+    btn.hidden = true;
+    btn.addEventListener("click", openEPG);
+    // Insérer dans la nav-row après le bouton TV
+    const nav = document.querySelector(".nav-row");
+    if(nav) nav.appendChild(btn);
+  })();
+
+  // Afficher/masquer le bouton EPG selon l'onglet actif
+  document.querySelectorAll(".nav-btn[data-type]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const epgBtn = document.getElementById("epgOpenBtn");
+      if(epgBtn) epgBtn.hidden = btn.dataset.type !== "live";
+    });
+  });
 
   // ── Pré-chargement de l'index épisodes (1 Ko, non bloquant) ──
   getEpMap();  // charge episodes_map.json en avance (1 Ko seulement)
