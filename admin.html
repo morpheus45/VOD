@@ -211,20 +211,23 @@
         return;
       }
       let users = [], payments = [], devices = [], sessions = [];
-      // Promise.allSettled : une requête qui échoue ne bloque pas les autres
-      const [rU, rP, rD, rS] = await Promise.allSettled([
-        A.supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-        A.supabase.from("payments").select("*").order("created_at", { ascending: false }),
-        A.supabase.from("devices").select("*"),
-        A.supabase.from("sessions").select("*").order("last_seen", { ascending: false })
-          .catch(() => A.supabase.from("sessions").select("*")) // fallback sans order si colonne manquante
+
+      // Chaque requête est indépendante — une erreur n'en bloque pas une autre
+      const safeQuery = async (fn) => { try { const r = await fn(); return r.data || []; } catch{ return []; } };
+
+      [users, payments, devices] = await Promise.all([
+        safeQuery(() => A.supabase.from("profiles").select("*").order("created_at", { ascending: false })),
+        safeQuery(() => A.supabase.from("payments").select("*").order("created_at", { ascending: false })),
+        safeQuery(() => A.supabase.from("devices").select("*"))
       ]);
-      users    = rU.status === "fulfilled"  ? (rU.value?.data  || []) : [];
-      payments = rP.status === "fulfilled"  ? (rP.value?.data  || []) : [];
-      devices  = rD.status === "fulfilled"  ? (rD.value?.data  || []) : [];
-      sessions = rS.status === "fulfilled"  ? (rS.value?.data  || []) : [];
-      if(rU.status === "rejected") console.warn("[admin] profiles :", rU.reason);
-      if(rS.status === "rejected") console.warn("[admin] sessions :", rS.reason);
+
+      // Sessions : essayer avec order, fallback sans si colonne last_seen absente
+      try {
+        const rS = await A.supabase.from("sessions").select("*").order("last_seen", { ascending: false });
+        sessions = rS.data || [];
+      } catch {
+        try { const rS = await A.supabase.from("sessions").select("*"); sessions = rS.data || []; } catch{}
+      }
 
       _allUsers           = users;
       window._allDevices  = devices;
@@ -490,37 +493,55 @@
     }
 
     async function activateUser(userId, days){
-      const expAt = new Date(Date.now() + days*24*3600*1000).toISOString();
-      await A.supabase.from("profiles").update({ plan:"active", subscription_expires_at: expAt }).eq("id",userId);
-      // Enregistrer le paiement
-      await A.supabase.from("payments").insert({
-        user_id: userId, amount: 4.99, type:"subscription",
-        period_start: new Date().toISOString().slice(0,10),
-        period_end: expAt.slice(0,10),
-        confirmed_at: new Date().toISOString(), confirmed_by: _session.user.id
-      });
-      showGlobalMsg("✓ Activé pour " + days + " jours");
-      loadAdmin();
+      try {
+        const expAt = new Date(Date.now() + days*24*3600*1000).toISOString();
+        const { error } = await A.supabase.from("profiles")
+          .update({ plan:"active", subscription_expires_at: expAt }).eq("id", userId);
+        if(error) throw error;
+        // Enregistrer le paiement (fire-and-forget, ne bloque pas l'activation)
+        try {
+          await A.supabase.from("payments").insert({
+            user_id: userId, amount: 4.99, type:"subscription",
+            period_start: new Date().toISOString().slice(0,10),
+            period_end: expAt.slice(0,10),
+            confirmed_at: new Date().toISOString(), confirmed_by: _session?.user?.id
+          });
+        } catch{}
+        showGlobalMsg("✓ Activé pour " + days + " jours");
+        loadAdmin();
+      } catch(err){ alert("Erreur activation : " + (err.message||err)); }
     }
 
     async function setUnlimited(userId){
-      await A.supabase.from("profiles").update({ plan:"unlimited", subscription_expires_at: null, devices_allowed: 999 }).eq("id",userId);
-      showGlobalMsg("✓ Compte illimité");
-      loadAdmin();
+      try {
+        const { error } = await A.supabase.from("profiles")
+          .update({ plan:"unlimited", subscription_expires_at: null, devices_allowed: 999 }).eq("id", userId);
+        if(error) throw error;
+        showGlobalMsg("✓ Compte illimité");
+        loadAdmin();
+      } catch(err){ alert("Erreur illimité : " + (err.message||err)); }
     }
 
     async function setTest(userId){
-      const expAt = new Date(Date.now()+7*24*3600*1000).toISOString();
-      await A.supabase.from("profiles").update({ plan:"active", subscription_expires_at: expAt }).eq("id",userId);
-      showGlobalMsg("✓ Accès test 7 jours");
-      loadAdmin();
+      try {
+        const expAt = new Date(Date.now()+7*24*3600*1000).toISOString();
+        const { error } = await A.supabase.from("profiles")
+          .update({ plan:"active", subscription_expires_at: expAt }).eq("id", userId);
+        if(error) throw error;
+        showGlobalMsg("✓ Accès test 7 jours");
+        loadAdmin();
+      } catch(err){ alert("Erreur test : " + (err.message||err)); }
     }
 
     async function deactivate(userId){
       if(!confirm("Bloquer cet utilisateur ?")) return;
-      await A.supabase.from("profiles").update({ plan:"pending", subscription_expires_at: null }).eq("id",userId);
-      showGlobalMsg("✓ Utilisateur bloqué");
-      loadAdmin();
+      try {
+        const { error } = await A.supabase.from("profiles")
+          .update({ plan:"pending", subscription_expires_at: null }).eq("id", userId);
+        if(error) throw error;
+        showGlobalMsg("✓ Utilisateur bloqué");
+        loadAdmin();
+      } catch(err){ alert("Erreur blocage : " + (err.message||err)); }
     }
 
     // ── Suppression complète d'un compte ──
