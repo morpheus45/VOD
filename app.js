@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v7.3 — Fix double popup + admin fallback    ║
+// ║  PIPSILY — app.js v7.0 — EPG D-pad + HTTPS + layout           ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -2402,10 +2402,8 @@ function _epgDecode(str){
 
 async function _epgFetch(creds, streamId){
   if(_epgCache[streamId]) return _epgCache[streamId];
-  // En WebView Android (MIXED_CONTENT_ALWAYS_ALLOW), HTTP est autorisé depuis une page HTTPS
-  // Sur navigateur web standard (GitHub Pages), on force HTTPS pour éviter le mixed-content
-  const isNativeApp = !!window.PIPSILY_NATIVE || typeof window.AndroidBridge !== "undefined";
-  const safeBase = isNativeApp ? creds.base : creds.base.replace(/^http:/i, "https:");
+  // GitHub Pages est HTTPS → forcer HTTPS pour éviter le mixed-content
+  const safeBase = creds.base.replace(/^http:/i, "https:");
   try {
     const url = `${safeBase}/player_api.php`
       + `?username=${encodeURIComponent(creds.username)}`
@@ -2568,49 +2566,38 @@ function openEPG(){
     if(!cells.length) return;
     _epgFocusIdx = Math.max(0, Math.min((_epgFocusIdx < 0 ? 0 : _epgFocusIdx) + delta, cells.length - 1));
     cells.forEach((c,i) => c.classList.toggle("epg-chan--focused", i === _epgFocusIdx));
-    // Scroll via epg-right (piloté par le listener scroll qui sync epg-chan-col)
+    // Scroll sur epgRight (colonne droite) → la colonne gauche suit via son listener
     const right = document.getElementById("epgRight");
     const cell  = cells[_epgFocusIdx];
     if(right && cell){
       const cellH = cell.offsetHeight || 48;
       const viewH = right.clientHeight;
       const cur   = right.scrollTop;
-      const top   = cell.offsetTop;   // relatif au parent epg-chan-col
-      if(top < cur + 44){
-        right.scrollTo({ top: Math.max(0, top - 44), behavior:"smooth" });
-      } else if(top + cellH > cur + viewH - 44){
-        right.scrollTo({ top: top + cellH - viewH + 44, behavior:"smooth" });
-      }
+      const top   = cell.offsetTop;
+      if(top < cur + 44)                      right.scrollTo({ top: Math.max(0, top - 44), behavior:"smooth" });
+      else if(top + cellH > cur + viewH - 44) right.scrollTo({ top: top + cellH - viewH + 44, behavior:"smooth" });
     }
-    _tvBeep(740, 0.045);  // son légèrement plus grave dans l'EPG
+    _tvBeep(740, 0.045);
   };
 
   const _onKey = e => {
     if(["Escape","GoBack","BrowserBack","Back"].includes(e.key)){
       e.stopPropagation(); e.preventDefault(); closeEPG(); return;
     }
-    // Bloquer la propagation pour tous les autres keys gérés,
-    // sinon le handler TV global (bubble) s'en empare aussi
-    if(["ArrowDown","ArrowUp","ArrowRight","ArrowLeft","Enter"].includes(e.key)){
-      e.stopPropagation(); e.preventDefault();
-      const right = document.getElementById("epgRight");
-      if(!right) return;
-      if(e.key === "ArrowDown") _epgMoveFocus(+1);
-      else if(e.key === "ArrowUp") _epgMoveFocus(-1);
-      else if(e.key === "ArrowRight") right.scrollBy({ left: EPG_PX_MIN * 30, behavior:"smooth" });
-      else if(e.key === "ArrowLeft")  right.scrollBy({ left: -EPG_PX_MIN * 30, behavior:"smooth" });
-      else if(e.key === "Enter"){ const cells = _epgChanCells(); if(cells[_epgFocusIdx]) cells[_epgFocusIdx].click(); }
+    const right = document.getElementById("epgRight");
+    if(!right) return;
+    if(e.key === "ArrowDown"){ e.preventDefault(); _epgMoveFocus(+1); }
+    else if(e.key === "ArrowUp"){ e.preventDefault(); _epgMoveFocus(-1); }
+    else if(e.key === "ArrowRight"){ e.preventDefault(); right.scrollBy({ left: EPG_PX_MIN * 30, behavior:"smooth" }); }
+    else if(e.key === "ArrowLeft"){ e.preventDefault(); right.scrollBy({ left: -EPG_PX_MIN * 30, behavior:"smooth" }); }
+    else if(e.key === "Enter"){
+      e.preventDefault();
+      const cells = _epgChanCells();
+      if(cells[_epgFocusIdx]) cells[_epgFocusIdx].click();
     }
   };
   document.addEventListener("keydown", _onKey, true);
   ov._onKey = _onKey;
-
-  // Auto-focus 1ère chaîne dès l'ouverture sur TV (télécommande opérationnelle immédiatement)
-  const _isTV = document.documentElement.classList.contains("is-tv") || window.PIPSILY_NATIVE === "android_tv";
-  if(_isTV) setTimeout(() => _epgMoveFocus(0), 150);
-  // Donner le focus à l'overlay pour que les keydown soient capturés même sans focus DOM
-  ov.tabIndex = -1;
-  requestAnimationFrame(() => ov.focus({ preventScroll: true }));
 
   // Clic sur une chaîne → lance le lecteur Live
   ov.querySelector("#epgChanCol")?.addEventListener("click", e => {
@@ -3302,26 +3289,6 @@ function openSearchOverlay(){
 //  NAVIGATION CLAVIER / D-PAD TV
 // ─────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────────────────────────
-//  SON NAVIGATION TV (Web Audio API — pas de fichier requis)
-// ─────────────────────────────────────────────────────────────────
-let _audioCtx = null;
-function _tvBeep(freq, dur){
-  try{
-    if(!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if(_audioCtx.state === "suspended") _audioCtx.resume();
-    const osc  = _audioCtx.createOscillator();
-    const gain = _audioCtx.createGain();
-    osc.connect(gain); gain.connect(_audioCtx.destination);
-    osc.frequency.value = freq || 780;
-    osc.type = "sine";
-    const t = _audioCtx.currentTime;
-    gain.gain.setValueAtTime(0.06, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + (dur || 0.055));
-    osc.start(t); osc.stop(t + (dur || 0.055));
-  } catch(e){}
-}
-
 function initTV(){
   // ── Navigation D-pad TV unifiée — un seul handler, 3 modes clairs ──
   document.addEventListener("keydown", e => {
@@ -3338,7 +3305,7 @@ function initTV(){
 
     if(!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)) return;
     e.preventDefault();
-    _tvBeep();  // son subtil à chaque déplacement D-pad
+    _tvBeep();
 
     const panelOpen  = !$("seriesPanel")?.hidden;
     const useNetflix = $("grid")?.className === "netflix-rows";
@@ -3668,8 +3635,8 @@ function initTV(){
 
     // ── Sur les nav-btns + Guide TV ──
     if(isNavBtn){
-      const epgBtn2  = document.getElementById("epgOpenBtn");
-      const navBtns  = [...document.querySelectorAll(".nav-btn[data-type]"), ...(epgBtn2 ? [epgBtn2] : [])];
+      const epgBtn  = document.getElementById("epgOpenBtn");
+      const navBtns = [...document.querySelectorAll(".nav-btn[data-type]"), ...(epgBtn ? [epgBtn] : [])];
       const ni = navBtns.indexOf(active);
       if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
@@ -4019,20 +3986,17 @@ async function boot(){
       auth = await window.PIPSILY_AUTH.authGate();
     } catch(e) {
       console.error("[PIPSILY] authGate crash (tables manquantes ?):", e.message);
-      // Récupérer la vraie session pour préserver l'email (admin check)
+      // Ne pas bloquer → démarrer en mode dégradé (préserver email pour check admin)
       let _sess = null;
       try { _sess = await window.PIPSILY_AUTH.getSession?.(); } catch{}
-      const _email = (_sess?.user?.email || "").toLowerCase();
-      const _isAdminEmail = _email && _email === (window.PIPSILY_AUTH?.ADMIN_EMAIL || "").toLowerCase();
-      auth = {
-        session: _sess || { user: { id: "err" } },
-        sub: { ok: true, plan: _isAdminEmail ? "admin" : "active", unlimited: _isAdminEmail }
-      };
+      const _em = (_sess?.user?.email || "").toLowerCase();
+      const _adm = _em && _em === (window.PIPSILY_AUTH?.ADMIN_EMAIL || "").toLowerCase();
+      auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm } };
     }
     if(!auth) return; // redirigé vers login.html ou paywall
 
     S._userId  = auth.session.user.id;
-    S._isAdmin = auth.sub.plan === "admin" || (auth.session?.user?.email || "").toLowerCase() === (window.PIPSILY_AUTH?.ADMIN_EMAIL || "").toLowerCase();
+    S._isAdmin = auth.sub.plan === "admin" || (auth.session.user.email||"" ).toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL||"" ).toLowerCase();
     S._unlim   = auth.sub.unlimited;
 
     const userBtns = $("topbarUserBtns");
@@ -4346,12 +4310,16 @@ async function boot(){
     }, 200);
   }
 
-  // ── Écoute des mises à jour Service Worker (message depuis sw.js) ──
+  // ── Écoute des mises à jour Service Worker ──
   if("serviceWorker" in navigator){
     navigator.serviceWorker.addEventListener("message", e => {
       if(e.data?.type === "UPDATE_AVAILABLE") showUpdateBanner();
     });
-    // Note : reg.waiting déjà vérifié plus haut dans init() — pas de doublon
+    // Cas APK : SW déjà en "waiting" depuis une session précédente
+    // → updatefound ne se re-déclenche pas, il faut le détecter manuellement
+    navigator.serviceWorker.ready.then(reg => {
+      if(reg.waiting) showUpdateBanner();
+    }).catch(() => {});
   }
 
   // ── Bannière installation APK pour Android (navigateur, hors APK) ──
@@ -4363,78 +4331,62 @@ async function boot(){
 
 function showUpdateBanner(){
   if($("updateBanner")) return;
-  // Dans l'APK natif, la mise à jour est gérée par le popup APK — ne pas doubler
-  if(window.PIPSILY_NATIVE || typeof window.AndroidBridge !== "undefined") return;
-  if($("apkUpdateBanner")) return; // popup APK déjà affiché
+  if($("apkUpdateBanner")) return;  // APK update déjà affiché → pas de doublon
+  const isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
+               (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
+  const banner = document.createElement("div");
+  banner.id = "updateBanner";
+  // Pas de bouton ✕ — la mise à jour est obligatoire
+  banner.innerHTML = `
+    <span style="flex:1;text-align:${isTV?"center":"left"}">
+      🔄 <strong>Nouvelle version disponible</strong> — cliquez pour mettre à jour
+    </span>
+    <button id="updateNowBtn" type="button" tabindex="0"
+      style="flex-shrink:0;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;
+             border-radius:10px;padding:12px 28px;font-weight:800;font-size:15px;cursor:pointer;
+             box-shadow:0 2px 12px rgba(34,197,94,.5);white-space:nowrap;animation:_upd-pulse 1.8s ease-in-out infinite">
+      ✅ Mettre à jour
+    </button>`;
 
-  // Overlay plein écran bloquant — pas de fond cliquable, pas de fermeture
-  const ov = document.createElement("div");
-  ov.id = "updateBanner";
-  ov.style.cssText = `
-    position:fixed;inset:0;z-index:99999;
-    display:flex;align-items:center;justify-content:center;
-    background:rgba(5,8,15,.85);backdrop-filter:blur(10px);
-    -webkit-backdrop-filter:blur(10px);padding:24px;`;
+  // Style bannière : en haut, pleine largeur, impossible à rater
+  banner.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:99999;
+    display:flex;align-items:center;gap:16px;
+    padding:${isTV?"16px 40px":"13px 20px"};
+    color:#fff;font-size:${isTV?"16px":"14px"};font-weight:600;
+    background:linear-gradient(135deg,#14532d,#166534);
+    border-bottom:3px solid #22c55e;
+    box-shadow:0 4px 24px rgba(0,0,0,.7);`;
 
-  ov.innerHTML = `
-    <div id="updateBox" style="
-      background:linear-gradient(155deg,#0d1a31 0%,#0c1523 100%);
-      border:1px solid rgba(34,197,94,.35);border-radius:24px;
-      padding:36px 32px 32px;max-width:400px;width:100%;
-      text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(34,197,94,.15);
-      animation:_upd-in .28s cubic-bezier(.34,1.56,.64,1)">
-      <div style="font-size:48px;margin-bottom:16px;line-height:1">🔄</div>
-      <h2 style="margin:0 0 10px;font-size:22px;font-weight:800;color:#eef4ff;letter-spacing:-.01em">
-        Nouvelle version disponible
-      </h2>
-      <p style="margin:0 0 28px;font-size:14px;color:#7a9cc0;line-height:1.5">
-        Une mise à jour est prête à être installée.<br>
-        L'application va se recharger automatiquement.
-      </p>
-      <button id="updateNowBtn" type="button" tabindex="0" style="
-        width:100%;padding:16px;border:none;border-radius:14px;cursor:pointer;
-        background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;
-        font-size:16px;font-weight:800;letter-spacing:.01em;
-        box-shadow:0 4px 20px rgba(34,197,94,.45);
-        animation:_upd-pulse 1.8s ease-in-out infinite">
-        ✅ Mettre à jour maintenant
-      </button>
-    </div>`;
-
+  // Injecter l'animation pulse si pas encore présente
   if(!document.getElementById("_upd-style")){
     const s = document.createElement("style");
     s.id = "_upd-style";
-    s.textContent = `
-      @keyframes _upd-pulse{
-        0%,100%{box-shadow:0 4px 20px rgba(34,197,94,.45)}
-        50%{box-shadow:0 4px 32px rgba(34,197,94,.8),0 0 0 6px rgba(34,197,94,.18)}
-      }
-      @keyframes _upd-in{
-        from{opacity:0;transform:scale(.88) translateY(20px)}
-        to{opacity:1;transform:scale(1) translateY(0)}
-      }`;
+    s.textContent = `@keyframes _upd-pulse{0%,100%{box-shadow:0 2px 12px rgba(34,197,94,.5)}50%{box-shadow:0 2px 24px rgba(34,197,94,.9),0 0 0 4px rgba(34,197,94,.3)}}`;
     document.head.appendChild(s);
   }
 
-  document.body.appendChild(ov);
+  document.body.appendChild(banner);
+
+  // Décaler la topbar vers le bas pour qu'elle reste visible sous la bannière
+  requestAnimationFrame(() => {
+    const h = banner.offsetHeight + "px";
+    const topbar = document.querySelector(".topbar");
+    if(topbar) topbar.style.top = h;
+    document.body.style.paddingTop = h;
+  });
 
   $("updateNowBtn").addEventListener("click", () => {
-    $("updateNowBtn").textContent = "⏳ Mise à jour en cours…";
+    $("updateNowBtn").textContent = "⏳ Mise à jour…";
     $("updateNowBtn").disabled = true;
     navigator.serviceWorker?.ready.then(reg => {
       reg.waiting?.postMessage({ type:"SKIP_WAITING" });
+      // Le SW enverra RELOAD — fallback si pas de message
       setTimeout(() => window.location.reload(), 3000);
     }).catch(() => window.location.reload());
   });
 
-  // Empêcher toute interaction avec la page derrière
-  ov.addEventListener("click", e => e.stopPropagation());
-  ov.addEventListener("keydown", e => {
-    if(!["Tab","Enter"," "].includes(e.key)) e.preventDefault();
-  }, true);
-
-  // Auto-focus
-  setTimeout(() => $("updateNowBtn")?.focus(), 100);
+  // Auto-focus sur TV pour D-pad
+  if(isTV) setTimeout(() => $("updateNowBtn")?.focus(), 100);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -4568,18 +4520,17 @@ async function checkApkUpdate(){
     // Déjà à jour
     if(remoteVer <= localVer) return;
 
-    // Détection TV (obligatoire = pas de suppression possible)
-    const isTV = window.PIPSILY_NATIVE === "android_tv" ||
-                 /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||
-                 (/Android/i.test(navigator.userAgent) && !/Mobile/i.test(navigator.userAgent));
+    // Suppression : déjà affiché pour cette version ET timer actif ? (clé v2)
+    // Changement de clé intentionnel : invalide les suppressions stockées sous l'ancienne clé.
+    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv2") || "0", 10);
+    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su2") || "0", 10);
+    if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
 
-    if(!isTV){
-      // Sur mobile : suppression possible après dismiss explicite (1 jour max)
-      const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv2") || "0", 10);
-      const suppressUntil = parseInt(localStorage.getItem("pf_apk_su2") || "0", 10);
-      if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
-    }
-    // Sur TV : bannière obligatoire à chaque lancement jusqu'à installation — pas de suppression
+    // Enregistrer la suppression DÈS L'AFFICHAGE (3 jours).
+    // Ainsi, même si l'utilisateur ferme sans cliquer, la bannière ne revient pas.
+    // Si une version PLUS RÉCENTE sort, suppressVer < remoteVer → affichage quand même.
+    localStorage.setItem("pf_apk_sv2", String(remoteVer));
+    localStorage.setItem("pf_apk_su2", String(Date.now() + 259200000)); // 3 jours
 
     showApkUpdateBanner(vinfo, remoteVer);
   } catch {}
@@ -4597,18 +4548,21 @@ function showApkUpdateBanner(vinfo, remoteVer){
   banner.id = "apkUpdateBanner";
 
   if(isTV){
-    // ── TV : overlay plein écran obligatoire (pas de "Plus tard") ──
+    // ── TV : overlay plein écran navigable à la télécommande ──
     banner.innerHTML = `
       <div class="apk-tv-modal">
         <div class="apk-tv-icon">📦</div>
-        <h2 class="apk-tv-title">PIPSILY v${remoteVer} — Mise à jour requise</h2>
+        <h2 class="apk-tv-title">PIPSILY v${remoteVer} disponible</h2>
         <p class="apk-tv-changes">${vinfo.changes || "Améliorations & corrections"}</p>
         <div class="apk-tv-btns">
           <button id="apkDownloadBtn" type="button" class="apk-tv-btn apk-tv-btn--install" tabindex="0">
             ✅ Installer maintenant
           </button>
+          <button id="apkDismissBtn" type="button" class="apk-tv-btn apk-tv-btn--later" tabindex="0">
+            ⏩ Plus tard
+          </button>
         </div>
-        <p class="apk-tv-hint">Appuyez sur OK pour mettre à jour</p>
+        <p class="apk-tv-hint">Utilisez ↑↓ ou ←→ pour naviguer, OK pour confirmer</p>
       </div>`;
     banner.style.cssText =
       "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.93);" +
@@ -4667,15 +4621,12 @@ function showApkUpdateBanner(vinfo, remoteVer){
     }
   };
 
-  const _dismissBtn = $("apkDismissBtn");
-  if(_dismissBtn){
-    _dismissBtn.onclick = () => {
-      banner.remove();
-      // Mobile seulement : suppression 1 jour si dismiss explicite
-      localStorage.setItem("pf_apk_sv2", String(remoteVer));
-      localStorage.setItem("pf_apk_su2", String(Date.now() + 86400000)); // 1 jour
-    };
-  }
+  $("apkDismissBtn").onclick = () => {
+    banner.remove();
+    // Étendre la suppression à 90 jours si l'utilisateur clique explicitement
+    localStorage.setItem("pf_apk_sv2", String(remoteVer));
+    localStorage.setItem("pf_apk_su2", String(Date.now() + 7776000000)); // 90 jours
+  };
 }
 
 window.addEventListener("load", boot);
