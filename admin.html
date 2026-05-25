@@ -167,29 +167,15 @@
     let _session  = null;
 
     async function init(){
-      try {
-        _session = await A.getSession();
-        if(!_session){ window.location.href = "./login.html"; return; }
-        const prof = await A.getProfile(_session.user.id);
-        // Accès admin si : plan DB = "admin" OU email = ADMIN_EMAIL (insensible à la casse)
-        const _isAdmin = (prof?.plan === "admin") ||
-          ((_session.user.email || "").toLowerCase() === (A.ADMIN_EMAIL || "").toLowerCase());
-        if(!_isAdmin){
-          document.getElementById("adminContent").innerHTML =
-            '<div style="text-align:center;padding:60px;color:#ff8899">⛔ Accès refusé</div>';
-          return;
-        }
-        // Forcer le profil admin en DB si pas encore fait (fire-and-forget)
-        if(prof?.plan !== "admin" && A.supabase){
-          A.supabase.from("profiles")
-            .upsert({ id: _session.user.id, email: _session.user.email, plan: "admin", devices_allowed: 999 })
-            .catch(() => {});
-        }
-        await loadAdmin();
-      } catch(e) {
+      _session = await A.getSession();
+      if(!_session){ window.location.href = "./login.html"; return; }
+      const prof = await A.getProfile(_session.user.id);
+      if(!prof || (prof.plan !== "admin" && _session.user.email !== A.ADMIN_EMAIL)){
         document.getElementById("adminContent").innerHTML =
-          `<div style="text-align:center;padding:60px;color:#ff8899">⚠ Erreur : ${_esc(e.message||String(e))}<br><br><a href="./admin.html" style="color:#82b4ff;font-size:13px">Réessayer</a></div>`;
+          '<div style="text-align:center;padding:60px;color:#ff8899">⛔ Accès refusé</div>';
+        return;
       }
+      loadAdmin();
     }
 
     async function loadAdmin(){
@@ -207,28 +193,18 @@
           </div>`;
         return;
       }
-      let users = [], payments = [], devices = [], sessions = [];
-      try {
-        const [rU, rP, rD, rS] = await Promise.all([
-          A.supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-          A.supabase.from("payments").select("*").order("created_at", { ascending: false }),
-          A.supabase.from("devices").select("*"),
-          A.supabase.from("sessions").select("*").order("last_seen", { ascending: false })
-        ]);
-        users    = rU.data || [];
-        payments = rP.data || [];
-        devices  = rD.data || [];
-        sessions = rS.data || [];
-      } catch(e) {
-        // Un tableau manquant/cassé ne bloque pas l'affichage — on continue avec ce qu'on a
-        console.warn("[admin] Erreur chargement données :", e);
-      }
+      const [{ data: users }, { data: payments }, { data: devices }, { data: sessions }] = await Promise.all([
+        A.supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+        A.supabase.from("payments").select("*").order("created_at", { ascending: false }),
+        A.supabase.from("devices").select("*"),
+        A.supabase.from("sessions").select("*").order("last_seen", { ascending: false })
+      ]);
 
-      _allUsers           = users;
-      window._allDevices  = devices;
-      window._allSessions = sessions;
-      window._allPayments = payments;
-      renderAdmin(users, payments, devices, sessions);
+      _allUsers    = users    || [];
+      window._allDevices  = devices  || [];
+      window._allSessions = sessions || [];
+      window._allPayments = payments || [];
+      renderAdmin(users || [], payments || [], devices || [], sessions || []);
     }
 
     function fmtDate(iso){ if(!iso) return "—"; return new Date(iso).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) }
@@ -394,7 +370,7 @@
         const devFees  = userDevs.reduce((s,d)=>s+(d.monthly_fee||0),0);
         const monthly  = (u.plan==="admin"||u.plan==="unlimited"||u.plan==="pending") ? null :
           (exp && exp > new Date() ? fmtMoney(4.99+devFees) : null);
-        const isMe     = (u.email||"").toLowerCase() === (A.ADMIN_EMAIL||"").toLowerCase();
+        const isMe     = u.email === A.ADMIN_EMAIL;
         const devLimit = u.plan==="admin"||u.plan==="unlimited" ? "∞" : (u.devices_allowed||1);
         const isOnline = userSess.length > 0;
 
