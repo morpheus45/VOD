@@ -267,12 +267,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                 };
                 IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
-                if (Build.VERSION.SDK_INT >= 26) {
-                    registerReceiver(apkReceiver, filter, 2 /* RECEIVER_EXPORTED */);
+                // RECEIVER_EXPORTED (3-arg) n'existe qu'à partir d'API 33 (Android 13)
+                // Sur API 21-32, on utilise la version 2-arg (broadcast système = OK sans flag)
+                if (Build.VERSION.SDK_INT >= 33) {
+                    registerReceiver(apkReceiver, filter, Context.RECEIVER_EXPORTED);
                 } else {
                     registerReceiver(apkReceiver, filter);
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {  // Throwable attrape aussi Error (ex: NoSuchMethodError)
                 Log.e(TAG, "startApkDownload", e);
                 Toast.makeText(MainActivity.this,
                     "Erreur téléchargement : " + e.getMessage(), Toast.LENGTH_LONG).show();
