@@ -2402,8 +2402,10 @@ function _epgDecode(str){
 
 async function _epgFetch(creds, streamId){
   if(_epgCache[streamId]) return _epgCache[streamId];
-  // GitHub Pages est HTTPS → forcer HTTPS pour éviter le mixed-content
-  const safeBase = creds.base.replace(/^http:/i, "https:");
+  // En WebView Android (MIXED_CONTENT_ALWAYS_ALLOW), HTTP est autorisé depuis une page HTTPS
+  // Sur navigateur web standard (GitHub Pages), on force HTTPS pour éviter le mixed-content
+  const isNativeApp = !!window.PIPSILY_NATIVE || typeof window.AndroidBridge !== "undefined";
+  const safeBase = isNativeApp ? creds.base : creds.base.replace(/^http:/i, "https:");
   try {
     const url = `${safeBase}/player_api.php`
       + `?username=${encodeURIComponent(creds.username)}`
@@ -2573,20 +2575,28 @@ function openEPG(){
     if(["Escape","GoBack","BrowserBack","Back"].includes(e.key)){
       e.stopPropagation(); e.preventDefault(); closeEPG(); return;
     }
-    const right = document.getElementById("epgRight");
-    if(!right) return;
-    if(e.key === "ArrowDown"){ e.preventDefault(); _epgMoveFocus(+1); }
-    else if(e.key === "ArrowUp"){ e.preventDefault(); _epgMoveFocus(-1); }
-    else if(e.key === "ArrowRight"){ e.preventDefault(); right.scrollBy({ left: EPG_PX_MIN * 30, behavior:"smooth" }); }
-    else if(e.key === "ArrowLeft"){ e.preventDefault(); right.scrollBy({ left: -EPG_PX_MIN * 30, behavior:"smooth" }); }
-    else if(e.key === "Enter"){
-      e.preventDefault();
-      const cells = _epgChanCells();
-      if(cells[_epgFocusIdx]) cells[_epgFocusIdx].click();
+    // Bloquer la propagation pour tous les autres keys gérés,
+    // sinon le handler TV global (bubble) s'en empare aussi
+    if(["ArrowDown","ArrowUp","ArrowRight","ArrowLeft","Enter"].includes(e.key)){
+      e.stopPropagation(); e.preventDefault();
+      const right = document.getElementById("epgRight");
+      if(!right) return;
+      if(e.key === "ArrowDown") _epgMoveFocus(+1);
+      else if(e.key === "ArrowUp") _epgMoveFocus(-1);
+      else if(e.key === "ArrowRight") right.scrollBy({ left: EPG_PX_MIN * 30, behavior:"smooth" });
+      else if(e.key === "ArrowLeft")  right.scrollBy({ left: -EPG_PX_MIN * 30, behavior:"smooth" });
+      else if(e.key === "Enter"){ const cells = _epgChanCells(); if(cells[_epgFocusIdx]) cells[_epgFocusIdx].click(); }
     }
   };
   document.addEventListener("keydown", _onKey, true);
   ov._onKey = _onKey;
+
+  // Auto-focus 1ère chaîne dès l'ouverture sur TV (télécommande opérationnelle immédiatement)
+  const _isTV = document.documentElement.classList.contains("is-tv") || window.PIPSILY_NATIVE === "android_tv";
+  if(_isTV) setTimeout(() => _epgMoveFocus(0), 150);
+  // Donner le focus à l'overlay pour que les keydown soient capturés même sans focus DOM
+  ov.tabIndex = -1;
+  requestAnimationFrame(() => ov.focus({ preventScroll: true }));
 
   // Clic sur une chaîne → lance le lecteur Live
   ov.querySelector("#epgChanCol")?.addEventListener("click", e => {
@@ -3978,7 +3988,7 @@ async function boot(){
     if(!auth) return; // redirigé vers login.html ou paywall
 
     S._userId  = auth.session.user.id;
-    S._isAdmin = auth.sub.plan === "admin" || auth.session.user.email === window.PIPSILY_AUTH.ADMIN_EMAIL;
+    S._isAdmin = auth.sub.plan === "admin" || (auth.session?.user?.email || "").toLowerCase() === (window.PIPSILY_AUTH?.ADMIN_EMAIL || "").toLowerCase();
     S._unlim   = auth.sub.unlimited;
 
     const userBtns = $("topbarUserBtns");
