@@ -211,21 +211,20 @@
         return;
       }
       let users = [], payments = [], devices = [], sessions = [];
-      try {
-        const [rU, rP, rD, rS] = await Promise.all([
-          A.supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-          A.supabase.from("payments").select("*").order("created_at", { ascending: false }),
-          A.supabase.from("devices").select("*"),
-          A.supabase.from("sessions").select("*").order("last_seen", { ascending: false })
-        ]);
-        users    = rU.data || [];
-        payments = rP.data || [];
-        devices  = rD.data || [];
-        sessions = rS.data || [];
-      } catch(e) {
-        // Un tableau manquant/cassé ne bloque pas l'affichage — on continue avec ce qu'on a
-        console.warn("[admin] Erreur chargement données :", e);
-      }
+      // Promise.allSettled : une requête qui échoue ne bloque pas les autres
+      const [rU, rP, rD, rS] = await Promise.allSettled([
+        A.supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+        A.supabase.from("payments").select("*").order("created_at", { ascending: false }),
+        A.supabase.from("devices").select("*"),
+        A.supabase.from("sessions").select("*").order("last_seen", { ascending: false })
+          .catch(() => A.supabase.from("sessions").select("*")) // fallback sans order si colonne manquante
+      ]);
+      users    = rU.status === "fulfilled"  ? (rU.value?.data  || []) : [];
+      payments = rP.status === "fulfilled"  ? (rP.value?.data  || []) : [];
+      devices  = rD.status === "fulfilled"  ? (rD.value?.data  || []) : [];
+      sessions = rS.status === "fulfilled"  ? (rS.value?.data  || []) : [];
+      if(rU.status === "rejected") console.warn("[admin] profiles :", rU.reason);
+      if(rS.status === "rejected") console.warn("[admin] sessions :", rS.reason);
 
       _allUsers           = users;
       window._allDevices  = devices;
