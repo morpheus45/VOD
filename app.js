@@ -2709,48 +2709,6 @@ function renderNetflixRows(){
     if(rowIdx < rowsArr.length){
       requestAnimationFrame(_renderBatch);
     } else {
-      // ── Rangée FOR ADULT tout en bas (Films uniquement) ──────────────
-      if(S.type === "vod" && S.vodAdult && S.vodAdult.length > 0 && !S.cat && !S.search){
-        const adultRow = document.createElement("div");
-        adultRow.className = "nrow nrow--adult";
-        adultRow.innerHTML = `
-          <div class="nrow-hdr">
-            <h3 class="nrow-title nrow-title--adult">🔞 For Adult</h3>
-          </div>
-          <div class="nrow-adult-locked" id="adultLocked">
-            <button class="adult-unlock-btn" id="adultUnlockBtn">
-              <span>🔒</span><span>Afficher le contenu adulte</span>
-            </button>
-          </div>
-          <div class="nrow-strip" id="adultStrip" style="display:none"></div>`;
-        grid.appendChild(adultRow);
-        totalItems += S.vodAdult.length;
-
-        document.getElementById("adultUnlockBtn")?.addEventListener("click", () => {
-          const strip = document.getElementById("adultStrip");
-          const locked = document.getElementById("adultLocked");
-          if(!strip || !locked) return;
-          locked.style.display = "none";
-          strip.style.display  = "";
-          if(strip.childElementCount === 0){
-            S.vodAdult.slice(0, NROW_MAX).forEach(item => strip.appendChild(makeNrowCard(item)));
-            // Tuile "Voir tout"
-            if(S.vodAdult.length > NROW_MAX){
-              const all = document.createElement("button");
-              all.className = "nrow-card nrow-all-tile";
-              all.type = "button";
-              all.innerHTML = `<div class="nrow-media nrow-all-media"><span class="nrow-all-arrow">→</span><span class="nrow-all-label">Voir tout</span><span class="nrow-all-count">(${S.vodAdult.length})</span></div>`;
-              all.addEventListener("click", () => {
-                S.cat = S.vodAdult[0]?.category_name || "";
-                const g = $("grid"); if(g) g.className = "grid";
-                S.shown[S.type] = PER_PAGE;
-                renderGrid(true);
-              });
-              strip.appendChild(all);
-            }
-          }
-        });
-      }
       $("catalogCount").textContent = `${totalItems} éléments · ${rowsArr.length} catégories`;
     }
   }
@@ -2798,13 +2756,7 @@ function render(){
   }
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const _last = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
-  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))]
-    .sort((a, b) => {
-      const la = _last(a), lb = _last(b);
-      if(la !== lb) return la ? 1 : -1;
-      return a.localeCompare(b);
-    });
+  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
     cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
 
@@ -3412,14 +3364,13 @@ function _renderPoursuivreRowInner(){
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   } else {
     const all = type === "vod" ? S.vod : S.live;
-    const _hideCat = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
     inProgress = all.map(item => {
       const k1 = itemKey(item), k2 = String(item.id || item.stream_id || "");
       const en = prog[k1] || prog[k2];
       const rawPct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
       const pct = rawPct > 1 ? rawPct / 100 : rawPct; // normalise format player.js (0-100) → fraction
       return { item, pct, ts: en?.ts || 0 };
-    }).filter(x => !_hideCat(x.item?.category_name) && x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
 
@@ -3848,13 +3799,6 @@ async function boot(){
     const seriesM3u = await fetchText("series.m3u");
     if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); }
   }
-
-  // Filtrer VOSTFR et catégories adult/porno
-  const noVostfr = t => !/\[vostfr\]/i.test(t || "");
-  const isAdultCatFn = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
-  S.vodAdult = S.vod.filter(x => noVostfr(x.title) && isAdultCatFn(x.category_name));
-  S.vod    = S.vod.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
-  S.series = S.series.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
 
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
