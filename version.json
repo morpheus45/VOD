@@ -1,6 +1,6 @@
 {
-  "apk_version": 21,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v21/PIPSILY.apk",
+  "apk_version": 22,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v22/PIPSILY.apk",
   "changes": "Barre progression séries — fix durée HLS inconnue (TIME_UNSET) · reportProgress dès 30s · pct fallback 50% · _epUrlMap TV",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
