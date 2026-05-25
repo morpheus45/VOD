@@ -1350,6 +1350,17 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
   height:min(72vh, calc(100vh - 190px));
   background:#02060d; object-fit:contain;
 }
+/* ── Overlay click-to-play/pause (remplace les contrôles natifs) ── */
+.pip-click-ov{
+  position:absolute; inset:0; z-index:2; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.pip-click-icon{
+  font-size:72px; color:rgba(255,255,255,.95);
+  pointer-events:none; opacity:0;
+  text-shadow:0 0 40px rgba(0,0,0,.9);
+  line-height:1; transition:opacity .5s ease;
+}
 .pip-status{
   position:absolute; left:14px; right:14px; bottom:14px;
   padding:10px 14px; border-radius:12px;
@@ -1537,3 +1548,215 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
   font-size:14px; cursor:pointer; transition:background .2s;
 }
 .adult-unlock-btn:hover{ background:rgba(192,57,43,.3); color:#fff; }
+
+/* ═══════════════════════════════════════════════════════════════
+   EPG — GUIDE TV
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Bouton Guide TV dans la nav */
+.epg-open-btn{
+  background:linear-gradient(135deg,rgba(56,189,248,.18),rgba(124,58,237,.18));
+  border:1px solid rgba(56,189,248,.35);
+  color:#7dd3fc; border-radius:10px;
+  padding:8px 14px; font-size:13px; font-weight:600;
+  cursor:pointer; white-space:nowrap;
+  transition:background .2s, color .2s;
+}
+.epg-open-btn:hover{ background:rgba(56,189,248,.28); color:#fff; }
+
+/* Overlay plein écran */
+.epg-overlay{
+  position:fixed; inset:0; z-index:9100;
+  display:flex; flex-direction:column;
+  background:linear-gradient(180deg,#050e1f,#040b18);
+  color:#e8f0ff;
+  font-family:'Segoe UI','Inter',system-ui,sans-serif;
+  overscroll-behavior:contain;
+}
+
+/* Topbar EPG */
+.epg-topbar{
+  display:flex; align-items:center; gap:12px;
+  padding:12px 16px;
+  background:rgba(5,14,31,.95);
+  border-bottom:1px solid rgba(56,189,248,.15);
+  position:relative; z-index:10; flex-shrink:0;
+  padding-top:max(12px,env(safe-area-inset-top));
+}
+.epg-topbar-title{
+  flex:1; text-align:center;
+  font-size:16px; font-weight:700; color:#7dd3fc;
+  letter-spacing:.03em;
+}
+.epg-close{
+  border:1px solid rgba(255,255,255,.14); background:#0d1a31;
+  color:#fff; padding:9px 14px; border-radius:10px;
+  cursor:pointer; font:inherit; font-size:13px;
+  transition:background .15s;
+}
+.epg-close:hover{ background:#1a2d50 }
+.epg-now-btn{
+  border:1px solid rgba(56,189,248,.35);
+  background:rgba(56,189,248,.1); color:#7dd3fc;
+  padding:9px 14px; border-radius:10px;
+  cursor:pointer; font:inherit; font-size:13px; font-weight:600;
+  transition:background .15s;
+}
+.epg-now-btn:hover{ background:rgba(56,189,248,.22); color:#fff }
+
+/* Corps — colonnes chaînes + grille */
+.epg-body{
+  display:flex; flex:1; overflow:hidden;
+  min-height:0;
+}
+
+/* Colonne chaînes (gauche, fixe) */
+.epg-chan-col{
+  width:140px; flex-shrink:0;
+  overflow:hidden;
+  background:rgba(6,12,26,.95);
+  border-right:1px solid rgba(56,189,248,.1);
+  display:flex; flex-direction:column;
+}
+.epg-chan-top-spacer{
+  height:38px; flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.epg-chan-cell{
+  display:flex; align-items:center; gap:8px;
+  padding:0 10px;
+  height:48px; flex-shrink:0;
+  border-bottom:1px solid rgba(255,255,255,.04);
+  cursor:pointer; transition:background .12s;
+  overflow:hidden;
+}
+.epg-chan-cell:hover{ background:rgba(56,189,248,.08) }
+.epg-chan-img{
+  width:32px; height:24px; object-fit:contain;
+  border-radius:3px; flex-shrink:0;
+}
+.epg-chan-name{
+  font-size:11px; font-weight:600;
+  color:#a8c0e0; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+}
+
+/* Zone droite scrollable */
+.epg-right{
+  flex:1; overflow:auto; position:relative;
+  min-width:0;
+}
+
+/* En-tête temporel */
+.epg-time-header{
+  position:sticky; top:0; z-index:5;
+  height:38px;
+  background:rgba(6,12,26,.97);
+  border-bottom:1px solid rgba(56,189,248,.14);
+  flex-shrink:0;
+}
+.epg-slot-label{
+  position:absolute; top:0;
+  transform:translateX(-50%);
+  height:38px; display:flex; align-items:center;
+  font-size:11px; font-weight:700; color:rgba(56,189,248,.8);
+  white-space:nowrap; pointer-events:none;
+  padding:0 4px;
+}
+
+/* Grille */
+.epg-grid{
+  position:relative;
+  /* hauteur = 48px × nb chaînes */
+  min-height:200px;
+}
+.epg-grid-line{
+  position:absolute; top:0; bottom:0; width:1px;
+  background:rgba(255,255,255,.05);
+  pointer-events:none;
+}
+
+/* Ligne "maintenant" */
+.epg-now-line{
+  position:absolute; top:0; bottom:0; width:2px;
+  background:linear-gradient(180deg,#ff3d5e,rgba(255,61,94,.3));
+  box-shadow:0 0 8px rgba(255,61,94,.6);
+  pointer-events:none; z-index:4;
+}
+.epg-now-line::before{
+  content:''; position:absolute; top:-4px; left:50%;
+  transform:translateX(-50%);
+  width:8px; height:8px; border-radius:50%;
+  background:#ff3d5e;
+  box-shadow:0 0 8px #ff3d5e;
+}
+
+/* Lignes par chaîne */
+.epg-row{
+  position:relative;
+  height:48px;
+  border-bottom:1px solid rgba(255,255,255,.035);
+  overflow:hidden;
+}
+
+/* Blocs programme */
+.epg-prog{
+  position:absolute; top:4px; bottom:4px;
+  background:rgba(16,36,72,.85);
+  border:1px solid rgba(56,189,248,.18);
+  border-radius:6px;
+  padding:0 8px;
+  display:flex; flex-direction:column; justify-content:center;
+  cursor:default;
+  overflow:hidden;
+  transition:background .15s, border-color .15s;
+  box-sizing:border-box;
+}
+.epg-prog:hover{
+  background:rgba(25,55,110,.95);
+  border-color:rgba(56,189,248,.45);
+  z-index:2;
+}
+.epg-prog--live{
+  background:rgba(10,55,40,.9);
+  border-color:rgba(56,248,168,.4);
+}
+.epg-prog--live:hover{ border-color:rgba(56,248,168,.75) }
+
+.epg-prog-time{
+  font-size:9px; color:rgba(56,189,248,.7); font-weight:700;
+  line-height:1; margin-bottom:2px; white-space:nowrap;
+}
+.epg-prog--live .epg-prog-time{ color:rgba(56,248,168,.8) }
+
+.epg-prog-title{
+  font-size:11px; font-weight:600; color:#c8daf5;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  line-height:1.2;
+}
+
+/* Barre de progression (programme en cours) */
+.epg-prog-bar{
+  position:absolute; bottom:0; left:0; height:2px;
+  background:linear-gradient(90deg,rgba(56,248,168,.9),rgba(56,189,248,.6));
+  border-radius:0 0 6px 6px;
+  transition:width .5s linear;
+}
+
+/* État chargement / vide */
+.epg-row-loading, .epg-empty{
+  position:absolute; inset:0;
+  display:flex; align-items:center;
+  padding:0 12px;
+  font-size:11px; color:rgba(255,255,255,.25);
+  font-style:italic;
+}
+
+/* Mobile */
+@media(max-width:600px){
+  .epg-chan-col{ width:90px }
+  .epg-chan-name{ font-size:10px }
+  .epg-chan-img{ width:26px; height:20px }
+  .epg-prog-title{ font-size:10px }
+  .epg-topbar-title{ font-size:14px }
+}
