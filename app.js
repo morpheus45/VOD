@@ -537,7 +537,11 @@ const PipPlayer = {
 function storeGet(k, fb){
   try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fb; } catch { return fb; }
 }
-function storeSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function storeSet(k, v){
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+  // Déclencher sync cloud si c'est une donnée utilisateur
+  if((k === STORE.progress || k === STORE.favorites) && _cloudUserId) _cloudSchedulePush();
+}
 
 // ── Cache mémoire — évite des centaines de JSON.parse par render ──
 let _cacheP = null; // cache progression
@@ -563,6 +567,68 @@ function getFavs(){
   return _cacheF;
 }
 function _invalidateCache(){ _cacheP = null; _cacheF = null; }
+
+// ═══════════════════════════════════════════════════════════════
+//  CLOUD SYNC — Favoris + Progression synchronisés sur le compte
+//  Multi-appareils via Supabase user_data (RLS par user_id)
+// ═══════════════════════════════════════════════════════════════
+let _cloudUserId   = null;
+let _cloudSyncTimer = null;
+
+// Debounce : évite de spammer Supabase à chaque seconde de vidéo
+function _cloudSchedulePush(){
+  if(!_cloudUserId) return;
+  clearTimeout(_cloudSyncTimer);
+  _cloudSyncTimer = setTimeout(_cloudDoPush, 4000);
+}
+
+async function _cloudDoPush(){
+  const supa = window.PIPSILY_AUTH?.supabase;
+  if(!supa || !_cloudUserId) return;
+  try {
+    await supa.from("user_data").upsert({
+      user_id    : _cloudUserId,
+      progress   : getProg(),
+      favorites  : getFavs(),
+      updated_at : new Date().toISOString()
+    }, { onConflict: "user_id" });
+  } catch(e){ console.warn("[PIPSILY] cloud push:", e.message); }
+}
+
+// Pull depuis Supabase, merge avec local (ts le plus récent gagne)
+async function _cloudPull(userId){
+  const supa = window.PIPSILY_AUTH?.supabase;
+  if(!supa || !userId) return;
+  try {
+    const { data, error } = await supa
+      .from("user_data").select("progress,favorites")
+      .eq("user_id", userId).maybeSingle();
+    if(error || !data) return;
+
+    // ── Progression : clé la plus récente gagne ──────────────────
+    if(data.progress && typeof data.progress === "object" && !Array.isArray(data.progress)){
+      const local = getProg(); let dirty = false;
+      for(const [k, v] of Object.entries(data.progress)){
+        if(!local[k] || (v?.ts||0) > (local[k]?.ts||0)){ local[k] = v; dirty = true; }
+      }
+      if(dirty){
+        _cacheP = local;
+        try { localStorage.setItem(STORE.progress, JSON.stringify(local)); } catch {}
+      }
+    }
+
+    // ── Favoris : union dédoublonnée par key, tri par date ───────
+    if(Array.isArray(data.favorites) && data.favorites.length){
+      const map = new Map(getFavs().map(x => [x.key, x]));
+      for(const cf of data.favorites){
+        if(!map.has(cf.key) || (cf.at||0) > (map.get(cf.key)?.at||0)) map.set(cf.key, cf);
+      }
+      const merged = [...map.values()].sort((a,b) => (b.at||0)-(a.at||0)).slice(0,500);
+      _cacheF = merged;
+      try { localStorage.setItem(STORE.favorites, JSON.stringify(merged)); } catch {}
+    }
+  } catch(e){ console.warn("[PIPSILY] cloud pull:", e.message); }
+}
 
 // ── Index de progression par série — toujours frais depuis _cacheP (pas de cache séparé) ──
 // _cacheP est déjà en mémoire : Object.entries dessus = ~0ms, pas besoin de double-cache.
@@ -3870,6 +3936,13 @@ async function boot(){
 
     // Surveillance session : déconnexion forcée si autre appareil se connecte (Standard/Test)
     window.PIPSILY_AUTH.startSessionWatcher?.(S._userId);
+
+    // Sync cloud : pull favoris + progression depuis le compte (arrière-plan, non bloquant)
+    _cloudUserId = S._userId;
+    _cloudPull(S._userId).then(() => {
+      renderPoursuivreRow?.();
+      if(typeof renderFavoritesRow === "function") renderFavoritesRow();
+    }).catch(() => {});
   }
 
   // Navigation type
@@ -4053,26 +4126,18 @@ async function boot(){
     else if(k === "p" || k === "P" || k === "ChannelDown"){ e.preventDefault(); PipPlayer.goPrev(); }
   }, true);
 
-  // ── Bouton Guide TV (EPG) — visible uniquement sur l'onglet TV ──
+  // ── Bouton Guide TV (EPG) — juste à côté du bouton TV, toujours visible ──
   (function(){
     const btn = document.createElement("button");
     btn.id = "epgOpenBtn";
     btn.className = "epg-open-btn";
     btn.innerHTML = "📅 Guide TV";
-    btn.hidden = true;
     btn.addEventListener("click", openEPG);
-    // Insérer dans la nav-row après le bouton TV
-    const nav = document.querySelector(".nav-row");
-    if(nav) nav.appendChild(btn);
+    // Insérer immédiatement après le bouton "📡 TV"
+    const tvBtn = document.querySelector('.nav-btn[data-type="live"]');
+    if(tvBtn) tvBtn.insertAdjacentElement("afterend", btn);
+    else { const nav = document.querySelector(".nav-row"); if(nav) nav.appendChild(btn); }
   })();
-
-  // Afficher/masquer le bouton EPG selon l'onglet actif
-  document.querySelectorAll(".nav-btn[data-type]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const epgBtn = document.getElementById("epgOpenBtn");
-      if(epgBtn) epgBtn.hidden = btn.dataset.type !== "live";
-    });
-  });
 
   // ── Pré-chargement de l'index épisodes (1 Ko, non bloquant) ──
   getEpMap();  // charge episodes_map.json en avance (1 Ko seulement)
