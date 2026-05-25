@@ -14,6 +14,20 @@ CREATE TABLE IF NOT EXISTS public.payments (
   created_at  timestamptz DEFAULT now()
 );
 
+
+-- Ajouter les colonnes manquantes sur une table payments deja existante
+DO $$
+BEGIN
+  BEGIN ALTER TABLE public.payments ADD COLUMN txn_id      text        UNIQUE; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE public.payments ADD COLUMN payer_email text        NOT NULL DEFAULT ''; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE public.payments ADD COLUMN amount      numeric     NOT NULL DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE public.payments ADD COLUMN plan        text        NOT NULL DEFAULT 'active'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE public.payments ADD COLUMN user_id     uuid        REFERENCES auth.users(id); EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE public.payments ADD COLUMN status      text        DEFAULT 'completed'; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE public.payments ADD COLUMN expires_at  timestamptz; EXCEPTION WHEN duplicate_column THEN NULL; END;
+  BEGIN ALTER TABLE public.payments ADD COLUMN created_at  timestamptz DEFAULT now(); EXCEPTION WHEN duplicate_column THEN NULL; END;
+END $$;
+
 CREATE INDEX IF NOT EXISTS payments_email_idx
   ON public.payments (lower(payer_email));
 
