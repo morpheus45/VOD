@@ -4501,17 +4501,18 @@ async function checkApkUpdate(){
     // Déjà à jour
     if(remoteVer <= localVer) return;
 
-    // Suppression : déjà affiché pour cette version ET timer actif ? (clé v2)
-    // Changement de clé intentionnel : invalide les suppressions stockées sous l'ancienne clé.
-    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv2") || "0", 10);
-    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su2") || "0", 10);
-    if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
+    // Détection TV (obligatoire = pas de suppression possible)
+    const isTV = window.PIPSILY_NATIVE === "android_tv" ||
+                 /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||
+                 (/Android/i.test(navigator.userAgent) && !/Mobile/i.test(navigator.userAgent));
 
-    // Enregistrer la suppression DÈS L'AFFICHAGE (3 jours).
-    // Ainsi, même si l'utilisateur ferme sans cliquer, la bannière ne revient pas.
-    // Si une version PLUS RÉCENTE sort, suppressVer < remoteVer → affichage quand même.
-    localStorage.setItem("pf_apk_sv2", String(remoteVer));
-    localStorage.setItem("pf_apk_su2", String(Date.now() + 259200000)); // 3 jours
+    if(!isTV){
+      // Sur mobile : suppression possible après dismiss explicite (1 jour max)
+      const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv2") || "0", 10);
+      const suppressUntil = parseInt(localStorage.getItem("pf_apk_su2") || "0", 10);
+      if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
+    }
+    // Sur TV : bannière obligatoire à chaque lancement jusqu'à installation — pas de suppression
 
     showApkUpdateBanner(vinfo, remoteVer);
   } catch {}
@@ -4529,21 +4530,18 @@ function showApkUpdateBanner(vinfo, remoteVer){
   banner.id = "apkUpdateBanner";
 
   if(isTV){
-    // ── TV : overlay plein écran navigable à la télécommande ──
+    // ── TV : overlay plein écran obligatoire (pas de "Plus tard") ──
     banner.innerHTML = `
       <div class="apk-tv-modal">
         <div class="apk-tv-icon">📦</div>
-        <h2 class="apk-tv-title">PIPSILY v${remoteVer} disponible</h2>
+        <h2 class="apk-tv-title">PIPSILY v${remoteVer} — Mise à jour requise</h2>
         <p class="apk-tv-changes">${vinfo.changes || "Améliorations & corrections"}</p>
         <div class="apk-tv-btns">
           <button id="apkDownloadBtn" type="button" class="apk-tv-btn apk-tv-btn--install" tabindex="0">
             ✅ Installer maintenant
           </button>
-          <button id="apkDismissBtn" type="button" class="apk-tv-btn apk-tv-btn--later" tabindex="0">
-            ⏩ Plus tard
-          </button>
         </div>
-        <p class="apk-tv-hint">Utilisez ↑↓ ou ←→ pour naviguer, OK pour confirmer</p>
+        <p class="apk-tv-hint">Appuyez sur OK pour mettre à jour</p>
       </div>`;
     banner.style.cssText =
       "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.93);" +
@@ -4602,12 +4600,15 @@ function showApkUpdateBanner(vinfo, remoteVer){
     }
   };
 
-  $("apkDismissBtn").onclick = () => {
-    banner.remove();
-    // Étendre la suppression à 90 jours si l'utilisateur clique explicitement
-    localStorage.setItem("pf_apk_sv2", String(remoteVer));
-    localStorage.setItem("pf_apk_su2", String(Date.now() + 7776000000)); // 90 jours
-  };
+  const _dismissBtn = $("apkDismissBtn");
+  if(_dismissBtn){
+    _dismissBtn.onclick = () => {
+      banner.remove();
+      // Mobile seulement : suppression 1 jour si dismiss explicite
+      localStorage.setItem("pf_apk_sv2", String(remoteVer));
+      localStorage.setItem("pf_apk_su2", String(Date.now() + 86400000)); // 1 jour
+    };
+  }
 }
 
 window.addEventListener("load", boot);
