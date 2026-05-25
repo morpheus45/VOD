@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v7.0 — EPG D-pad + HTTPS + layout           ║
+// ║  PIPSILY — app.js v7.1 — Guide TV D-pad + marges + search     ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -3436,7 +3436,7 @@ function initTV(){
   function _navNetflix(k){
     const active   = document.activeElement;
     const isPill   = active?.classList.contains("cat-pill");
-    const isNavBtn = active?.classList.contains("nav-btn");
+    const isNavBtn = active?.classList.contains("nav-btn") || active?.id === "epgOpenBtn";
     const isNouCard = active?.classList.contains("nou-card");
 
     // ── Helper : première nou-card visible (favoris / continuer) ──
@@ -3509,9 +3509,10 @@ function initTV(){
     const currentRow = active?.closest(".nrow, .nou-row");
     const rowIdx     = allRows.indexOf(currentRow);
 
-    // ── Sur les nav-btns (top) : Films/Séries/TV ──
+    // ── Sur les nav-btns (top) : Films/Séries/TV + Guide TV ──
     if(isNavBtn){
-      const navBtns = [...document.querySelectorAll(".nav-btn[data-type]")];
+      const epgBtn  = document.getElementById("epgOpenBtn");
+      const navBtns = [...document.querySelectorAll(".nav-btn[data-type]"), ...(epgBtn ? [epgBtn] : [])];
       const ni = navBtns.indexOf(active);
       if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
@@ -3618,7 +3619,7 @@ function initTV(){
   function _navGrid(k){
     const active   = document.activeElement;
     const isPill   = active?.classList.contains("cat-pill");
-    const isNavBtn = active?.classList.contains("nav-btn");
+    const isNavBtn = active?.classList.contains("nav-btn") || active?.id === "epgOpenBtn";
 
     // ── Helper : première nou-card visible (favoris / continuer) ──
     const _firstNouCard = () => {
@@ -3630,9 +3631,10 @@ function initTV(){
       return null;
     };
 
-    // ── Sur les nav-btns ──
+    // ── Sur les nav-btns + Guide TV ──
     if(isNavBtn){
-      const navBtns = [...document.querySelectorAll(".nav-btn[data-type]")];
+      const epgBtn2  = document.getElementById("epgOpenBtn");
+      const navBtns  = [...document.querySelectorAll(".nav-btn[data-type]"), ...(epgBtn2 ? [epgBtn2] : [])];
       const ni = navBtns.indexOf(active);
       if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
