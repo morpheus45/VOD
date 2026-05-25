@@ -1,8 +1,8 @@
 {
   "apk_version": 24,
   "apk_url": "https://github.com/morpheus45/VOD/releases/download/v24/PIPSILY.apk",
-  "changes": "Barre progression s\u00e9ries \u2014 fix dur\u00e9e HLS inconnue (TIME_UNSET) \u00b7 reportProgress d\u00e8s 30s \u00b7 pct fallback 50% \u00b7 _epUrlMap TV",
+  "changes": "Barre progression séries — fix durée HLS inconnue (TIME_UNSET) · reportProgress dès 30s · pct fallback 50% · _epUrlMap TV",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
-  "tizen_changes": "Version initiale Samsung TV \u2014 Films, S\u00e9ries, TV en direct"
+  "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"
 }
