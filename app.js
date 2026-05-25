@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v7.1 — Guide TV D-pad + marges + search     ║
+// ║  PIPSILY — app.js v7.2 — Son D-pad + EPG scroll + Guide TV    ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -2568,7 +2568,21 @@ function openEPG(){
     if(!cells.length) return;
     _epgFocusIdx = Math.max(0, Math.min((_epgFocusIdx < 0 ? 0 : _epgFocusIdx) + delta, cells.length - 1));
     cells.forEach((c,i) => c.classList.toggle("epg-chan--focused", i === _epgFocusIdx));
-    cells[_epgFocusIdx].scrollIntoView({ block:"nearest", behavior:"smooth" });
+    // Scroll via epg-right (piloté par le listener scroll qui sync epg-chan-col)
+    const right = document.getElementById("epgRight");
+    const cell  = cells[_epgFocusIdx];
+    if(right && cell){
+      const cellH = cell.offsetHeight || 48;
+      const viewH = right.clientHeight;
+      const cur   = right.scrollTop;
+      const top   = cell.offsetTop;   // relatif au parent epg-chan-col
+      if(top < cur + 44){
+        right.scrollTo({ top: Math.max(0, top - 44), behavior:"smooth" });
+      } else if(top + cellH > cur + viewH - 44){
+        right.scrollTo({ top: top + cellH - viewH + 44, behavior:"smooth" });
+      }
+    }
+    _tvBeep(740, 0.045);  // son légèrement plus grave dans l'EPG
   };
 
   const _onKey = e => {
@@ -3288,6 +3302,26 @@ function openSearchOverlay(){
 //  NAVIGATION CLAVIER / D-PAD TV
 // ─────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────
+//  SON NAVIGATION TV (Web Audio API — pas de fichier requis)
+// ─────────────────────────────────────────────────────────────────
+let _audioCtx = null;
+function _tvBeep(freq, dur){
+  try{
+    if(!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if(_audioCtx.state === "suspended") _audioCtx.resume();
+    const osc  = _audioCtx.createOscillator();
+    const gain = _audioCtx.createGain();
+    osc.connect(gain); gain.connect(_audioCtx.destination);
+    osc.frequency.value = freq || 780;
+    osc.type = "sine";
+    const t = _audioCtx.currentTime;
+    gain.gain.setValueAtTime(0.06, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + (dur || 0.055));
+    osc.start(t); osc.stop(t + (dur || 0.055));
+  } catch(e){}
+}
+
 function initTV(){
   // ── Navigation D-pad TV unifiée — un seul handler, 3 modes clairs ──
   document.addEventListener("keydown", e => {
@@ -3304,6 +3338,7 @@ function initTV(){
 
     if(!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)) return;
     e.preventDefault();
+    _tvBeep();  // son subtil à chaque déplacement D-pad
 
     const panelOpen  = !$("seriesPanel")?.hidden;
     const useNetflix = $("grid")?.className === "netflix-rows";
