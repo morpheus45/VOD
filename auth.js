@@ -424,10 +424,9 @@ async function authGate(){
   }
 
   // ── Admin → accès illimité sans restriction ──
-  if((session.user.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase() || sub.plan === "admin"){
+  if(session.user.email === ADMIN_EMAIL || sub.plan === "admin"){
     // Créer/mettre à jour le profil admin (fire-and-forget — ne bloque pas)
-    // Condition élargie : met à jour si plan != admin/unlimited (couvre pending, active, free, null)
-    if(_supa && sub.plan !== "admin" && sub.plan !== "unlimited"){
+    if(_supa && (!sub.plan || sub.plan === "free")){
       _supa.from("profiles")
         .upsert({ id: session.user.id, email: session.user.email,
                   plan: "admin", devices_allowed: 999 })
