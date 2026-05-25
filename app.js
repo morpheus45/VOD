@@ -4323,61 +4323,75 @@ async function boot(){
 
 function showUpdateBanner(){
   if($("updateBanner")) return;
-  const isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
-               (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
-  const banner = document.createElement("div");
-  banner.id = "updateBanner";
-  // Pas de bouton ✕ — la mise à jour est obligatoire
-  banner.innerHTML = `
-    <span style="flex:1;text-align:${isTV?"center":"left"}">
-      🔄 <strong>Nouvelle version disponible</strong> — cliquez pour mettre à jour
-    </span>
-    <button id="updateNowBtn" type="button" tabindex="0"
-      style="flex-shrink:0;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;
-             border-radius:10px;padding:12px 28px;font-weight:800;font-size:15px;cursor:pointer;
-             box-shadow:0 2px 12px rgba(34,197,94,.5);white-space:nowrap;animation:_upd-pulse 1.8s ease-in-out infinite">
-      ✅ Mettre à jour
-    </button>`;
 
-  // Style bannière : en haut, pleine largeur, impossible à rater
-  banner.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:99999;
-    display:flex;align-items:center;gap:16px;
-    padding:${isTV?"16px 40px":"13px 20px"};
-    color:#fff;font-size:${isTV?"16px":"14px"};font-weight:600;
-    background:linear-gradient(135deg,#14532d,#166534);
-    border-bottom:3px solid #22c55e;
-    box-shadow:0 4px 24px rgba(0,0,0,.7);`;
+  // Overlay plein écran bloquant — pas de fond cliquable, pas de fermeture
+  const ov = document.createElement("div");
+  ov.id = "updateBanner";
+  ov.style.cssText = `
+    position:fixed;inset:0;z-index:99999;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(5,8,15,.85);backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);padding:24px;`;
 
-  // Injecter l'animation pulse si pas encore présente
+  ov.innerHTML = `
+    <div id="updateBox" style="
+      background:linear-gradient(155deg,#0d1a31 0%,#0c1523 100%);
+      border:1px solid rgba(34,197,94,.35);border-radius:24px;
+      padding:36px 32px 32px;max-width:400px;width:100%;
+      text-align:center;box-shadow:0 32px 80px rgba(0,0,0,.8),0 0 0 1px rgba(34,197,94,.15);
+      animation:_upd-in .28s cubic-bezier(.34,1.56,.64,1)">
+      <div style="font-size:48px;margin-bottom:16px;line-height:1">🔄</div>
+      <h2 style="margin:0 0 10px;font-size:22px;font-weight:800;color:#eef4ff;letter-spacing:-.01em">
+        Nouvelle version disponible
+      </h2>
+      <p style="margin:0 0 28px;font-size:14px;color:#7a9cc0;line-height:1.5">
+        Une mise à jour est prête à être installée.<br>
+        L'application va se recharger automatiquement.
+      </p>
+      <button id="updateNowBtn" type="button" tabindex="0" style="
+        width:100%;padding:16px;border:none;border-radius:14px;cursor:pointer;
+        background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;
+        font-size:16px;font-weight:800;letter-spacing:.01em;
+        box-shadow:0 4px 20px rgba(34,197,94,.45);
+        animation:_upd-pulse 1.8s ease-in-out infinite">
+        ✅ Mettre à jour maintenant
+      </button>
+    </div>`;
+
   if(!document.getElementById("_upd-style")){
     const s = document.createElement("style");
     s.id = "_upd-style";
-    s.textContent = `@keyframes _upd-pulse{0%,100%{box-shadow:0 2px 12px rgba(34,197,94,.5)}50%{box-shadow:0 2px 24px rgba(34,197,94,.9),0 0 0 4px rgba(34,197,94,.3)}}`;
+    s.textContent = `
+      @keyframes _upd-pulse{
+        0%,100%{box-shadow:0 4px 20px rgba(34,197,94,.45)}
+        50%{box-shadow:0 4px 32px rgba(34,197,94,.8),0 0 0 6px rgba(34,197,94,.18)}
+      }
+      @keyframes _upd-in{
+        from{opacity:0;transform:scale(.88) translateY(20px)}
+        to{opacity:1;transform:scale(1) translateY(0)}
+      }`;
     document.head.appendChild(s);
   }
 
-  document.body.appendChild(banner);
-
-  // Décaler la topbar vers le bas pour qu'elle reste visible sous la bannière
-  requestAnimationFrame(() => {
-    const h = banner.offsetHeight + "px";
-    const topbar = document.querySelector(".topbar");
-    if(topbar) topbar.style.top = h;
-    document.body.style.paddingTop = h;
-  });
+  document.body.appendChild(ov);
 
   $("updateNowBtn").addEventListener("click", () => {
-    $("updateNowBtn").textContent = "⏳ Mise à jour…";
+    $("updateNowBtn").textContent = "⏳ Mise à jour en cours…";
     $("updateNowBtn").disabled = true;
     navigator.serviceWorker?.ready.then(reg => {
       reg.waiting?.postMessage({ type:"SKIP_WAITING" });
-      // Le SW enverra RELOAD — fallback si pas de message
       setTimeout(() => window.location.reload(), 3000);
     }).catch(() => window.location.reload());
   });
 
-  // Auto-focus sur TV pour D-pad
-  if(isTV) setTimeout(() => $("updateNowBtn")?.focus(), 100);
+  // Empêcher toute interaction avec la page derrière
+  ov.addEventListener("click", e => e.stopPropagation());
+  ov.addEventListener("keydown", e => {
+    if(!["Tab","Enter"," "].includes(e.key)) e.preventDefault();
+  }, true);
+
+  // Auto-focus
+  setTimeout(() => $("updateNowBtn")?.focus(), 100);
 }
 
 // ─────────────────────────────────────────────────────────────────
