@@ -4348,9 +4348,13 @@ function showUpdateBanner(){
 
   document.body.appendChild(banner);
 
-  // Décaler le contenu de la page pour que la bannière ne cache rien
-  const _pushBody = () => document.body.style.paddingTop = (parseInt(document.body.style.paddingTop)||0) + banner.offsetHeight + "px";
-  requestAnimationFrame(_pushBody);
+  // Décaler la topbar vers le bas pour qu'elle reste visible sous la bannière
+  requestAnimationFrame(() => {
+    const h = banner.offsetHeight + "px";
+    const topbar = document.querySelector(".topbar");
+    if(topbar) topbar.style.top = h;
+    document.body.style.paddingTop = h;
+  });
 
   $("updateNowBtn").addEventListener("click", () => {
     $("updateNowBtn").textContent = "⏳ Mise à jour…";
