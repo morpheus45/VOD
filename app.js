@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v7.2 — Son D-pad + EPG scroll + Guide TV    ║
+// ║  PIPSILY — app.js v7.3 — Fix double popup + admin fallback    ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -4019,8 +4019,15 @@ async function boot(){
       auth = await window.PIPSILY_AUTH.authGate();
     } catch(e) {
       console.error("[PIPSILY] authGate crash (tables manquantes ?):", e.message);
-      // Ne pas bloquer → démarrer en mode dégradé
-      auth = { session: { user: { id: "err" } }, sub: { ok: true, plan: "active", unlimited: false } };
+      // Récupérer la vraie session pour préserver l'email (admin check)
+      let _sess = null;
+      try { _sess = await window.PIPSILY_AUTH.getSession?.(); } catch{}
+      const _email = (_sess?.user?.email || "").toLowerCase();
+      const _isAdminEmail = _email && _email === (window.PIPSILY_AUTH?.ADMIN_EMAIL || "").toLowerCase();
+      auth = {
+        session: _sess || { user: { id: "err" } },
+        sub: { ok: true, plan: _isAdminEmail ? "admin" : "active", unlimited: _isAdminEmail }
+      };
     }
     if(!auth) return; // redirigé vers login.html ou paywall
 
@@ -4339,16 +4346,12 @@ async function boot(){
     }, 200);
   }
 
-  // ── Écoute des mises à jour Service Worker ──
+  // ── Écoute des mises à jour Service Worker (message depuis sw.js) ──
   if("serviceWorker" in navigator){
     navigator.serviceWorker.addEventListener("message", e => {
       if(e.data?.type === "UPDATE_AVAILABLE") showUpdateBanner();
     });
-    // Cas APK : SW déjà en "waiting" depuis une session précédente
-    // → updatefound ne se re-déclenche pas, il faut le détecter manuellement
-    navigator.serviceWorker.ready.then(reg => {
-      if(reg.waiting) showUpdateBanner();
-    }).catch(() => {});
+    // Note : reg.waiting déjà vérifié plus haut dans init() — pas de doublon
   }
 
   // ── Bannière installation APK pour Android (navigateur, hors APK) ──
@@ -4360,6 +4363,9 @@ async function boot(){
 
 function showUpdateBanner(){
   if($("updateBanner")) return;
+  // Dans l'APK natif, la mise à jour est gérée par le popup APK — ne pas doubler
+  if(window.PIPSILY_NATIVE || typeof window.AndroidBridge !== "undefined") return;
+  if($("apkUpdateBanner")) return; // popup APK déjà affiché
 
   // Overlay plein écran bloquant — pas de fond cliquable, pas de fermeture
   const ov = document.createElement("div");
