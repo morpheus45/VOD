@@ -1168,23 +1168,6 @@ html.is-tv .update-bar__date{ display:none }
   border:1px solid rgba(56,168,232,.35) !important;
   color:#82b4ff !important;
 }
-@keyframes adultShake{
-  0%,100%{ transform:translateX(0) }
-  20%{ transform:translateX(-8px) }
-  40%{ transform:translateX(8px) }
-  60%{ transform:translateX(-6px) }
-  80%{ transform:translateX(4px) }
-}
-.cat-pill--adult{
-  flex-shrink:0;
-  position:sticky; right:0;
-  z-index:2;
-  background:rgba(180,0,0,.18) !important;
-  border-color:rgba(220,50,50,.4) !important;
-  color:#ff8899 !important;
-  /* Fond opaque pour ne pas laisser passer le contenu derrière la pill */
-  box-shadow:-8px 0 12px 4px rgba(5,8,15,.85);
-}
 
 /* Overlay de recherche plein écran (TV-friendly) */
 .search-overlay{
