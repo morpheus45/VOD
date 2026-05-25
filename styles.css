@@ -106,7 +106,10 @@ button,select,input{ font:inherit }
 }
 .user-btn--account:hover{ background:rgba(255,255,255,.14) }
 .nav-row{
-  display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;
+  display:flex; flex-wrap:wrap; gap:8px;
+}
+.nav-row .nav-btn{
+  flex:1; min-width:70px;
 }
 .nav-btn{
   border:1px solid var(--line); background:rgba(255,255,255,.04);
@@ -1555,6 +1558,7 @@ button{ min-height:44px; touch-action:manipulation; -webkit-tap-highlight-color:
 
 /* Bouton Guide TV dans la nav */
 .epg-open-btn{
+  flex:1; min-width:70px;
   border:1px solid rgba(56,189,248,.45);
   background:linear-gradient(135deg,rgba(56,189,248,.14),rgba(124,58,237,.14));
   color:#7dd3fc; border-radius:12px;
