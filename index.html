@@ -15,6 +15,10 @@
   <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
   <title>PIPSILY</title>
   <link rel="manifest" href="./manifest.webmanifest" />
+  <!-- Typographie premium (taste-skill) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" />
   <link rel="icon" href="./icons/icon-192.png" type="image/png" />
   <link rel="shortcut icon" href="./icons/icon-192.png" type="image/png" />
   <!-- Icône iOS (180×180 recommandé) -->
@@ -48,7 +52,7 @@
   <link rel="apple-touch-startup-image"
         media="(device-width:1024px) and (device-height:1366px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)"
         href="./icons/splash/splash-2048x2732.png" />
-  <link rel="stylesheet" href="styles.css?v=94" />
+  <link rel="stylesheet" href="styles.css?v=100" />
   <script>
     /* Détection TV précoce — avant le 1er rendu, pour éviter tout flash */
     if(/AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||
@@ -65,6 +69,7 @@
         <img src="./logo.svg" alt="PIPSILY" class="brand-logo" />
         <div class="topbar-user-btns" id="topbarUserBtns" style="display:none">
           <a href="./admin.html"   class="user-btn user-btn--admin" id="adminBtn"   style="display:none">⚙ Admin</a>
+          <a href="./install.html" class="user-btn" title="Installer sur TV / mobile">📲</a>
           <a href="./account.html" class="user-btn user-btn--account" id="accountBtn">👤</a>
         </div>
       </div>
@@ -87,7 +92,10 @@
           <button class="quality-pill" data-q="HD">HD</button>
           <button class="quality-pill" data-q="SD">SD</button>
           <button class="quality-pill" data-q="Autres">Autres</button>
+          <button class="quality-pill fav-pill" id="favFilterBtn">❤️ Favoris</button>
         </div>
+        <!-- Pills région — visibles uniquement sur l'onglet TV Live -->
+        <div id="regionPills" class="quality-pills" hidden></div>
         <select id="sortSelect">
           <option value="title">Titre A→Z</option>
           <option value="category">Catégorie</option>
@@ -111,20 +119,12 @@
         </div>
       </section>
 
-      <!-- Section Continuer à regarder -->
-      <section id="continueSection" class="section-block" hidden>
+      <!-- Section Poursuivre (En cours + Favoris fusionnés) -->
+      <section id="poursuivreSection" class="section-block" hidden>
         <div class="section-title-row">
-          <h2 class="section-h2">▶ Continuer à regarder</h2>
+          <h2 class="section-h2">▶ Poursuivre</h2>
         </div>
-        <div id="continueRow" class="nou-row"></div>
-      </section>
-
-      <!-- Section Favoris -->
-      <section id="favoritesSection" class="section-block" hidden>
-        <div class="section-title-row">
-          <h2 class="section-h2">❤️ Mes favoris</h2>
-        </div>
-        <div id="favoritesRow" class="nou-row"></div>
+        <div id="poursuivreRow" class="nou-row"></div>
       </section>
 
       <!-- Section Nouveautés -->
@@ -224,7 +224,7 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" onerror="console.warn('HLS.js indisponible')"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./auth.js"></script>
-  <script src="app.js?v=126"></script>
+  <script src="app.js?v=162"></script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {
