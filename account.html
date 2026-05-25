@@ -328,15 +328,12 @@
 
         <!-- Code parental -->
         <div class="card">
-          <div class="card-title">Code parental</div>
+          <div class="card-title">🔞 Contrôle parental</div>
           <p style="font-size:13px;color:#7a9cc0;margin-bottom:14px;line-height:1.5">
-            Protégez les contenus réservés aux adultes avec un code PIN à 4-6 chiffres.
+            Protège les contenus adultes avec un code PIN.<br>
+            Le verrou se réactive automatiquement à chaque fermeture de l'application.
           </p>
-          <label>Code parental (4-6 chiffres)</label>
-          <div class="pin-row">
-            <input type="password" id="pinInput" inputmode="numeric" maxlength="6" placeholder="••••" />
-            <button class="btn btn-primary" onclick="savePin()">Enregistrer</button>
-          </div>
+          <div id="pinSection"></div>
           <div class="msg" id="pinMsg"></div>
         </div>
 
@@ -355,10 +352,8 @@
         </div>
       `;
 
-      // Pré-remplir le PIN s'il existe
-      A.getParentalPin(session.user.id).then(pin => {
-        if(pin) document.getElementById("pinInput").placeholder = "Code enregistré (modifier)";
-      });
+      // Initialiser la section PIN parental
+      initPinSection();
 
       // Pré-sélectionner la région
       initRegionSelect();
@@ -366,13 +361,58 @@
       window._userId = session.user.id;
     }
 
-    async function savePin(){
-      const pin = document.getElementById("pinInput").value.trim();
+    // ── Contrôle parental (stockage local, verrou par session) ────────────────
+    function initPinSection(){
+      const sec    = document.getElementById("pinSection");
+      const hasPin = !!localStorage.getItem("pipsily_adult_pin");
+      if(!hasPin){
+        sec.innerHTML = `
+          <label>Créer un code PIN (4 à 6 chiffres)</label>
+          <input type="password" id="pinNew" inputmode="numeric" maxlength="6" placeholder="••••" />
+          <label style="margin-top:4px">Confirmer le code</label>
+          <input type="password" id="pinConfirm" inputmode="numeric" maxlength="6" placeholder="••••" style="margin-bottom:14px" />
+          <button class="btn btn-primary" onclick="createPin()" style="width:100%">🔒 Activer le contrôle parental</button>`;
+      } else {
+        sec.innerHTML = `
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;background:rgba(100,220,140,.08);border:1px solid rgba(100,220,140,.2);margin-bottom:14px">
+            <span style="font-size:20px">🔒</span>
+            <span style="font-size:13px;color:#6ef7b0;font-weight:600">Contrôle parental actif</span>
+          </div>
+          <label>Nouveau code (4 à 6 chiffres)</label>
+          <input type="password" id="pinNew" inputmode="numeric" maxlength="6" placeholder="Nouveau code" style="margin-bottom:14px" />
+          <div style="display:flex;gap:10px">
+            <button class="btn btn-primary" onclick="changePin()" style="flex:1">Modifier le code</button>
+            <button class="btn btn-danger" onclick="deletePin()" style="flex-shrink:0">Supprimer</button>
+          </div>`;
+      }
+    }
+
+    function createPin(){
+      const pin  = document.getElementById("pinNew").value.trim();
+      const conf = document.getElementById("pinConfirm").value.trim();
+      const msg  = document.getElementById("pinMsg");
+      if(!/^\d{4,6}$/.test(pin)){ showMsg(msg,"error","Le code doit contenir 4 à 6 chiffres."); return; }
+      if(pin !== conf){ showMsg(msg,"error","Les deux codes ne correspondent pas."); return; }
+      localStorage.setItem("pipsily_adult_pin", pin);
+      showMsg(msg,"success","✓ Code parental activé ! La section adulte apparaîtra dans l'app.");
+      setTimeout(() => initPinSection(), 800);
+    }
+
+    function changePin(){
+      const pin = document.getElementById("pinNew").value.trim();
       const msg = document.getElementById("pinMsg");
-      if(!/^\d{4,6}$/.test(pin)){ showMsg(msg, "error", "4 à 6 chiffres requis."); return; }
-      const { error } = await A.setParentalPin(window._userId, pin);
-      if(error) showMsg(msg, "error", error.message);
-      else showMsg(msg, "success", "✓ Code parental enregistré.");
+      if(!/^\d{4,6}$/.test(pin)){ showMsg(msg,"error","Le code doit contenir 4 à 6 chiffres."); return; }
+      localStorage.setItem("pipsily_adult_pin", pin);
+      sessionStorage.removeItem("pipsily_adult_unlocked"); // re-verrouiller
+      showMsg(msg,"success","✓ Code parental modifié.");
+    }
+
+    function deletePin(){
+      const msg = document.getElementById("pinMsg");
+      localStorage.removeItem("pipsily_adult_pin");
+      sessionStorage.removeItem("pipsily_adult_unlocked");
+      showMsg(msg,"success","Code parental supprimé. Les contenus adultes sont masqués.");
+      setTimeout(() => initPinSection(), 800);
     }
 
     async function changePw(){
