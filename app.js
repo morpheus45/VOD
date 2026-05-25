@@ -1855,10 +1855,9 @@ const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.categor
 
 function filtered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
-  // VOSTFR toujours masqué, quelle que soit la vue
+  // VOSTFR et adulte toujours masqués, quelle que soit la vue
   items = items.filter(x => !_isVostfr(x));
-  // Sécurité : si le contenu adulte est sélectionné mais que la session n'est plus déverrouillée → reset
-  if(S.cat === "__ADULT__" && sessionStorage.getItem("pipsily_adult_unlocked") !== "1") S.cat = "";
+  if(S.cat === "__ADULT__") S.cat = ""; // sécurité : jamais accessible
   if(S.cat === "__ADULT__"){
     // Pill 🔞 sélectionnée → uniquement les catégories adultes
     items = items.filter(x => _isAdultCat(x.category_name));
@@ -2852,29 +2851,13 @@ function renderCatPills(cats){
     normalCats.map(c =>
       `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(displayCat(c))}</button>`
     ).join("") +
-    (hasAdult && S.type !== "live" && localStorage.getItem("pipsily_adult_pin")
-      ? `<button class="cat-pill cat-pill--adult ${S.cat==="__ADULT__" ? "cat-pill--active" : ""}" data-cat="__ADULT__">🔞 Adulte</button>`
-      : "");
+    "";
 
   // ── Bouton recherche : ouvre un overlay plein écran ──
   pills.querySelector(".cat-pill--search")?.addEventListener("click", () => openSearchOverlay());
 
   pills.querySelectorAll(".cat-pill[data-cat]").forEach(btn => {
     btn.addEventListener("click", () => {
-      // Interception pill adulte : demander le PIN si session non déverrouillée
-      if(btn.dataset.cat === "__ADULT__" && sessionStorage.getItem("pipsily_adult_unlocked") !== "1"){
-        openAdultPinOverlay(() => {
-          S.cat = "__ADULT__";
-          S.shown[S.type] = PER_PAGE;
-          pills.querySelectorAll(".cat-pill[data-cat]").forEach(b =>
-            b.classList.toggle("cat-pill--active", b.dataset.cat === "__ADULT__")
-          );
-          const g = $("grid");
-          if(g) g.className = S.type === "live" ? "grid grid--live" : "grid";
-          renderGrid(true);
-        });
-        return;
-      }
       S.cat = btn.dataset.cat;
       const sel = $("categorySelect");
       if(sel) sel.value = S.cat;
@@ -2893,60 +2876,7 @@ function renderCatPills(cats){
   });
 }
 
-// ── Overlay PIN parental (TV-friendly) ──────────────────────────────────────
-function openAdultPinOverlay(onSuccess){
-  if($("adultPinOverlay")) return;
-  const ov = document.createElement("div");
-  ov.id = "adultPinOverlay";
-  ov.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(5,8,15,.93);backdrop-filter:blur(24px);display:flex;align-items:center;justify-content:center";
-  ov.innerHTML = `
-    <div style="background:#0c1422;border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:36px 28px;text-align:center;max-width:320px;width:90%">
-      <div style="font-size:44px;margin-bottom:10px">🔒</div>
-      <div style="font-size:17px;font-weight:800;color:#eef4ff;margin-bottom:6px">Contenu réservé aux adultes</div>
-      <div style="font-size:13px;color:#7a9cc0;margin-bottom:22px">Entrez votre code parental pour continuer</div>
-      <input id="adultPinInput" type="password" inputmode="numeric" maxlength="6"
-        placeholder="••••"
-        style="width:100%;padding:15px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#eef4ff;font-size:22px;text-align:center;outline:none;letter-spacing:6px;margin-bottom:8px;font-family:monospace" />
-      <div id="adultPinErr" style="color:#ff8899;font-size:12px;min-height:18px;margin-bottom:14px"></div>
-      <div style="display:flex;gap:10px">
-        <button id="adultPinCancel"
-          style="flex:1;padding:13px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#7a9cc0;font-size:14px;font-weight:600;cursor:pointer">Annuler</button>
-        <button id="adultPinConfirm"
-          style="flex:1;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;font-size:14px;font-weight:700;cursor:pointer">Déverrouiller</button>
-      </div>
-    </div>`;
-  document.body.appendChild(ov);
 
-  const input  = document.getElementById("adultPinInput");
-  const errEl  = document.getElementById("adultPinErr");
-  const btnOk  = document.getElementById("adultPinConfirm");
-  const btnCan = document.getElementById("adultPinCancel");
-  setTimeout(() => input.focus(), 80);
-
-  function tryPin(){
-    const entered = input.value.trim();
-    const saved   = localStorage.getItem("pipsily_adult_pin");
-    if(entered === saved){
-      sessionStorage.setItem("pipsily_adult_unlocked", "1");
-      ov.remove();
-      onSuccess();
-    } else {
-      errEl.textContent = "Code incorrect — réessayez.";
-      input.value = "";
-      input.focus();
-      // Shake animation
-      ov.firstElementChild.style.animation = "none";
-      requestAnimationFrame(() => {
-        ov.firstElementChild.style.animation = "adultShake .35s ease";
-      });
-    }
-  }
-
-  btnOk.onclick  = tryPin;
-  btnCan.onclick = () => ov.remove();
-  input.addEventListener("keydown", e => { if(e.key === "Enter") tryPin(); });
-  ov.addEventListener("keydown", e => { if(e.key === "Escape" || e.key === "GoBack"){ e.stopPropagation(); ov.remove(); } });
-}
 
 // ── Overlay de recherche plein écran (TV-friendly) ──
 function openSearchOverlay(){
