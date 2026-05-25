@@ -6,16 +6,12 @@ android {
     namespace 'com.pipsiflix.app'
     compileSdk 34
 
-    buildFeatures {
-        buildConfig true
-    }
-
     defaultConfig {
         applicationId "com.pipsiflix.app"
         minSdk 21                // Android 5.0+ (TV inclus)
         targetSdk 34
-        versionCode 23
-        versionName "23.0"
+        versionCode 24
+        versionName "24.0"
     }
 
     // Signing config release (utilisé par GitHub Actions ou Android Studio)
