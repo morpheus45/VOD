@@ -165,9 +165,11 @@ button,select,input{ font:inherit }
   border-bottom:1px solid var(--line);
 }
 .controls-grid--four{
-  display:grid; grid-template-columns:1fr 1.4fr 1.1fr .6fr; gap:8px;
+  display:grid; grid-template-columns:1fr 2fr 1fr 0.8fr; gap:8px;
   min-width:0;
 }
+/* Permettre à chaque cellule de rétrécir sous sa taille intrinsèque */
+.controls-grid--four > *{ min-width:0 }
 .controls-grid--four select,
 .controls-grid--four input{
   width:100%; min-width:0; padding:11px 14px; border-radius:12px;
@@ -741,9 +743,13 @@ button,select,input{ font:inherit }
   .app-shell{ padding:0 10px 0 }
   .brand-logo{ height:28px }
   .topbar{ padding:8px 0 }
-  .hero{ height:200px; border-radius:16px }
+  .hero{ height:180px; border-radius:14px; margin-bottom:14px }
   .hero h1{ font-size:18px }
-  .controls-grid--four{ grid-template-columns:1fr 1fr; gap:8px }
+  .controls-grid--four{ grid-template-columns:1fr 1fr; gap:6px }
+  .cat-pills{ padding:8px 0 8px; margin-bottom:2px }
+  .netflix-rows{ gap:18px }
+  .section-block{ margin-top:14px }
+  .sticky-controls{ padding:6px 0 6px }
   .grid{ grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); gap:8px }
   .nav-btn{ padding:10px; font-size:12px; border-radius:10px }
   .sp-hero{ grid-template-columns:75px 1fr }
