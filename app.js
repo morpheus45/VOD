@@ -3944,15 +3944,22 @@ async function boot(){
     document.documentElement.classList.add("is-tv");
   }
 
-  // ── Auto-refresh catalogue au démarrage : si un nouveau SW est en
-  //    attente, on l'active silencieusement (sans bouton manuel) ──
+  // ── Détection mise à jour SW → bannière OBLIGATOIRE (pas d'auto-reload) ──
   if("serviceWorker" in navigator){
     navigator.serviceWorker.ready.then(reg => {
-      if(reg.waiting){
-        reg.waiting.postMessage({ type:"SKIP_WAITING" });
-      }
+      // SW déjà en attente depuis une session précédente → bannière immédiate
+      if(reg.waiting) showUpdateBanner();
       // Vérifier les MAJ à chaque démarrage
       reg.update?.().catch(() => {});
+      // Nouveau SW téléchargé pendant la session → bannière dès qu'il passe "installed"
+      reg.addEventListener("updatefound", () => {
+        const newSW = reg.installing;
+        newSW?.addEventListener("statechange", () => {
+          if(newSW.state === "installed" && navigator.serviceWorker.controller){
+            showUpdateBanner();
+          }
+        });
+      });
     }).catch(() => {});
   }
 
@@ -4310,35 +4317,52 @@ function showUpdateBanner(){
                (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
   const banner = document.createElement("div");
   banner.id = "updateBanner";
+  // Pas de bouton ✕ — la mise à jour est obligatoire
   banner.innerHTML = `
-    <span>🔄 Mise à jour disponible !</span>
+    <span style="flex:1;text-align:${isTV?"center":"left"}">
+      🔄 <strong>Nouvelle version disponible</strong> — cliquez pour mettre à jour
+    </span>
     <button id="updateNowBtn" type="button" tabindex="0"
-      style="background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;border:none;
-             border-radius:10px;padding:10px 20px;font-weight:700;font-size:14px;cursor:pointer">
-      Mettre à jour
-    </button>
-    <button id="updateDismissBtn" type="button" tabindex="0" aria-label="Fermer"
-      style="background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:10px;
-             padding:10px 14px;font-size:14px;cursor:pointer">✕</button>`;
-  // Sur TV : bannière en HAUT pour être accessible par D-pad (pas en bas hors écran)
-  banner.style.cssText = isTV
-    ? `position:fixed;top:0;left:0;right:0;z-index:9999;display:flex;align-items:center;
-       justify-content:center;gap:16px;padding:14px 20px;color:#fff;font-size:14px;font-weight:600;
-       background:linear-gradient(135deg,#1a2d50,#0f1e3a);border-bottom:2px solid rgba(255,159,44,.5);
-       box-shadow:0 4px 24px rgba(0,0,0,.6);`
-    : `position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;
-       display:flex;align-items:center;gap:12px;padding:14px 18px;color:#fff;font-size:14px;font-weight:600;
-       background:linear-gradient(135deg,#1a2d50,#0f1e3a);border:1px solid rgba(255,159,44,.4);
-       border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.5);white-space:nowrap;`;
+      style="flex-shrink:0;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;border:none;
+             border-radius:10px;padding:12px 28px;font-weight:800;font-size:15px;cursor:pointer;
+             box-shadow:0 2px 12px rgba(34,197,94,.5);white-space:nowrap;animation:_upd-pulse 1.8s ease-in-out infinite">
+      ✅ Mettre à jour
+    </button>`;
+
+  // Style bannière : en haut, pleine largeur, impossible à rater
+  banner.style.cssText = `position:fixed;top:0;left:0;right:0;z-index:99999;
+    display:flex;align-items:center;gap:16px;
+    padding:${isTV?"16px 40px":"13px 20px"};
+    color:#fff;font-size:${isTV?"16px":"14px"};font-weight:600;
+    background:linear-gradient(135deg,#14532d,#166534);
+    border-bottom:3px solid #22c55e;
+    box-shadow:0 4px 24px rgba(0,0,0,.7);`;
+
+  // Injecter l'animation pulse si pas encore présente
+  if(!document.getElementById("_upd-style")){
+    const s = document.createElement("style");
+    s.id = "_upd-style";
+    s.textContent = `@keyframes _upd-pulse{0%,100%{box-shadow:0 2px 12px rgba(34,197,94,.5)}50%{box-shadow:0 2px 24px rgba(34,197,94,.9),0 0 0 4px rgba(34,197,94,.3)}}`;
+    document.head.appendChild(s);
+  }
+
   document.body.appendChild(banner);
+
+  // Décaler le contenu de la page pour que la bannière ne cache rien
+  const _pushBody = () => document.body.style.paddingTop = (parseInt(document.body.style.paddingTop)||0) + banner.offsetHeight + "px";
+  requestAnimationFrame(_pushBody);
+
   $("updateNowBtn").addEventListener("click", () => {
+    $("updateNowBtn").textContent = "⏳ Mise à jour…";
+    $("updateNowBtn").disabled = true;
     navigator.serviceWorker?.ready.then(reg => {
-      reg.waiting?.postMessage({ type: "SKIP_WAITING" });
-      window.location.reload();
+      reg.waiting?.postMessage({ type:"SKIP_WAITING" });
+      // Le SW enverra RELOAD — fallback si pas de message
+      setTimeout(() => window.location.reload(), 3000);
     }).catch(() => window.location.reload());
   });
-  $("updateDismissBtn").addEventListener("click", () => banner.remove());
-  // Auto-focus sur TV pour que le D-pad puisse sélectionner tout de suite
+
+  // Auto-focus sur TV pour D-pad
   if(isTV) setTimeout(() => $("updateNowBtn")?.focus(), 100);
 }
 
