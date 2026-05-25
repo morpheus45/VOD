@@ -1,5 +1,5 @@
 // ╔══════════════════════════════════════════════════════════════╗
-// ║  PIPSILY — app.js v6.2 — quality picker TV fix              ║
+// ║  PIPSILY — app.js v6.9 — fix durée HLS inconnue (d=0)        ║
 // ║  Films + Séries (Saisons / Épisodes) — M3U / JSON            ║
 // ║  Xtream Codes API — Google TV / Android                      ║
 // ╚══════════════════════════════════════════════════════════════╝
@@ -44,8 +44,11 @@ const S = {
   cat       : "",
   search    : "",
   quality   : "",
+  region    : localStorage.getItem("pipsily_region") || "",
+  _liveRegionIdx: null,   // construit une fois, resetté si live recharge
   sort      : "title",
   shown     : { vod: 0, series: 0, live: 0 },
+  favOnly   : false,
   loading   : false,
   // Panneau séries
   panel     : {
@@ -69,6 +72,11 @@ const $  = id => document.getElementById(id);
 const esc = s  => String(s ?? "").replace(/[&<>"']/g,
   c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 
+// Supprime le préfixe "EU | " ou "EU|" des noms de catégorie Live pour l'affichage
+function displayCat(name){
+  return String(name || "").replace(/^EU\s*\|\s*/i, "").trim();
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  LECTEUR INTERNE — PipPlayer
 //  Remplace la navigation vers player.html par un overlay intégré
@@ -86,32 +94,31 @@ const PipPlayer = {
     this._epList = item._epList || [];
     this._epIdx  = item._epIdx  ?? -1;
 
-    const url   = item.url || item.stream_url || "";
+    // preparePlutoUrl() injecte les params requis par Pluto TV (deviceModel, etc.)
+    // doit s'appliquer ici, AVANT AndroidBridge, iOS AVPlayer et le WebView player.
+    const url   = preparePlutoUrl(item.url || item.stream_url || "");
     const label = item.episode_label
       ? `${item.title} — ${item.episode_label}`
       : item.title || "Lecture";
     const sub = item.episode_title || item.category_name || "";
 
-    // ── APK : lecteur natif ExoPlayer (téléphones/tablettes non-TV) ──
-    // Sur TV/AndroidTV, on utilise le lecteur interne WebView à la place :
-    // le lecteur overlay sauvegarde la progression toutes les 5s via _saveProgress(),
-    // ce qui garantit le "Reprendre" même si l'APK n'implémente pas onAndroidPlayerClosed.
-    const _isTVCtx = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
-                    (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
-    if(!_isTVCtx && typeof window.AndroidBridge?.openPlayer === "function"){
+    // ── APK : lecteur natif ExoPlayer (HTTP sans mixed content) ────
+    if(typeof window.AndroidBridge?.openPlayer === "function"){
       pushHist(item);
-
-      // ── Mémoriser URL(s) → progress_key pour que onAndroidPlayerClosed puisse sauvegarder ──
-      if(!window._epUrlMap) window._epUrlMap = {};
-      // VOD sans progress_key : utiliser l'id comme clé de reprise
-      const _progKeyForMap = item.progress_key || String(item.id || item.stream_id || "");
-      if(_progKeyForMap && url) window._epUrlMap[url] = _progKeyForMap;
-      if(Array.isArray(item.all_episodes)){
-        item.all_episodes.forEach(ep => {
-          if(ep.url && ep.progress_key) window._epUrlMap[ep.url] = ep.progress_key;
-        });
+      // Alimenter _epUrlMap pour tous les épisodes (TV + non-TV)
+      // afin que onAndroidPlayerClosed puisse sauvegarder sous "seriesId||SxxExx"
+      if(item.type === "series" && this._epList.length > 0){
+        const sid = String(item.series_id || item.id || "");
+        if(sid){
+          if(!window._epUrlMap) window._epUrlMap = {};
+          this._epList.forEach(ep => {
+            if(!ep.url) return;
+            const s = String(ep.season || 1).padStart(2,"0");
+            const e = String(ep.episode_num || 1).padStart(2,"0");
+            window._epUrlMap[ep.url] = ep.progress_key || `${sid}||S${s}E${e}`;
+          });
+        }
       }
-
       // Sérialiser la liste d'épisodes pour Java
       const epsJson = this._epList.length > 1
         ? JSON.stringify(this._epList.map(ep => ({
@@ -169,9 +176,19 @@ const PipPlayer = {
     $("pip-player").classList.remove("pip-open");
     document.body.style.overflow = "";
     document.title = "PIPSILY";
+
+    // Rafraîchir après fermeture AVANT de nullifier _item
+    const closedItem = this._item;
     this._item = null;
-    // Rafraîchir "Continuer à regarder" après fermeture
+
+    // 1. Rafraîchir "Continuer à regarder" (section en cours + favoris)
     if(typeof renderContinueRow === "function") renderContinueRow();
+
+    // 2. Rafraîchir le panneau série si ouvert (bouton Reprendre, barres épisodes)
+    if(S.panel.open && !S.panel.isVod && typeof renderPanel === "function") renderPanel();
+
+    // 3. Mettre à jour les barres de progression sur les vignettes de la grille
+    if(closedItem) _refreshCardProgress(closedItem);
   },
 
   // ── Sélection automatique de la piste audio française ──────────
@@ -199,27 +216,13 @@ const PipPlayer = {
     video.removeAttribute("src"); video.load();
     if(this._hls){ this._hls.destroy(); this._hls = null; }
 
-    const url = secureUrl((item.url || item.stream_url || "").trim());
+    const url = secureUrl(preparePlutoUrl((item.url || item.stream_url || "").trim()));
     if(!url){ this._showStatus("❌ Aucune URL de lecture disponible.", true); return; }
 
     const isHLS = /\.m3u8/i.test(url) || item.type === "live";
 
     // ── Fallback natif : ouvre le lecteur de l'appareil si la vidéo plante ──
-    const _isTVFallback = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
-                          (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
     const _openNativeFallback = () => {
-      // TV : le lecteur interne a échoué (ex. HTTP bloqué) → ExoPlayer en dernier recours
-      if(_isTVFallback && typeof window.AndroidBridge?.openPlayer === "function"){
-        this._showStatus("⚠️ Basculement vers le lecteur natif…", false);
-        const epListJson = this._epList.length > 1
-          ? JSON.stringify(this._epList.map(ep => ({ url: ep.url || "", title: ep.title || "", episode_label: ep.episode_label || "" })))
-          : "[]";
-        setTimeout(() => {
-          try { window.AndroidBridge.openPlayer(url, this._item?.title || "", "", epListJson, this._epIdx ?? 0); }
-          catch(e){ window.open(url, "_blank", "noopener"); }
-        }, 600);
-        return;
-      }
       if(typeof window.AndroidBridge?.openInVlc === "function"){
         this._showStatus("⚠️ Ouverture du lecteur natif…", false);
         setTimeout(() => {
@@ -293,11 +296,16 @@ const PipPlayer = {
   _restoreProgress(){
     const video = $("pip-video");
     if(!video || !this._item) return;
-    const prog  = storeGet(STORE.progress, {});
+    const prog  = getProg(); // utilise le cache (au lieu de storeGet brut)
     const key   = this._item.progress_key || String(this._item.id || this._item.stream_id || "");
     const saved = prog[key];
-    if(saved?.t > 10 && saved.t < (video.duration || Infinity) - 30){
+    if(!saved) return;
+    // Format {t, d, ts} (PipPlayer) — priorité
+    if(saved.t > 10 && saved.t < (video.duration || Infinity) - 30){
       video.currentTime = saved.t;
+    // Format {pct, ts} (iOS AVPlayer / ancien) — repli
+    } else if(saved.pct > 0.01 && saved.pct < 0.97 && video.duration && isFinite(video.duration)){
+      video.currentTime = saved.pct * video.duration;
     }
   },
 
@@ -396,9 +404,6 @@ const PipPlayer = {
     this._epIdx = idx;
     const s   = String(ep.season || 1).padStart(2,"0");
     const e   = String(ep.episode_num || idx+1).padStart(2,"0");
-    // Calculer la bonne clé de progression pour le nouvel épisode
-    const seriesId   = this._item.series_id || this._item.id;
-    const newProgKey = seriesId ? `${seriesId}||S${s}E${e}` : this._item.progress_key;
     this.open({
       ...this._item,
       id            : ep.id,
@@ -407,7 +412,6 @@ const PipPlayer = {
       plot          : ep.plot || this._item.plot || "",
       episode_label : `S${s}E${e}`,
       episode_title : ep.title || "",
-      progress_key  : newProgKey,
       _epList       : this._epList,
       _epIdx        : idx
     });
@@ -479,20 +483,33 @@ const PipPlayer = {
       try { vid.webkitEnterFullscreen(); } catch(e) { console.warn("[AVP]", e); }
     }
 
-    // Sauvegarde progression
+    // Sauvegarde progression — utilise progress_key pour les séries, itemKey sinon
     let _pt;
     vid.addEventListener("timeupdate", () => {
       clearTimeout(_pt);
       _pt = setTimeout(() => {
-        const pct = vid.duration ? vid.currentTime / vid.duration : 0;
-        if(pct > 0.01 && pct < 0.98) saveProg(itemKey(item), pct);
+        if(vid.currentTime < 5) return;
+        const k = item.progress_key || itemKey(item);
+        const t = Math.floor(vid.currentTime);
+        const d = (vid.duration && isFinite(vid.duration)) ? Math.floor(vid.duration) : 0;
+        const pct = d > 0 ? t / d : 0;
+        if(pct > 0.01 && pct < 0.98){
+          const p = getProg();
+          p[k] = { t, d, ts: Date.now() };
+          storeSet(STORE.progress, p);
+        }
       }, 5000);
     });
 
-    // Reprendre depuis la progression sauvegardée
+    // Reprendre depuis la progression sauvegardée (supporte les deux formats)
     vid.addEventListener("loadedmetadata", () => {
-      const saved = getProg()[itemKey(item)];
-      if(saved?.pct && vid.duration) vid.currentTime = saved.pct * vid.duration;
+      const k     = item.progress_key || itemKey(item);
+      const saved = getProg()[k];
+      if(!saved) return;
+      if(saved.t > 10 && saved.t < (vid.duration || Infinity) - 30)
+        vid.currentTime = saved.t;
+      else if(saved.pct > 0.01 && vid.duration && isFinite(vid.duration))
+        vid.currentTime = saved.pct * vid.duration;
     }, { once: true });
 
     // Nettoyage à la fermeture du lecteur natif + rafraîchissement "Continuer"
@@ -525,14 +542,45 @@ let _cacheP = null; // cache progression
 let _cacheF = null; // cache favoris
 
 function getProg(){
-  if(!_cacheP) _cacheP = storeGet(STORE.progress, {});
+  if(!_cacheP || typeof _cacheP !== "object" || Array.isArray(_cacheP)){
+    const raw = storeGet(STORE.progress, {});
+    _cacheP = (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw : {};
+  }
   return _cacheP;
 }
 function getFavs(){
-  if(!_cacheF) _cacheF = storeGet(STORE.favorites, []);
+  if(!Array.isArray(_cacheF)){
+    const raw = storeGet(STORE.favorites, []);
+    _cacheF = Array.isArray(raw) ? raw : [];
+    // Nettoyage préventif si le format est corrompu (null, objet, string…)
+    if(!Array.isArray(raw)){
+      console.warn("[PIPSILY] Favoris corrompus en localStorage — réinitialisation.");
+      storeSet(STORE.favorites, []);
+    }
+  }
   return _cacheF;
 }
 function _invalidateCache(){ _cacheP = null; _cacheF = null; }
+
+// ── Index de progression par série — toujours frais depuis _cacheP (pas de cache séparé) ──
+// _cacheP est déjà en mémoire : Object.entries dessus = ~0ms, pas besoin de double-cache.
+function _getSeriesPctMap(){
+  const prog = getProg(); // lit _cacheP (in-memory), pas localStorage
+  const map  = {};
+  const re   = /^(.+)\|\|S\d+E\d+$/;
+  for(const [k, e] of Object.entries(prog)){
+    const m = re.exec(k);
+    if(!m || !e?.ts) continue;
+    const sid = m[1];
+    // Priorité : ratio t/d si les deux sont connus, sinon pct stocké (fallback HLS),
+    // sinon estimation 0.5 si t>30 (durée inconnue mais visionnage confirmé)
+    const pct = (e.t > 0 && e.d > 0) ? e.t / e.d
+              : (e.pct > 0 ? e.pct : (e.t > 30 ? 0.5 : 0));
+    if(pct <= 0) continue;
+    if(!map[sid] || e.ts > map[sid].ts) map[sid] = { pct: Math.min(pct, 1), ts: e.ts };
+  }
+  return map;
+}
 
 // ── Retourne la position sauvegardée en ms (pour Android openPlayerAt) ──
 function _getSavedProgressMs(item){
@@ -545,24 +593,8 @@ function _getSavedProgressMs(item){
 
 // ── Callback appelé par l'APK Android quand le lecteur ExoPlayer se ferme ──
 // MainActivity.reportProgress() injecte ce JS via webView.evaluateJavascript()
-window.onAndroidPlayerClosed = function(url, rawPos, rawDur){
-  if(!url || !rawPos || rawPos <= 0) return;
-
-  // ── Auto-détection de l'unité : millisecondes ou secondes ──────────
-  // ExoPlayer standard → ms. Certains APKs envoient en secondes.
-  // Si rawPos ou rawDur >= 100 000 c'est forcément en ms (100 000 ms = 100 s,
-  // une durée plausible ; 100 000 s = 27 h, irréaliste). Sinon → secondes.
-  let posMs, durMs;
-  if(rawPos >= 100000 || rawDur >= 100000){
-    posMs = rawPos;
-    durMs = rawDur;
-  } else {
-    // Valeurs "petites" → probablement en secondes, convertir en ms
-    posMs = rawPos * 1000;
-    durMs = rawDur > 0 ? rawDur * 1000 : 0;
-  }
-
-  if(posMs < 30000) return;   // moins de 30s regardées → ignorer
+window.onAndroidPlayerClosed = function(url, posMs, durMs){
+  if(!url || !posMs || posMs < 30000) return;   // moins de 30s regardées → ignorer
 
   const t   = Math.floor(posMs / 1000);
   const d   = (durMs > 0 && isFinite(durMs)) ? Math.floor(durMs / 1000) : 0;
@@ -573,10 +605,20 @@ window.onAndroidPlayerClosed = function(url, rawPos, rawDur){
   // ── Épisodes de série : URL connue via _epUrlMap ────────────────
   const epKey = window._epUrlMap?.[url];
   if(epKey){
-    prog[epKey] = { t, d, ts: Date.now() };
+    // Si durée inconnue (d=0, typique HLS séries), stocker pct=0.5 comme
+    // valeur de secours pour que la barre rouge et "Reprendre" restent visibles.
+    const savePct = d > 0 ? pct : 0.5;
+    prog[epKey] = { t, d, pct: savePct, ts: Date.now() };
     storeSet(STORE.progress, prog);
     _invalidateCache();
     if(typeof renderContinueRow === "function") renderContinueRow();
+    // Rafraîchir la vignette de la série dans la grille + le panneau si ouvert
+    const sid = epKey.split("||")[0];
+    const seriesItem = (S.series || []).find(s => String(s.id || s.stream_id || "") === sid);
+    if(seriesItem){
+      if(typeof _refreshCardProgress === "function") _refreshCardProgress(seriesItem);
+    }
+    if(S.panel.open && !S.panel.isVod && typeof renderPanel === "function") renderPanel();
     return;
   }
 
@@ -592,8 +634,8 @@ window.onAndroidPlayerClosed = function(url, rawPos, rawDur){
   }
   storeSet(STORE.progress, prog);
   _invalidateCache();
-
   if(typeof renderContinueRow === "function") renderContinueRow();
+  if(item && typeof _refreshCardProgress === "function") _refreshCardProgress(item);
 };
 
 function getHist()  { return storeGet(STORE.history, []); }
@@ -606,12 +648,62 @@ function itemKey(item){
   return `${item.type || S.type}||${item.id || ""}||${item.title || ""}`;
 }
 
+// ── Met à jour la barre de progression sur toutes les vignettes d'un item ──
+// Appelé par PipPlayer.close() pour rafraîchir les cartes sans re-rendre toute la grille.
+function _refreshCardProgress(playedItem){
+  // Pour un épisode de série, l'item qui nous intéresse est la série parente
+  const isSeries = playedItem.type === "series" || !!playedItem.series_id;
+  let targetItem = null;
+  if(isSeries){
+    const sid = String(playedItem.series_id || playedItem.id || "");
+    targetItem = (S.series || []).find(s => String(s.id || s.stream_id || "") === sid);
+  } else {
+    targetItem = playedItem;
+  }
+  if(!targetItem) return;
+
+  const key = itemKey(targetItem);
+  const pct = getWatchPct(targetItem);
+  document.querySelectorAll(`[data-key="${CSS.escape(key)}"]`).forEach(card => {
+    // Chercher la zone image (card-media, nrow-media, nou-media)
+    const media = card.querySelector(".card-media, .nrow-media, .nou-media");
+    if(!media) return;
+    let bar = media.querySelector(".card-prog-bar");
+    if(pct > 0.03 && pct < 0.97){
+      if(!bar){
+        bar = document.createElement("div");
+        bar.className = "card-prog-bar";
+        bar.innerHTML = `<div class="card-prog-fill"></div>`;
+        media.appendChild(bar);
+      }
+      bar.querySelector(".card-prog-fill").style.width = Math.round(pct * 100) + "%";
+    } else if(bar){
+      bar.remove();
+    }
+  });
+}
+
 // Upgrade HTTP → HTTPS si la page est servie en HTTPS (évite mixed content sur Android)
 function secureUrl(url){
   if(!url) return url;
   if(location.protocol === "https:" && /^http:\/\//i.test(url))
     return url.replace(/^http:\/\//i, "https://");
   return url;
+}
+
+/**
+ * Ajoute les paramètres obligatoires aux URLs de streaming Pluto TV.
+ * Sans ces params le serveur retourne HTTP 400 (deviceModel manquant, etc.).
+ * Appelé juste avant la lecture — les URLs stockées restent propres.
+ */
+function preparePlutoUrl(url){
+  if(!url || !url.includes("pluto.tv/stitch/hls/channel/")) return url;
+  const base = url.split("?")[0];
+  return base +
+    "?advertisingId=&appName=web&appVersion=unknown&clientTime=0" +
+    "&deviceDNT=0&deviceId=pipsily&deviceLat=0&deviceLon=0" +
+    "&deviceMake=web&deviceModel=web&deviceType=web&deviceVersion=unknown" +
+    "&includeExtendedEvents=false&marketingRegion=FR&sid=&userId=";
 }
 function isFav(item){ return getFavs().some(x => x.key === itemKey(item)); }
 
@@ -620,8 +712,10 @@ function getWatchPct(item){
   const prog = getProg();
   const k1   = itemKey(item);                              // clé AVPlayer iOS
   if(prog[k1]?.pct > 0) return prog[k1].pct;
-  const k2 = String(item.id || item.stream_id || "");     // clé PipPlayer
+  const k2 = String(item.id || item.stream_id || "");     // clé PipPlayer VOD
   if(k2 && prog[k2]?.t > 0 && prog[k2]?.d > 0) return prog[k2].t / prog[k2].d;
+  // Séries : progression du dernier épisode regardé (stockée sous "seriesId||SxxExx")
+  if(item.type === "series" && k2) return _getSeriesPctMap()[k2]?.pct || 0;
   return 0;
 }
 
@@ -669,11 +763,6 @@ function cleanTitle(t){
   s = s.replace(/\.(mkv|mp4|ts|m3u8|avi|mov)$/i, "");
   s = s.replace(/\s*\(\d{4}\)\s*$/, "");
   return s.replace(/\s+/g, " ").trim();
-}
-
-// Supprime le préfixe "EU | " ou "EU|" des noms de catégorie Live pour l'affichage
-function displayCat(name){
-  return String(name || "").replace(/^EU\s*\|\s*/i, "").trim();
 }
 
 // "NomSérie - S01E01 - Titre épisode"  →  "Titre épisode"
@@ -998,6 +1087,7 @@ function getExt(url){
 }
 
 function openVodPanel(item){
+  S.panel.lastFocus = document.activeElement;
   S.panel.open     = true;
   S.panel.series   = item;
   S.panel.isVod    = true;
@@ -1170,7 +1260,16 @@ function closeVodPanel(_fromPopstate){
   S.panel.isVod = false;
   $("seriesPanel").hidden = true;
   document.body.style.overflow = "";
-  if(needBack) history.back(); // nettoie le pushState
+  // Restaurer le focus sur la vignette d'origine
+  const prev = S.panel.lastFocus;
+  S.panel.lastFocus = null;
+  if(prev && prev.isConnected){
+    requestAnimationFrame(() => {
+      prev.focus({ preventScroll: true });
+      prev.scrollIntoView({ behavior:"smooth", block:"nearest" });
+    });
+  }
+  if(needBack) history.back();
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1178,6 +1277,7 @@ function closeVodPanel(_fromPopstate){
 // ─────────────────────────────────────────────────────────────────
 
 function openPanel(series){
+  S.panel.lastFocus  = document.activeElement;
   S.panel.open       = true;
   S.panel.series     = series;
   S.panel.seasonsMap = {};
@@ -1208,6 +1308,15 @@ function closePanel(_fromPopstate){
   S.panel.open = false;
   $("seriesPanel").hidden = true;
   document.body.style.overflow = "";
+  // Restaurer le focus sur la vignette d'origine
+  const prev = S.panel.lastFocus;
+  S.panel.lastFocus = null;
+  if(prev && prev.isConnected){
+    requestAnimationFrame(() => {
+      prev.focus({ preventScroll: true });
+      prev.scrollIntoView({ behavior:"smooth", block:"nearest" });
+    });
+  }
   if(needBack) history.back();
 }
 
@@ -1309,7 +1418,9 @@ function renderPanel(){
       eps.forEach((ep, idx) => {
         const code  = `S${String(sel).padStart(2,"0")}E${String(ep.episode_num).padStart(2,"0")}`;
         const progK = `${s.id}||${code}`;
-        const pct   = getProg()[progK]?.pct || 0;
+        const _pe   = getProg()[progK] || {};
+        const pct   = (_pe.t > 0 && _pe.d > 0) ? Math.round(_pe.t / _pe.d * 100)
+                    : (_pe.pct > 0 ? Math.round(_pe.pct * 100) : (_pe.t > 30 ? 50 : 0));
         const done  = pct >= 90;
         const hasUrl= !!ep.url;
 
@@ -1343,6 +1454,56 @@ function renderPanel(){
     }
   }
 
+  // ── Trouver le dernier épisode regardé (en cours ou terminé) ──
+  let lastWatched = null;
+  {
+    const prog = getProg();
+    const sIdEsc  = String(s.id).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const epKeyRe = new RegExp(`^${sIdEsc}\\|\\|(S(\\d+)E(\\d+))$`);
+    let lastTs = 0;
+    const progKeys = Object.keys(prog).filter(k => epKeyRe.test(k));
+    console.log(`[PIPSILY] Série "${s.title}" (id=${s.id}) — clés progression:`, progKeys.length ? progKeys : "(aucune)");
+    progKeys.forEach(k => {
+      const m = epKeyRe.exec(k);
+      if(!m) return;
+      const en = prog[k];
+      if(!en?.ts || en.ts <= lastTs) return;
+      const tSec = en.t || 0;
+      const dSec = (en.d && isFinite(en.d)) ? en.d : 0;
+      const pct  = dSec > 0 ? tSec / dSec : (en.pct || 0);
+      console.log(`  ${k} →`, { t: tSec, d: dSec, pct: Math.round(pct*100)+"%" });
+      // Accepte les deux formats : {t,d,ts} (PipPlayer) et {pct,ts} (AVPlayer/ancien)
+      if(tSec > 10 || pct > 0.01){
+        lastWatched = { code: m[1], sn: String(Number(m[2])), en: m[3], pct, tSec, progK: k };
+        lastTs = en.ts;
+      }
+    });
+    console.log(`[PIPSILY] lastWatched:`, lastWatched || "(aucun)");
+  }
+
+  // ── Premier épisode (pour Regarder / Début) ──
+  let firstEp = null, firstSk = null;
+  {
+    const firstSeason = keys[0];
+    if(firstSeason && smap[firstSeason]?.length){
+      firstEp = smap[firstSeason].find(e => !!e.url) || null;
+      firstSk = firstSeason;
+    }
+  }
+
+  // ── Prochain épisode à afficher sur le bouton (si lastWatched est terminé) ──
+  let nextEpCode = null;
+  if(lastWatched?.pct >= 0.95){
+    const _orderedAll = [];
+    keys.forEach(sk => (smap[sk]||[]).forEach(ep => _orderedAll.push({ sk, ep })));
+    const _curI = _orderedAll.findIndex(({sk, ep}) =>
+      Number(sk) === Number(lastWatched.sn) && Number(ep.episode_num) === Number(lastWatched.en));
+    if(_curI >= 0 && _curI + 1 < _orderedAll.length){
+      const nxt = _orderedAll[_curI + 1];
+      nextEpCode = `S${String(nxt.sk).padStart(2,"0")}E${String(nxt.ep.episode_num).padStart(2,"0")}`;
+    }
+  }
+
   // ── Rendu HTML complet ──
   panel.innerHTML = `
     <div class="sp-header">
@@ -1364,8 +1525,23 @@ function renderPanel(){
         </div>
       </div>
 
-      <!-- Bouton favoris série -->
+      <!-- Actions série : Reprendre / Début / Regarder + Favoris -->
       <div class="sp-series-actions">
+        ${lastWatched
+          ? `<button id="seriesResumeBtn" class="vod-play-btn" type="button">
+               <span class="vod-play-icon">▶</span>
+               <span>${lastWatched.pct >= 0.95
+                 ? "Épisode suivant · " + (nextEpCode || lastWatched.code)
+                 : "Reprendre · " + lastWatched.code + (lastWatched.pct > 0.01 ? " — " + Math.round(lastWatched.pct * 100) + "%" : "")
+               }</span>
+             </button>
+             ${firstEp ? `<button id="seriesRestartBtn" class="vod-restart-btn" type="button">↩ Depuis le début</button>` : ""}`
+          : (firstEp
+              ? `<button id="seriesPlayBtn" class="vod-play-btn" type="button">
+                   <span class="vod-play-icon">▶</span>
+                   <span>Regarder la série</span>
+                 </button>`
+              : "")}
         <button class="fav-btn-large ${isFav(s) ? "is-fav" : ""}" id="seriesFavBtn" type="button">
           <span class="fav-heart">♥</span>
           <span id="seriesFavLabel">${isFav(s) ? "Favori" : "Ajouter aux favoris"}</span>
@@ -1380,6 +1556,64 @@ function renderPanel(){
     `;
 
   bindClose();
+
+  // ── Helper : retrouve {ep, sk} par numéro de saison+épisode (robuste aux clés "2" vs "02") ──
+  function _findEpBySE(targetSn, targetEn){
+    for(const [sk, epList] of Object.entries(smap)){
+      if(Number(sk) !== targetSn) continue;
+      const ep = epList.find(e => Number(e.episode_num) === targetEn);
+      if(ep) return { ep, sk };
+    }
+    return null;
+  }
+
+  // ── Helper : liste ordonnée de tous les épisodes ──
+  function _allEpsOrdered(){
+    const arr = [];
+    Object.keys(smap).sort((a,b)=>Number(a)-Number(b)).forEach(sk =>
+      (smap[sk]||[]).forEach(ep => arr.push({ sk, ep })));
+    return arr;
+  }
+
+  // Bouton Reprendre / Épisode suivant
+  $("seriesResumeBtn")?.addEventListener("click", () => {
+    if(!lastWatched) return;
+    const targetSn = Number(lastWatched.sn);
+    const targetEn = Number(lastWatched.en);
+
+    if(lastWatched.pct >= 0.95){
+      // Épisode terminé → chercher le suivant dans la liste ordonnée
+      const all = _allEpsOrdered();
+      const curIdx = all.findIndex(({sk, ep}) =>
+        Number(sk) === targetSn && Number(ep.episode_num) === targetEn);
+      if(curIdx >= 0 && curIdx + 1 < all.length){
+        const next = all[curIdx + 1];
+        if(next.ep.url){ playEpisode(s, next.ep, next.sk); return; }
+      }
+      // Fin de série ou pas d'épisode suivant : reprise de l'épisode en cours
+    }
+
+    // Reprendre l'épisode en cours (ou dernier si fin de série)
+    const found = _findEpBySE(targetSn, targetEn);
+    if(found) playEpisode(s, found.ep, found.sk);
+  });
+
+  // Bouton Début série (premier épisode)
+  $("seriesRestartBtn")?.addEventListener("click", () => {
+    if(!firstEp || !firstSk) return;
+    // Supprimer TOUTE la progression de cette série (tous les épisodes déjà vus)
+    const prog   = getProg();
+    const prefix = String(s.id) + "||";
+    Object.keys(prog).forEach(k => { if(k.startsWith(prefix)) delete prog[k]; });
+    storeSet(STORE.progress, prog);
+    _invalidateCache();
+    playEpisode(s, firstEp, firstSk);
+  });
+
+  // Bouton Regarder série (pas de progression, premier épisode)
+  $("seriesPlayBtn")?.addEventListener("click", () => {
+    if(firstEp && firstSk) playEpisode(s, firstEp, firstSk);
+  });
 
   // Lecture directe
   $("spDirectBtn")?.addEventListener("click", () => playItem(s));
@@ -1486,8 +1720,13 @@ function renderPanel(){
     });
   });
 
-  // Focus initial (TV)
-  setTimeout(() => panel.querySelector(".sp-ep:not([disabled])")?.focus(), 80);
+  // Focus initial (TV) — priorité : Reprendre > Lire > premier épisode
+  setTimeout(() => {
+    const primaryBtn = $("seriesResumeBtn") || $("seriesPlayBtn") ||
+                       panel.querySelector(".sp-series-actions .vod-play-btn") ||
+                       panel.querySelector(".sp-ep:not([disabled])");
+    primaryBtn?.focus();
+  }, 80);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1531,17 +1770,23 @@ function playEpisode(series, ep, season){
     current_ep_index : curIdx
   };
 
-  // APK Android (non-TV) : ExoPlayer (openPlayerAt) avec reprise de position
+  // APK Android (TV ou non-TV) : pré-alimenter _epUrlMap pour TOUS les épisodes
+  // Indispensable avant tout appel AndroidBridge, quelle que soit la détection TV.
+  // PipPlayer.open() peut aussi lancer ExoPlayer sur TV — _epUrlMap doit être prêt.
+  if(typeof window.AndroidBridge !== "undefined"){
+    if(!window._epUrlMap) window._epUrlMap = {};
+    playerItem.all_episodes.forEach(epItem => {
+      if(epItem.url) window._epUrlMap[epItem.url] = epItem.progress_key;
+    });
+  }
+
+  // APK Android (non-TV) : ExoPlayer direct depuis playEpisode (openPlayerAt)
   const _isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
                 (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
   if(!_isTV && typeof window.AndroidBridge !== "undefined"){
     const epTitle  = `${series.title} — ${code}${ep.title ? " " + ep.title : ""}`;
     const epsJson  = JSON.stringify(playerItem.all_episodes);
     const savedMs  = _getSavedProgressMs({ progress_key: progKey });
-
-    // Mémoriser l'URL → progress_key pour que onAndroidPlayerClosed puisse sauvegarder
-    if(!window._epUrlMap) window._epUrlMap = {};
-    window._epUrlMap[ep.url] = progKey;
 
     if(typeof window.AndroidBridge.openPlayerAt === "function"){
       try { window.AndroidBridge.openPlayerAt(ep.url, series.title, epTitle, epsJson, curIdx, savedMs); return; }
@@ -1618,8 +1863,143 @@ function filtered(){
   else if(S.sort !== "recent")
     items.sort((a,b) => a.title.localeCompare(b.title));
 
+  // ── Live : filtre régional (préférence utilisateur, index auto-construit) ──
+  // Logique : si une variante régionale correspond → on la montre.
+  // Si AUCUNE variante ne correspond (ex : France 3 sans Roussillon),
+  // on affiche en repli la variante "Paris" si elle existe, sinon la première trouvée.
+  if(S.type === "live" && S.region){
+    if(!S._liveRegionIdx) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
+    const { regionSet } = S._liveRegionIdx;
+    const userReg = S.region.toLowerCase();
+
+    // Phase 1 — identifier les bases ayant une variante correspondant à la région,
+    //            et préparer un repli pour celles qui n'en ont pas.
+    // Ordre de priorité du repli :
+    //   1. Chaîne générale sans suffixe ("France 3")
+    //   2. Variante "Paris" ("France 3 Paris")
+    //   3. Première variante disponible
+    const basesWithMatch  = new Set();
+    const baseGeneral     = new Map(); // base_lc → item sans suffixe régional
+    const baseFallback    = new Map(); // base_lc → item de repli (Paris ou premier)
+
+    items.forEach(item => {
+      const clean = _baseLiveName(item.title);
+      const r = _isChannelRegional(clean, regionSet);
+      if(r){
+        const base = r.base.toLowerCase();
+        if(r.region === userReg) basesWithMatch.add(base);
+        // Repli régional : priorité à "paris", sinon premier trouvé
+        if(!baseFallback.has(base) || r.region === "paris")
+          baseFallback.set(base, item);
+      } else {
+        // Chaîne sans suffixe → peut servir de repli général pour une base du même nom
+        const key = clean.toLowerCase();
+        if(!baseGeneral.has(key)) baseGeneral.set(key, item);
+      }
+    });
+
+    // Phase 2 — items de repli pour les bases sans correspondance
+    const fallbackSet = new Set();
+    baseFallback.forEach((item, base) => {
+      if(basesWithMatch.has(base)) return; // une variante correspond → pas de repli
+      // 1. Chaîne générale ("France 3") si elle existe dans le flux
+      const general = baseGeneral.get(base);
+      if(general){ fallbackSet.add(general); return; }
+      // 2. Sinon : Paris ou première variante
+      fallbackSet.add(item);
+    });
+
+    items = items.filter(item => {
+      const clean = _baseLiveName(item.title);
+      const r = _isChannelRegional(clean, regionSet);
+
+      if(!r){
+        // Chaîne sans suffixe régional (ex : "France 3")
+        // La masquer si une variante de la région la remplace déjà
+        // (évite "France 3" + "France 3 Bretagne" en même temps)
+        return !basesWithMatch.has(clean.toLowerCase());
+      }
+
+      if(r.region === userReg) return true;   // variante de la région → visible
+      return fallbackSet.has(item);            // repli général si aucune variante ne correspond
+    });
+
+    // ── Filet de sécurité : dédoublonnage final ─────────────────────────────
+    // Si plusieurs variantes de la même base ont échappé au filtre ci-dessus
+    // (ex : détection tardive via fallback mot-par-mot), on n'en garde qu'une :
+    //   1. Variante de la région  →  priorité absolue
+    //   2. Chaîne générale sans suffixe (France 3)  →  repli préféré
+    //   3. Première variante trouvée  →  dernier recours
+    {
+      const baseBest = new Map(); // base_lc → { score, item }
+      items.forEach(item => {
+        const clean = _baseLiveName(item.title);
+        const r = _isChannelRegional(clean, regionSet);
+        if(!r) return;                                // les "généraux" sont hors concours
+        const base  = r.base.toLowerCase();
+        const score = r.region === userReg ? 2 : 0;
+        if(!baseBest.has(base) || score > baseBest.get(base).score)
+          baseBest.set(base, { score, item });
+      });
+      if(baseBest.size){
+        const keepRegional = new Set([...baseBest.values()].map(v => v.item));
+        items = items.filter(item => {
+          const clean = _baseLiveName(item.title);
+          const r = _isChannelRegional(clean, regionSet);
+          if(!r) return true;                         // général : toujours conservé
+          return keepRegional.has(item);
+        });
+      }
+    }
+  }
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
   if(S.type === "live") items = groupLiveItems(items);
+
+  // ── Live : TNT France d'abord (ordre LCN officiel), puis catégories ──
+  if(S.type === "live" && !S.cat && !S.search){
+    // Ordre officiel des chaînes TNT gratuites françaises (numéro logique LCN)
+    const _TNT = [
+      "TF1","FRANCE 2","FRANCE 3","CANAL+","FRANCE 5","M6","ARTE",
+      "C8","W9","TMC","TFX","TF1 SERIES","TF1 SÉRIES","LCI","FRANCE 4",
+      "FRANCEINFO","FRANCE INFO","BFM TV","BFMTV","CNEWS","CSTAR","C STAR",
+      "GULLI","NRJ12","NEON","CHERIE 25","CHÉRIE 25","L'EQUIPE","L EQUIPE",
+      "RMC STORY","RMC DECOUVERTE","RMC DÉCOUVERTE","6TER","PARAMOUNT"
+    ];
+    const _tntIdx = title => {
+      const u = title.replace(_DECO_RE," ").toUpperCase().replace(/\s+/g," ").trim();
+      for(let i = 0; i < _TNT.length; i++) if(u.startsWith(_TNT[i])) return i;
+      return -1;
+    };
+    const _CAT_PRI = {
+      "EU | FRANCE GENERAL":       0,
+      "EU | FRANCE NEWS":          1,
+      "EU | FRANCE ENTERTAINMENT": 2,
+      "EU | FRANCE SPORTS":        3,
+      "EU | FRANCE CINEMA":        4,
+      "EU | FRANCE DOCUMENTAIRE":  5,
+      "EU | FRANCE KIDS":          6,
+      "EU | FRANCE DOM TOM":       7,
+      "EU | 24/7 FRENCH":          8,
+      "EU | FRANCE PLUTO TV":      9,
+      "EU | FRANCE DAZN":         10,
+      "EU | FRANCE LIGUE 1+":     11,
+    };
+    items.sort((a, b) => {
+      const ai = _tntIdx(a.title), bi = _tntIdx(b.title);
+      if(ai >= 0 && bi >= 0) return ai - bi;   // deux TNT → ordre LCN
+      if(ai >= 0) return -1;                    // a=TNT, b=autre → a devant
+      if(bi >= 0) return  1;                    // b=TNT, a=autre → b devant
+      const pa = _CAT_PRI[a.category_name] ?? 99;
+      const pb = _CAT_PRI[b.category_name] ?? 99;
+      return pa - pb;                           // aucun TNT → ordre catégorie
+    });
+  }
+
+  // Filtre favoris uniquement (bouton ❤️ dans la barre)
+  if(S.favOnly){
+    if(S.type === "live") items = items.filter(g => isFav(g));
+    else items = items.filter(x => isFav(x));
+  }
 
   return items;
 }
@@ -1627,8 +2007,8 @@ function filtered(){
 // ─────────────────────────────────────────────────────────────────
 //  GROUPAGE LIVE PAR NOM DE BASE — SD/FHD/HEVC etc. → 1 seule carte
 // ─────────────────────────────────────────────────────────────────
-const _QUAL_ORDER = ["4K","UHD","FHD","HD","HEVC","SD"];
-const _QUAL_RE    = /[\s\[\(]+(SD|HD|FHD|UHD|4K|8K|HEVC|H\.?265|H\.?264|1080p?|720p?|2160p?)\b\]?\)?/gi;
+const _QUAL_ORDER = ["4K","UHD","FHD","HDR","HDTV","HD","HEVC","SD"];
+const _QUAL_RE    = /[\s\[\(]+(HDR\+?|HDTV|FHD|UHD|4K|8K|HEVC|H\.?265|H\.?264|1080p?|720p?|2160p?|HD|SD)\b\]?\)?/gi;
 
 function _parseLiveQuality(title){
   if(!title) return null;
@@ -1636,9 +2016,250 @@ function _parseLiveQuality(title){
   for(const q of _QUAL_ORDER) if(matches.includes(q)) return q;
   return matches[0] || null;
 }
+// Caractères décoratifs utilisés par certains fournisseurs IPTV (ex: "TF1•", "◉ M6")
+const _DECO_RE = /[◉★►•·✦✧▶⬤●❶-❿①-⑳]+/g;
 function _baseLiveName(title){
   if(!title) return "";
-  return title.replace(_QUAL_RE, "").replace(/\s+/g, " ").trim();
+  return title
+    .replace(_DECO_RE, " ")          // supprimer les décoratifs (TF1• → TF1, ◉ TF1 → TF1)
+    .replace(_QUAL_RE, "")           // supprimer les tags qualité (HD, FHD, HDR…)
+    .replace(/^[\s\-–—|:]+/, "")    // supprimer les préfixes "- ", "| ", ": " courants dans les flux IPTV
+    .replace(/\s+/g, " ").trim();
+}
+
+// ── Détection dynamique des chaînes régionales ───────────────────────────────
+// Un suffixe est considéré "région" s'il apparaît à la fin de 2+ chaînes de bases différentes.
+// Ex : "Bretagne" est dans "France 3 Bretagne" ET "BFM Bretagne" → région détectée.
+// Aucune liste codée en dur — fonctionne avec n'importe quel flux IPTV.
+
+// Mots qui ne sont PAS des noms géographiques — évite les faux positifs
+// IMPORTANT : inclure les chiffres pour éviter que "France 2", "RMC 2"… soient
+// traités comme chaînes régionales (suffixe "2" détecté dans 2+ bases → faux positif).
+const _NON_GEO = new Set([
+  "séries","series","films","cinéma","cinema","sport","sports","info","kids",
+  "jeunesse","comedy","action","thriller","music","news","live","direct","replay",
+  "plus","one","two","max","go","box","play","vod","premium","extra","family",
+  "classic","vintage","gold","select","club","tv","web","mobile","app",
+  // Chiffres — empêchent France 2 / Canal 2 / RMC 2… d'être classés "régionaux"
+  "2","3","4","5","6","7","8","9","10","11","12",
+  // Qualités vidéo — jamais des noms de régions
+  "hd","sd","4k","uhd","fhd","hdr",
+  // Suffixes IPTV courants (pas des noms géographiques)
+  "²","2","fr","be","ch","lu","ca","us",
+  "event","event only","only","vip","iptv","adult","adults",
+  "rue","ter","bis",
+  // Suffixes de chaînes thématiques (Canal+, L'Équipe, BeIN...)
+  "action","animation","aventure","cinema","cinéma","comedie","comédie",
+  "crime","decouvertes","découvertes","drame","enquetes","enquêtes","famille",
+  "gaming","horreur","investigation","jeunesse","kids","life","nature",
+  "polar","romance","sci-fi","scifi","serie","séries","thriller","western",
+  "event only","event","only","a+","+1","+2","+3","+4","+5",
+  "max","one","two","three","four","five","six","seven","eight","nine","ten"
+]);
+
+// ── Liste de garantie : noms géographiques toujours reconnus comme régions ──
+// Complète la détection dynamique pour les flux avec peu de variantes régionales.
+const _GEO_NAMES = new Set([
+  // Nouvelles régions administratives
+  "auvergne-rhône-alpes","bourgogne-franche-comté","bretagne",
+  "centre-val de loire","corse","grand est","hauts-de-france",
+  "île-de-france","normandie","nouvelle-aquitaine","occitanie",
+  "pays de la loire","provence-alpes-côte d'azur",
+  // Anciennes régions (encore très utilisées dans les flux IPTV)
+  "alsace","aquitaine","auvergne","bourgogne",
+  "champagne","champagne-ardenne","franche-comté",
+  "languedoc","languedoc-roussillon","limousin","lorraine",
+  "midi-pyrénées","nord-pas-de-calais","picardie",
+  "poitou-charentes","rhône-alpes",
+  // Abréviations courantes
+  "ara","bfc","cvl","hdf","idf","na","npc","paca","pdl",
+  // Grandes villes (BFM régionales, etc.)
+  "paris","lyon","marseille","bordeaux","toulouse","lille",
+  "rennes","nantes","strasbourg","montpellier","nice",
+  "grenoble","rouen","toulon","perpignan","nancy",
+  // DOM-TOM
+  "guadeloupe","martinique","guyane","la réunion","réunion","mayotte",
+  // Variantes sans accents / avec espaces (orthographes alternatives dans les flux)
+  "ile-de-france","hauts de france","ile de france",
+  "rhone-alpes","franche comte","pays-de-la-loire",
+  // Variantes SANS tirets (providers qui utilisent des espaces)
+  "nord pas de calais","nouvelle aquitaine","auvergne rhone alpes",
+  "bourgogne franche comte","centre val de loire","provence alpes cote d azur",
+  "pays de loire",
+  // Autres suffixes régionaux fréquents
+  "grand littoral","alsace-moselle","nord picardie",
+  // Sous-régions / bassins France 3 (apparaissent dans certains flux)
+  "alpes","alpes du sud","côte d azur","cote d azur",
+  "poitou","charentes","berry","limousin","auvergne",
+  "bourgogne","franche-comte","franche comté","lorraine",
+  "champagne ardenne","picardie","haute normandie","basse normandie",
+  "centre","ardennes","moselle","alsace"
+]);
+
+/**
+ * Construit l'index régional depuis les items live.
+ * Un suffixe est une région si :
+ *   (A) il apparaît dans ≥ 2 bases différentes  → "Bretagne" dans France3 + BFM
+ *   (B) la même base a ≥ 2 suffixes non-NON_GEO → "France 3" avec 2+ régions
+ * En plus, _GEO_NAMES garantit la détection même avec 1 seule occurrence.
+ * Retourne { regionSet: Set<string_lc>, displayNames: Map<lc, string> }
+ */
+function _buildLiveRegionIdx(items){
+  const baseSuffixes = new Map(); // base_lc → Set<suf_lc>
+  const suffixBases  = new Map(); // suf_lc  → Set<base_lc>
+
+  items.forEach(item => {
+    const clean = _baseLiveName(item.title).trim();
+    const words = clean.split(/\s+/);
+    if(words.length < 2) return;
+    for(let n = 1; n <= Math.min(4, words.length - 1); n++){
+      const suf  = words.slice(-n).join(" ").toLowerCase();
+      const base = words.slice(0,  -n).join(" ").toLowerCase();
+      // Rejeter si le suffixe contient des chiffres ou des caractères spéciaux
+      // (ex : "6ter", "24/7", "²", "a$$3$" ne sont pas des régions)
+      if(!suf || !base || _NON_GEO.has(suf) || suf.length < 2 || base.length < 2) continue;
+      if(/\d|[²³¹$&@!%#^*]/.test(suf)) continue;
+      // Rejeter les suffixes qui commencent par un tiret ou contiennent des parenthèses
+      // (ex : "- (EVENT ONLY)", "(EVENT ONLY)", "- A+", "- ACTION")
+      if(/^[-–—]/.test(suf) || /[()[\]]/.test(suf)) continue;
+      if(!baseSuffixes.has(base)) baseSuffixes.set(base, new Set());
+      baseSuffixes.get(base).add(suf);
+      if(!suffixBases.has(suf))  suffixBases.set(suf, new Set());
+      suffixBases.get(suf).add(base);
+    }
+  });
+
+  const regionSet = new Set();
+
+  // (A) Même suffixe dans ≥ 2 bases → région transversale (BFM Bretagne + France3 Bretagne)
+  suffixBases.forEach((bases, suf) => { if(bases.size >= 2) regionSet.add(suf); });
+
+  // (B) Même base avec ≥ 2 suffixes → la chaîne a des variantes régionales
+  //     (France 3 Bretagne + France 3 Normandie suffit)
+  baseSuffixes.forEach((suffixes, _base) => {
+    if(suffixes.size >= 2) suffixes.forEach(suf => regionSet.add(suf));
+  });
+
+  // Reconstruire les noms d'affichage (casse d'origine) + stocker pour account.html
+  const displayNames = new Map();
+  items.forEach(item => {
+    const clean = _baseLiveName(item.title).trim();
+    const words = clean.split(/\s+/);
+    for(let n = 1; n <= Math.min(4, words.length - 1); n++){
+      const suf  = words.slice(-n).join(" ");
+      const lc   = suf.toLowerCase();
+      if(regionSet.has(lc) && !displayNames.has(lc)) displayNames.set(lc, suf);
+    }
+  });
+
+  try {
+    const names = [...displayNames.values()].sort((a,b) => a.localeCompare(b,"fr"));
+    localStorage.setItem("pipsily_available_regions", JSON.stringify(names));
+  } catch(e){}
+
+  return { regionSet, displayNames };
+}
+
+/**
+ * Retourne {base, region_lc} si le titre est une chaîne régionale, sinon null.
+ * Consulte d'abord l'index dynamique, puis la liste statique _GEO_NAMES.
+ * Cherche du suffixe le plus long au plus court (priorité aux noms multi-mots).
+ *
+ * Fallback : si aucun suffixe reconnu, scanne les mots du titre un par un.
+ * Permet de détecter "France 3 Corse Via Stella" → base="France 3", région="corse"
+ * même quand "Via Stella" est accroché à la fin et masque le nom géographique.
+ */
+function _isChannelRegional(cleanTitle, regionSet){
+  const words = cleanTitle.trim().split(/\s+/);
+  if(words.length < 2) return null;
+
+  // ── Étape 1 : suffixes de longueur décroissante (4 → 1 mots) ──
+  for(let n = Math.min(4, words.length - 1); n >= 1; n--){
+    const suf  = words.slice(-n).join(" ").toLowerCase();
+    const base = words.slice(0,  -n).join(" ");
+    if((regionSet.has(suf) || _GEO_NAMES.has(suf)) && base) return { base, region: suf };
+  }
+
+  // ── Étape 2 : scan mot par mot (géo-nom en milieu de titre) ──
+  // Gère les cas comme "France 3 Corse Via Stella" où le nom de région
+  // n'est pas le dernier mot mais est reconnu dans _GEO_NAMES.
+  for(let i = 1; i < words.length; i++){
+    const word = words[i].toLowerCase();
+    if(_GEO_NAMES.has(word)){
+      const base = words.slice(0, i).join(" ");
+      if(base) return { base, region: word };
+    }
+  }
+
+  return null;
+}
+
+// ── Logos de repli pour les chaînes sans icône dans le flux ─────────────────
+// Wikimedia Commons Special:FilePath → redirige vers l'image réelle (CORS ok).
+// ?width=160 force la conversion SVG → PNG 160 px.
+const _LW = "?width=160";
+const _LB = "https://commons.wikimedia.org/wiki/Special:FilePath/";
+const _LOGO_MAP = {
+  // France Télévisions ───────────────────────────────────────────────────────
+  "france 2":            _LB+"France_2_logo.svg"+_LW,
+  "france 3":            _LB+"France_3.svg"+_LW,
+  "france 4":            _LB+"France_4_logo.svg"+_LW,
+  "france 5":            _LB+"France_5_logo.svg"+_LW,
+  "franceinfo":          _LB+"Franceinfo_logo.svg"+_LW,
+  "france info":         _LB+"Franceinfo_logo.svg"+_LW,
+  // TF1 Groupe ──────────────────────────────────────────────────────────────
+  "tf1":                 _LB+"TF1_logo.svg"+_LW,
+  "tmc":                 _LB+"TMC_logo.svg"+_LW,
+  "tfx":                 _LB+"TFX.svg"+_LW,
+  "tf1 series films":    _LB+"TF1_S%C3%A9ries_Films.svg"+_LW,
+  "tf1 séries films":    _LB+"TF1_S%C3%A9ries_Films.svg"+_LW,
+  "tf1 series":          _LB+"TF1_S%C3%A9ries_Films.svg"+_LW,
+  "tf1 séries":          _LB+"TF1_S%C3%A9ries_Films.svg"+_LW,
+  "lci":                 _LB+"LCI_logo.svg"+_LW,
+  // M6 Groupe ───────────────────────────────────────────────────────────────
+  "m6":                  _LB+"M6_logo.svg"+_LW,
+  "w9":                  _LB+"W9.svg"+_LW,
+  "6ter":                _LB+"6ter.svg"+_LW,
+  // Arte / Canal+ ───────────────────────────────────────────────────────────
+  "arte":                _LB+"Arte_Logo.svg"+_LW,
+  "canal+":              _LB+"Canal%2B.svg"+_LW,
+  "canal plus":          _LB+"Canal%2B.svg"+_LW,
+  // Info / News ─────────────────────────────────────────────────────────────
+  "bfmtv":               _LB+"BFMTV.svg"+_LW,
+  "bfm tv":              _LB+"BFMTV.svg"+_LW,
+  "bfm":                 _LB+"BFMTV.svg"+_LW,         // couvre BFM Paris, BFM Lyon…
+  "cnews":               _LB+"CNews.svg"+_LW,
+  // Divertissement TNT ──────────────────────────────────────────────────────
+  "c8":                  _LB+"C8.svg"+_LW,
+  "cstar":               _LB+"CStar.svg"+_LW,
+  "c star":              _LB+"CStar.svg"+_LW,
+  "gulli":               _LB+"Gulli.svg"+_LW,
+  "nrj12":               _LB+"NRJ_12.svg"+_LW,
+  "nrj 12":              _LB+"NRJ_12.svg"+_LW,
+  "neon":                _LB+"Neon_TV.svg"+_LW,
+  "chérie 25":           _LB+"Ch%C3%A9rie_25.svg"+_LW,
+  "cherie 25":           _LB+"Ch%C3%A9rie_25.svg"+_LW,
+  "l'equipe":            _LB+"L%27%C3%89quipe_TV.svg"+_LW,
+  "l equipe":            _LB+"L%27%C3%89quipe_TV.svg"+_LW,
+  "rmc story":           _LB+"RMC_Story.svg"+_LW,
+  "rmc decouverte":      _LB+"RMC_D%C3%A9couverte.svg"+_LW,
+  "rmc découverte":      _LB+"RMC_D%C3%A9couverte.svg"+_LW,
+  "paramount":           _LB+"Paramount_Network.svg"+_LW,
+};
+// Clés triées du plus long au plus court → préfixe le plus précis gagne
+const _LOGO_KEYS = Object.keys(_LOGO_MAP).sort((a,b)=>b.length-a.length);
+
+/**
+ * Retourne l'URL du logo de repli pour un titre de chaîne, sinon "".
+ * Couvre les variantes régionales : "France 3 Bretagne" → logo France 3.
+ */
+function _getLogoFallback(title){
+  if(!title) return "";
+  const key = _baseLiveName(title).toLowerCase();
+  for(const k of _LOGO_KEYS){
+    if(key === k || key.startsWith(k+" ")) return _LOGO_MAP[k];
+  }
+  return "";
 }
 
 function groupLiveItems(items){
@@ -1677,6 +2298,8 @@ function groupLiveItems(items){
 // ── Sélecteur de qualité Live (overlay) ──
 function openLivePicker(group){
   if(document.getElementById("livePicker")) return;
+  // Pousse un état dans l'historique → Back TV/Android ferme le picker, pas l'app
+  history.pushState({pip:"picker"}, "");
   const ov = document.createElement("div");
   ov.id = "livePicker";
   ov.className = "live-picker";
@@ -1753,10 +2376,13 @@ function openLivePicker(group){
     else if(which === 1 && c) c.focus();
   };
 
-  const close = () => {
+  const close = (fromPopstate = false) => {
     document.removeEventListener("keydown", onKey, true);
     ov.remove();
+    if(!fromPopstate && history.state?.pip === "picker") history.back();
   };
+  // Exposer close pour le popstate handler (closure inaccessible autrement)
+  ov._closePicker = close;
 
   // Listener en phase CAPTURE sur document — intercepte AVANT la nav spatiale Android TV WebView
   function onKey(e) {
@@ -1858,16 +2484,19 @@ function renderGrid(reset = false){
   if(reset) grid.innerHTML = "";
 
   const frag = document.createDocumentFragment();
+  let _staggerIdx = 0;
   items.slice(grid.children.length).forEach(item => {
     const card = document.createElement("div");
     const key  = itemKey(item);
     card.className   = "card";
     card.tabIndex    = 0;
     card.dataset.key  = key;
+    // taste-skill : stagger animation (max 18 pour éviter les délais trop longs)
+    card.style.setProperty("--i", Math.min(_staggerIdx++, 18));
 
     const isSeries = item.type === "series";
     const isLive   = item.type === "live";
-    const poster   = item.stream_icon || "";
+    const poster   = item.stream_icon || (isLive ? _getLogoFallback(item.title) : "");
     const badgeCls = isLive ? "card-badge--live" : isSeries ? "card-badge--s" : "card-badge--f";
     const badgeTxt = isLive ? "📡 Live" : isSeries ? "Série" : "Film";
     const pct      = isLive ? 0 : getWatchPct(item);
@@ -1939,8 +2568,12 @@ function makeNrowCard(item){
   card.className   = "nrow-card" + (isLive ? " nrow-card--live" : "");
   card.tabIndex    = 0;
   card.dataset.key = itemKey(item);
-  const poster   = item.stream_icon || "";
+  const poster   = item.stream_icon || (isLive ? _getLogoFallback(item.title) : "");
   const isSeries = item.type === "series";
+  const pct      = isLive ? 0 : getWatchPct(item);
+  const progBar  = (pct > 0.03 && pct < 0.97)
+    ? `<div class="card-prog-bar"><div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div></div>`
+    : "";
 
   card.innerHTML = `
     <div class="nrow-media">
@@ -1950,6 +2583,7 @@ function makeNrowCard(item){
       ${item.quality ? `<span class="nrow-qual">${esc(item.quality)}</span>` : ""}
       <div class="nrow-overlay"><span class="nrow-play">▶</span></div>
       <button class="nrow-fav ${isFav(item) ? "is-fav" : ""}" type="button" aria-label="Favori">♥</button>
+      ${progBar}
     </div>
     <div class="nrow-info">
       <div class="nrow-name">${esc(item.title)}</div>
@@ -2075,6 +2709,48 @@ function renderNetflixRows(){
     if(rowIdx < rowsArr.length){
       requestAnimationFrame(_renderBatch);
     } else {
+      // ── Rangée FOR ADULT tout en bas (Films uniquement) ──────────────
+      if(S.type === "vod" && S.vodAdult && S.vodAdult.length > 0 && !S.cat && !S.search){
+        const adultRow = document.createElement("div");
+        adultRow.className = "nrow nrow--adult";
+        adultRow.innerHTML = `
+          <div class="nrow-hdr">
+            <h3 class="nrow-title nrow-title--adult">🔞 For Adult</h3>
+          </div>
+          <div class="nrow-adult-locked" id="adultLocked">
+            <button class="adult-unlock-btn" id="adultUnlockBtn">
+              <span>🔒</span><span>Afficher le contenu adulte</span>
+            </button>
+          </div>
+          <div class="nrow-strip" id="adultStrip" style="display:none"></div>`;
+        grid.appendChild(adultRow);
+        totalItems += S.vodAdult.length;
+
+        document.getElementById("adultUnlockBtn")?.addEventListener("click", () => {
+          const strip = document.getElementById("adultStrip");
+          const locked = document.getElementById("adultLocked");
+          if(!strip || !locked) return;
+          locked.style.display = "none";
+          strip.style.display  = "";
+          if(strip.childElementCount === 0){
+            S.vodAdult.slice(0, NROW_MAX).forEach(item => strip.appendChild(makeNrowCard(item)));
+            // Tuile "Voir tout"
+            if(S.vodAdult.length > NROW_MAX){
+              const all = document.createElement("button");
+              all.className = "nrow-card nrow-all-tile";
+              all.type = "button";
+              all.innerHTML = `<div class="nrow-media nrow-all-media"><span class="nrow-all-arrow">→</span><span class="nrow-all-label">Voir tout</span><span class="nrow-all-count">(${S.vodAdult.length})</span></div>`;
+              all.addEventListener("click", () => {
+                S.cat = S.vodAdult[0]?.category_name || "";
+                const g = $("grid"); if(g) g.className = "grid";
+                S.shown[S.type] = PER_PAGE;
+                renderGrid(true);
+              });
+              strip.appendChild(all);
+            }
+          }
+        });
+      }
       $("catalogCount").textContent = `${totalItems} éléments · ${rowsArr.length} catégories`;
     }
   }
@@ -2104,18 +2780,31 @@ function render(){
     if(novSect) novSect.hidden = true;
   }
 
-  renderFavoritesRow();
-  renderContinueRow();
+  // Section Poursuivre — En cours + Favoris fusionnés (persiste via localStorage)
+  renderPoursuivreRow();
 
-  // Masquer le filtre qualité pour le live (non pertinent)
-  if($("qualityPills")) $("qualityPills").style.display = S.type === "live" ? "none" : "";
-  // Mettre à jour la pilule active
-  document.querySelectorAll(".quality-pill").forEach(p =>
-    p.classList.toggle("quality-pill--active", p.dataset.q === S.quality)
-  );
+  // Basculer qualité ↔ région selon l'onglet
+  const _qp = $("qualityPills");
+  const _rp = $("regionPills");
+  if(S.type === "live"){
+    if(_qp) _qp.style.display = "none";
+    _renderRegionPills(_rp);
+  } else {
+    if(_qp) _qp.style.display = "";
+    if(_rp) _rp.hidden = true;
+    document.querySelectorAll(".quality-pill").forEach(p =>
+      p.classList.toggle("quality-pill--active", p.dataset.q === S.quality)
+    );
+  }
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
+  const _last = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
+  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))]
+    .sort((a, b) => {
+      const la = _last(a), lb = _last(b);
+      if(la !== lb) return la ? 1 : -1;
+      return a.localeCompare(b);
+    });
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
     cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
 
@@ -2133,6 +2822,41 @@ function render(){
   S.shown[S.type] = PER_PAGE;
   if(useNetflix) renderNetflixRows();
   else           renderGrid(true);
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  PILLS RÉGION (onglet TV Live)
+// ─────────────────────────────────────────────────────────────────
+
+function _renderRegionPills(container){
+  if(!container) return;
+  container.hidden = false;
+
+  // Récupérer les régions détectées depuis le flux live
+  let regions = [];
+  try { regions = JSON.parse(localStorage.getItem("pipsily_available_regions") || "[]"); } catch(e){}
+
+  const cur = S.region.toLowerCase();
+
+  // Pill "Tout" + une pill par région détectée
+  container.innerHTML =
+    `<button class="quality-pill ${!S.region ? "quality-pill--active" : ""}" data-rgn="">🌍 Tout</button>` +
+    regions.map(r => {
+      const lc = r.toLowerCase();
+      return `<button class="quality-pill ${lc === cur ? "quality-pill--active" : ""}" data-rgn="${esc(lc)}">${esc(r.charAt(0).toUpperCase()+r.slice(1))}</button>`;
+    }).join("");
+
+  // Gestionnaire de clic sur chaque pill
+  container.querySelectorAll("[data-rgn]").forEach(btn => {
+    btn.onclick = () => {
+      const val = btn.dataset.rgn;
+      S.region = val;
+      S._liveRegionIdx = null; // forcer recalcul
+      if(val) localStorage.setItem("pipsily_region", val);
+      else    localStorage.removeItem("pipsily_region");
+      renderUI();
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -2201,7 +2925,8 @@ function openSearchOverlay(){
       S.shown[S.type] = PER_PAGE;
       const useNetflix = !S.cat && !S.search && !S.quality;
       const g = $("grid");
-      if(g) g.className = useNetflix ? "netflix-rows" : "grid";
+      if(g) g.className = useNetflix ? "netflix-rows"
+                        : S.type === "live" ? "grid grid--live" : "grid";
       if(useNetflix) renderNetflixRows(); else renderGrid(true);
       close();
     }
@@ -2218,10 +2943,10 @@ function initTV(){
   document.addEventListener("keydown", e => {
     const k = e.key;
 
-    // Retour / Fermeture panneau
+    // Retour / Fermeture panneau — toujours preventDefault pour ne pas quitter l'app
     if(["Escape","GoBack","Back","BrowserBack"].includes(k)){
+      e.preventDefault();
       if(!$("seriesPanel")?.hidden){
-        e.preventDefault();
         if(S.panel.isVod) closeVodPanel(); else closePanel();
       }
       return;
@@ -2242,21 +2967,106 @@ function initTV(){
   function _navPanel(k){
     const panel = $("seriesPanel");
     if(!panel) return;
-    const items = [...panel.querySelectorAll(
-      ".sp-tab, .sp-ep:not([disabled]), .sp-close, .sp-direct," +
-      ".vod-play-btn, .vod-restart-btn, .fav-btn-large," +
-      ".sp-resume-play, .sp-resume-restart, .sp-resume-dismiss"
+
+    // ── Panneau Film (VOD) : navigation linéaire simple ──
+    if(S.panel.isVod){
+      const items = [...panel.querySelectorAll(
+        ".vod-play-btn, .vod-restart-btn, .fav-btn-large, .sp-close," +
+        ".sp-resume-play, .sp-resume-restart, .sp-resume-dismiss"
+      )].filter(el => !el.closest("[hidden]"));
+      const idx = items.indexOf(document.activeElement);
+      if(idx < 0){ items[0]?.focus(); return; }
+      if(k === "ArrowDown" || k === "ArrowRight") items[Math.min(idx+1, items.length-1)]?.focus();
+      else if(k === "ArrowUp" || k === "ArrowLeft") items[Math.max(idx-1, 0)]?.focus();
+      return;
+    }
+
+    // ── Panneau Série : navigation 2D complète ──
+    // Zones (de haut en bas) :
+    //   close   : #seriesCloseBtn  (✕ en haut à droite)
+    //   actions : Reprendre/Lire + Restart + Favoris  (dans .sp-series-actions)
+    //   tabs    : onglets saisons  (horizontal)
+    //   eps     : boutons épisodes (vertical)
+    const active = document.activeElement;
+
+    const closeBtn   = panel.querySelector("#seriesCloseBtn");
+    const actionBtns = [...panel.querySelectorAll(
+      ".sp-series-actions .vod-play-btn," +
+      ".sp-series-actions .vod-restart-btn," +
+      ".sp-series-actions .fav-btn-large"
     )].filter(el => !el.closest("[hidden]"));
-    const idx = items.indexOf(document.activeElement);
-    if(idx < 0){ items[0]?.focus(); return; }
-    if(k === "ArrowDown" || k === "ArrowRight"){
-      items[Math.min(idx + 1, items.length - 1)]?.focus();
-    } else if(k === "ArrowUp" || k === "ArrowLeft"){
-      items[Math.max(idx - 1, 0)]?.focus();
+    const tabs = [...panel.querySelectorAll(".sp-tab")]
+                   .filter(el => !el.closest("[hidden]"));
+    const eps  = [...panel.querySelectorAll(".sp-ep:not([disabled])")]
+                   .filter(el => !el.closest("[hidden]"));
+
+    const isClose  = active === closeBtn;
+    const isAction = actionBtns.includes(active);
+    const isTab    = active?.classList.contains("sp-tab");
+    const isEp     = active?.classList.contains("sp-ep");
+
+    // Focus initial si rien n'est focalisé dans le panneau
+    if(!isClose && !isAction && !isTab && !isEp){
+      (actionBtns[0] || tabs[0] || eps[0])?.focus();
+      return;
+    }
+
+    // ── Bouton Fermer (✕) ──
+    if(isClose){
+      if(k === "ArrowDown"){
+        (actionBtns[0] || tabs[0] || eps[0])?.focus();
+      }
+      // ← → sans effet sur le close
+      return;
+    }
+
+    // ── Boutons d'action (Reprendre/Lire, Depuis le début, Favoris) ──
+    if(isAction){
+      const ai = actionBtns.indexOf(active);
+      if(k === "ArrowRight"){ actionBtns[Math.min(ai+1, actionBtns.length-1)]?.focus(); return; }
+      if(k === "ArrowLeft") { actionBtns[Math.max(ai-1, 0)]?.focus();                   return; }
+      if(k === "ArrowUp")   { closeBtn?.focus(); panel.scrollTo?.({top:0,behavior:"smooth"}); return; }
+      if(k === "ArrowDown") { (tabs[0] || eps[0])?.focus(); return; }
+      return;
+    }
+
+    // ── Onglets saisons ──
+    if(isTab){
+      const ti = tabs.indexOf(active);
+      if(k === "ArrowRight" && ti < tabs.length-1){ tabs[ti+1].focus(); return; }
+      if(k === "ArrowLeft"  && ti > 0)            { tabs[ti-1].focus(); return; }
+      if(k === "ArrowUp")   { (actionBtns[0] || closeBtn)?.focus(); panel.scrollTo?.({top:0,behavior:"smooth"}); return; }
+      if(k === "ArrowDown") { eps[0]?.focus(); return; }
+      return;
+    }
+
+    // ── Épisodes (liste verticale) ──
+    if(isEp){
+      const ei = eps.indexOf(active);
+      if(k === "ArrowDown"){
+        if(ei < eps.length-1){
+          eps[ei+1].focus();
+          eps[ei+1].scrollIntoView({ behavior:"smooth", block:"nearest" });
+        }
+        return;
+      }
+      if(k === "ArrowUp"){
+        if(ei > 0){
+          eps[ei-1].focus();
+          eps[ei-1].scrollIntoView({ behavior:"smooth", block:"nearest" });
+        } else {
+          // Premier épisode → remonter aux onglets (s'il y en a) ou aux boutons
+          (tabs[0] || actionBtns[0])?.focus();
+          panel.scrollTo?.({ top:0, behavior:"smooth" });
+        }
+        return;
+      }
+      // ← → ignorés dans la liste épisodes
+      return;
     }
   }
 
-  // ── Helper : focus sur le 1er pill catégorie (ou pill actif) + scroll en haut ──
+  // ── Helper : focus sur le 1er pill catégorie (ou pill actif) ──
   function _focusFirstPill(){
     const pills = $("catPills");
     if(!pills || pills.hidden) return false;
@@ -2277,6 +3087,64 @@ function initTV(){
     const active   = document.activeElement;
     const isPill   = active?.classList.contains("cat-pill");
     const isNavBtn = active?.classList.contains("nav-btn");
+    const isNouCard = active?.classList.contains("nou-card");
+
+    // ── Helper : première nou-card visible (favoris / continuer) ──
+    const _firstNouCard = () => {
+      for(const row of document.querySelectorAll(".nou-row")){
+        if(row.closest("[hidden]")) continue;
+        const c = row.querySelector(".nou-card");
+        if(c) return c;
+      }
+      return null;
+    };
+
+    // ── Sur une nou-card (favoris / continuer) ──
+    if(isNouCard){
+      const row   = active.closest(".nou-row");
+      const cards = row ? [...row.querySelectorAll(".nou-card")] : [];
+      const ci    = cards.indexOf(active);
+      if(k === "ArrowRight"){
+        const next = cards[ci + 1];
+        if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+        return;
+      }
+      if(k === "ArrowLeft"){
+        const prev = cards[ci - 1];
+        if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+        return;
+      }
+      if(k === "ArrowUp"){
+        // Chercher la nou-row précédente, sinon remonter aux pills
+        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
+        const ri = allRows.indexOf(row);
+        if(ri > 0){
+          const prevRow = allRows[ri - 1];
+          const prevCard = prevRow.querySelectorAll(".nou-card")[ci] || prevRow.querySelector(".nou-card");
+          prevCard?.focus(); prevCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        } else {
+          if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        return;
+      }
+      if(k === "ArrowDown"){
+        // Passer à la prochaine nou-row ou à la grille principale
+        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
+        const ri = allRows.indexOf(row);
+        if(ri >= 0 && ri < allRows.length - 1){
+          const nextRow  = allRows[ri + 1];
+          const nextCard = nextRow.querySelectorAll(".nou-card")[ci] || nextRow.querySelector(".nou-card");
+          nextCard?.focus(); nextCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        } else {
+          // .nrow-card en mode Netflix, .card en mode grille
+          const first = document.querySelector(".nrow-card, .card");
+          if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
+        }
+        return;
+      }
+      // Ne pas consommer les touches non-flèches (Enter/Space gérés par le card lui-même)
+    }
 
     // Toutes les rangées visibles dans l'ordre DOM :
     //   1. nou-row (Continuer, Favoris, Nouveautés) — seulement si section visible + non vide
@@ -2297,10 +3165,31 @@ function initTV(){
       const ni = navBtns.indexOf(active);
       if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
+      if(k === "ArrowUp"){
+        // Remonter vers les boutons utilisateur (Admin / Compte / Install)
+        const uBtns = [...document.querySelectorAll("#topbarUserBtns a, #topbarUserBtns button")]
+          .filter(el => getComputedStyle(el).display !== "none");
+        if(uBtns.length) { uBtns[0].focus(); return; }
+      }
       if(k === "ArrowDown"){
         if(_focusFirstPill()) return;
         const first = allRows[0]?.querySelector(CARD);
         if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
+      }
+      return;
+    }
+
+    // ── Sur les boutons utilisateur (Admin / Compte / Install) ──
+    const isUserBtn = active?.closest("#topbarUserBtns") !== null;
+    if(isUserBtn){
+      const uBtns = [...document.querySelectorAll("#topbarUserBtns a, #topbarUserBtns button")]
+        .filter(el => getComputedStyle(el).display !== "none");
+      const ui = uBtns.indexOf(active);
+      if(k === "ArrowRight" && ui < uBtns.length-1){ uBtns[ui+1].focus(); return; }
+      if(k === "ArrowLeft"  && ui > 0)             { uBtns[ui-1].focus(); return; }
+      if(k === "ArrowDown"){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        return;
       }
       return;
     }
@@ -2321,7 +3210,6 @@ function initTV(){
       }
       if(k === "ArrowUp"){
         document.querySelector(".nav-btn.active, .nav-btn")?.focus();
-        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
       if(k === "ArrowDown"){
@@ -2381,7 +3269,6 @@ function initTV(){
     const active   = document.activeElement;
     const isPill   = active?.classList.contains("cat-pill");
     const isNavBtn = active?.classList.contains("nav-btn");
-    const isNouCard = active?.classList.contains("nou-card");
 
     // ── Helper : première nou-card visible (favoris / continuer) ──
     const _firstNouCard = () => {
@@ -2399,11 +3286,29 @@ function initTV(){
       const ni = navBtns.indexOf(active);
       if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
+      if(k === "ArrowUp"){
+        const uBtns = [...document.querySelectorAll("#topbarUserBtns a, #topbarUserBtns button")]
+          .filter(el => getComputedStyle(el).display !== "none");
+        if(uBtns.length) { uBtns[0].focus(); return; }
+      }
       if(k === "ArrowDown"){
         if(_focusFirstPill()) return;
-        const nou = _firstNouCard();
-        if(nou){ nou.focus(); nou.scrollIntoView({ behavior:"smooth", block:"nearest" }); return; }
         document.querySelector(".card")?.focus();
+      }
+      return;
+    }
+
+    // ── Sur les boutons utilisateur (Admin / Compte / Install) ──
+    const isUserBtn2 = active?.closest("#topbarUserBtns") !== null;
+    if(isUserBtn2){
+      const uBtns = [...document.querySelectorAll("#topbarUserBtns a, #topbarUserBtns button")]
+        .filter(el => getComputedStyle(el).display !== "none");
+      const ui = uBtns.indexOf(active);
+      if(k === "ArrowRight" && ui < uBtns.length-1){ uBtns[ui+1].focus(); return; }
+      if(k === "ArrowLeft"  && ui > 0)             { uBtns[ui-1].focus(); return; }
+      if(k === "ArrowDown"){
+        document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        return;
       }
       return;
     }
@@ -2424,59 +3329,10 @@ function initTV(){
       }
       if(k === "ArrowUp"){
         document.querySelector(".nav-btn.active, .nav-btn")?.focus();
-        window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
       if(k === "ArrowDown"){
-        const nou = _firstNouCard();
-        if(nou){ nou.focus(); nou.scrollIntoView({ behavior:"smooth", block:"nearest" }); return; }
         document.querySelector(".card")?.focus();
-        return;
-      }
-      return;
-    }
-
-    // ── Sur une nou-card (favoris / continuer) ──
-    if(isNouCard){
-      const row   = active.closest(".nou-row");
-      const cards = row ? [...row.querySelectorAll(".nou-card")] : [];
-      const ci    = cards.indexOf(active);
-      if(k === "ArrowRight"){
-        const next = cards[ci + 1];
-        if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
-        return;
-      }
-      if(k === "ArrowLeft"){
-        const prev = cards[ci - 1];
-        if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
-        return;
-      }
-      if(k === "ArrowUp"){
-        // Chercher la nou-row précédente, sinon remonter aux pills
-        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
-        const ri = allRows.indexOf(row);
-        if(ri > 0){
-          const prevRow = allRows[ri - 1];
-          const prevCard = prevRow.querySelectorAll(".nou-card")[ci] || prevRow.querySelector(".nou-card");
-          prevCard?.focus(); prevCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
-        } else {
-          if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }
-        return;
-      }
-      if(k === "ArrowDown"){
-        // Passer à la prochaine nou-row ou à la grille principale
-        const allRows = [...document.querySelectorAll(".nou-row")].filter(r => !r.closest("[hidden]"));
-        const ri = allRows.indexOf(row);
-        if(ri >= 0 && ri < allRows.length - 1){
-          const nextRow  = allRows[ri + 1];
-          const nextCard = nextRow.querySelectorAll(".nou-card")[ci] || nextRow.querySelector(".nou-card");
-          nextCard?.focus(); nextCard?.scrollIntoView({ behavior:"smooth", block:"nearest" });
-        } else {
-          const first = document.querySelector(".card");
-          if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
-        }
         return;
       }
       return;
@@ -2512,162 +3368,128 @@ function initTV(){
 }
 
 // ─────────────────────────────────────────────────────────────────
-//  SECTION CONTINUER À REGARDER
+//  SECTION POURSUIVRE — En cours + Favoris fusionnés
+//  Ordre : items en cours (tri par ts desc) → favoris non commencés
 // ─────────────────────────────────────────────────────────────────
 
-function renderContinueRow(){
-  const sect = $("continueSection");
-  const row  = $("continueRow");
+function renderPoursuivreRow(){
+  try { _renderPoursuivreRowInner(); } catch(e){ console.error("[PIPSILY] renderPoursuivreRow:", e); }
+}
+function _renderPoursuivreRowInner(){
+  const sect = $("poursuivreSection");
+  const row  = $("poursuivreRow");
   if(!sect || !row) return;
 
-  // Lire la progression une seule fois (évite N×JSON.parse pour des catalogues de 5000+ items)
+  // Onglet TV (live) : section non pertinente, masquée
+  if(S.type === "live"){ sect.hidden = true; return; }
+
   const prog = getProg();
-  function _pct(item){
-    const k1 = itemKey(item);
-    if(prog[k1]?.pct > 0) return prog[k1].pct;
-    const k2 = String(item.id || item.stream_id || "");
-    if(k2 && prog[k2]?.t > 0 && prog[k2]?.d > 0) return prog[k2].t / prog[k2].d;
-    return 0;
-  }
-  function _ts(item){
-    const k1 = itemKey(item);
-    if(prog[k1]?.ts) return prog[k1].ts;
-    const k2 = String(item.id || item.stream_id || "");
-    if(k2 && prog[k2]?.ts) return prog[k2].ts;
-    return 0;
-  }
+  const type = S.type;
 
-  // ── Construire la liste scored selon le type ──────────────────────
-  // Pour les séries : scanner prog à la recherche de clés "seriesId||SxxExx"
-  // puis retrouver la série parente → évite le mismatch clé épisode vs objet série
-  let scored = [];
-
-  if(S.type === "series"){
+  // ── 1. Items en cours ──────────────────────────────────────────
+  let inProgress = [];
+  if(type === "series"){
+    // Épisodes stockés sous "seriesId||SxxExx"
     const seriesIdx = {};
     S.series.forEach(s => { seriesIdx[String(s.id || s.stream_id || "")] = s; });
-
     const epKeyRe = /^(.+)\|\|S\d+E\d+$/;
-    const bestBySeries = {};
+    const best = {};
     Object.keys(prog).forEach(k => {
       const m = epKeyRe.exec(k);
       if(!m) return;
       const sid = m[1];
-      const entry = prog[k];
-      if(!entry?.ts) return;
-      const pct = (entry.t > 0 && entry.d > 0) ? entry.t / entry.d : (entry.pct || 0);
+      if(!seriesIdx[sid]) return;
+      const e = prog[k];
+      if(!e?.ts) return;
+      let pct = (e.t > 0 && e.d > 0) ? e.t / e.d
+              : (e.pct > 0 ? e.pct : (e.t > 30 ? 0.5 : 0));
+      if(pct > 1) pct /= 100; // normalise format player.js (0-100) → fraction (0-1)
       if(pct <= 0.03 || pct >= 0.97) return;
-      if(!bestBySeries[sid] || entry.ts > bestBySeries[sid].ts)
-        bestBySeries[sid] = { pct, ts: entry.ts };
+      if(!best[sid] || e.ts > best[sid].ts) best[sid] = { pct, ts: e.ts };
     });
-
-    scored = Object.keys(bestBySeries)
-      .filter(sid => seriesIdx[sid])
-      .map(sid => ({ item: seriesIdx[sid], pct: bestBySeries[sid].pct, ts: bestBySeries[sid].ts }))
-      .sort((a, b) => b.ts - a.ts)
-      .slice(0, 20);
-
+    inProgress = Object.keys(best)
+      .map(sid => ({ item: seriesIdx[sid], pct: best[sid].pct, ts: best[sid].ts }))
+      .sort((a, b) => b.ts - a.ts).slice(0, 15);
   } else {
-    const all = S.type === "vod" ? S.vod : S.live;
-    scored = all
-      .map(item => ({ item, pct: _pct(item), ts: _ts(item) }))
-      .filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
-      .sort((a, b) => b.ts - a.ts)
-      .slice(0, 20);
+    const all = type === "vod" ? S.vod : S.live;
+    const _hideCat = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
+    inProgress = all.map(item => {
+      const k1 = itemKey(item), k2 = String(item.id || item.stream_id || "");
+      const en = prog[k1] || prog[k2];
+      const rawPct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
+      const pct = rawPct > 1 ? rawPct / 100 : rawPct; // normalise format player.js (0-100) → fraction
+      return { item, pct, ts: en?.ts || 0 };
+    }).filter(x => !_hideCat(x.item?.category_name) && x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+      .sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
 
-  if(!scored.length){ sect.hidden = true; return; }
+  // ── 2. Favoris non déjà en cours ──────────────────────────────
+  const inProgKeys = new Set(inProgress.map(x => itemKey(x.item)));
+  const favItems = getFavs()
+    .filter(f => {
+      if(!f.item) return false;
+      const ftype = f.item.type || type;
+      return ftype === type && !inProgKeys.has(itemKey(f.item));
+    })
+    .map(f => ({ item: f.item, pct: 0, ts: 0 }))
+    .slice(0, 15);
+
+  // ── 3. Fusionner — en cours d'abord, puis favoris ─────────────
+  const all = [...inProgress, ...favItems].slice(0, 25);
+
+  if(!all.length){ sect.hidden = true; return; }
   sect.hidden = false;
   row.innerHTML = "";
   const frag = document.createDocumentFragment();
-  scored.forEach(({ item, pct }) => {
+
+  all.forEach(({ item, pct, ts }) => {
+    const isLive    = item.type === "live";
+    const isInProg  = ts > 0 && pct > 0.03;
     const card = document.createElement("div");
-    const isLiveCont = item.type === "live";
-    card.className = "nou-card" + (isLiveCont ? " nou-card--live" : "");
+    card.className = "nou-card" + (isLive ? " nou-card--live" : "");
     card.tabIndex  = 0;
-    card.innerHTML = `
-      <div class="nou-media">
-        ${item.stream_icon
-          ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.parentElement.parentElement.style.display='none'">`
-          : `<div class="nou-placeholder">▶</div>`}
-        <div class="nou-overlay"><span class="nou-play">▶</span></div>
-        <div class="card-prog-bar card-prog-bar--nou">
-          <div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div>
-        </div>
-      </div>
-      <div class="nou-info">
-        <div class="nou-title">${esc(item.title)}</div>
-        <div class="nou-date">${Math.round(pct*100)}% visionné</div>
-      </div>`;
-    const activate = () => {
-      if(item.type === "series") openPanel(item);
-      else if(item.type === "live") playItem(item._variants?.[0]?.item || item);
-      else openVodPanel(item);
-    };
-    card.addEventListener("click", activate);
-    card.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); activate(); } });
-    card.addEventListener("focus", () => { document.querySelectorAll(".nou-card.is-tv-focused").forEach(c=>c.classList.remove("is-tv-focused")); card.classList.add("is-tv-focused"); card.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); });
-    card.addEventListener("blur",  () => card.classList.remove("is-tv-focused"));
-    frag.appendChild(card);
-  });
-  row.appendChild(frag);
-}
 
-// ─────────────────────────────────────────────────────────────────
-//  SECTION FAVORIS
-// ─────────────────────────────────────────────────────────────────
-
-function renderFavoritesRow(){
-  const sect = $("favoritesSection");
-  const row  = $("favoritesRow");
-  if(!sect || !row) return;
-
-  const type  = S.type;
-  const favs  = getFavs()
-    .filter(f => (f.item?.type || type) === type)
-    .slice(0, 30);
-
-  if(!favs.length){ sect.hidden = true; return; }
-  sect.hidden = false;
-  row.innerHTML = "";
-  const frag = document.createDocumentFragment();
-  favs.forEach(({ item }) => {
-    if(!item) return;
-    const pct  = getWatchPct(item);
-    const card = document.createElement("div");
-    const isLiveFav = item.type === "live";
-    card.className = "nou-card" + (isLiveFav ? " nou-card--live" : "");
-    card.tabIndex  = 0;
-    const progBar  = (pct > 0.03 && pct < 0.97)
+    const progBar = isInProg
       ? `<div class="card-prog-bar card-prog-bar--nou"><div class="card-prog-fill" style="width:${Math.round(pct*100)}%"></div></div>`
-      : "";
+      : `<div class="nou-fav-badge">❤️</div>`;
+
     card.innerHTML = `
       <div class="nou-media">
         ${item.stream_icon
           ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.parentElement.parentElement.style.display='none'">`
-          : `<div class="nou-placeholder">❤️</div>`}
+          : `<div class="nou-placeholder">${isInProg ? "▶" : "❤️"}</div>`}
         <div class="nou-overlay"><span class="nou-play">▶</span></div>
         ${progBar}
       </div>
       <div class="nou-info">
         <div class="nou-title">${esc(item.title)}</div>
-        <div class="nou-date">${esc(item.category_name || "")}</div>
+        <div class="nou-date">${isInProg ? Math.round(pct*100) + "% visionné" : esc(displayCat(item.category_name) || "Favori")}</div>
       </div>`;
+
     const activate = () => {
       if(item.type === "series") openPanel(item);
       else if(item.type === "live"){
-        if(item._variants && item._variants.length > 1) openLivePicker(item);
+        if(item._variants?.length > 1) openLivePicker(item);
         else playItem(item._variants?.[0]?.item || item);
       }
       else openVodPanel(item);
     };
     card.addEventListener("click", activate);
     card.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); activate(); } });
-    card.addEventListener("focus", () => { document.querySelectorAll(".nou-card.is-tv-focused").forEach(c=>c.classList.remove("is-tv-focused")); card.classList.add("is-tv-focused"); card.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); });
-    card.addEventListener("blur",  () => card.classList.remove("is-tv-focused"));
+    card.addEventListener("focus", () => {
+      document.querySelectorAll(".nou-card.is-tv-focused").forEach(c => c.classList.remove("is-tv-focused"));
+      card.classList.add("is-tv-focused");
+      card.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" });
+    });
+    card.addEventListener("blur", () => card.classList.remove("is-tv-focused"));
     frag.appendChild(card);
   });
   row.appendChild(frag);
 }
+
+// Stubs de compatibilité (call sites existants)
+function renderContinueRow()  { renderPoursuivreRow(); }
+function renderFavoritesRow() { renderPoursuivreRow(); }
 
 // ─────────────────────────────────────────────────────────────────
 //  SECTION NOUVEAUTÉS
@@ -2762,6 +3584,20 @@ function renderHero(item){
 
 async function boot(){
 
+  // ── Purger le cache région corrompu (noms de chaînes au lieu de régions) ──
+  // Les anciennes versions stockaient n'importe quel suffixe ; on purge pour reconstruire proprement.
+  try {
+    const cached = JSON.parse(localStorage.getItem("pipsily_available_regions") || "[]");
+    // Si la liste contient des entrées avec des chiffres ou des tirets initiaux → corrompue
+    const corrupted = cached.some(r =>
+      /^\d|^[-–]/.test(r) ||            // commence par chiffre ou tiret
+      /[()[\]\d]/.test(r) ||             // contient parenthèses, crochets ou chiffres
+      r.length > 35 ||                   // trop long pour être un nom de région
+      /event|only|action|cinema|sport|series|kids|gaming/i.test(r) // mots thématiques
+    );
+    if(corrupted) localStorage.removeItem("pipsily_available_regions");
+  } catch(e){ localStorage.removeItem("pipsily_available_regions"); }
+
   // ── Classe CSS TV (failsafe si le media query ne se déclenche pas) ──
   if(window.PIPSILY_NATIVE === "android_tv" || window.PIPSIFLIX_NATIVE === "android_tv" ||
      /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent)){
@@ -2817,14 +3653,17 @@ async function boot(){
       // Fermer le panneau s'il est ouvert
       if(S.panel?.open){ closePanel?.(); }
       S.type    = btn.dataset.type;
+      S.loading = false;
       S.cat     = "";
       S.search  = "";
       S.quality = "";
       S.sort    = "title";
+      S.favOnly = false;
       $("searchInput").value = "";
       // Reset pilules qualité → "Tout"
       document.querySelectorAll(".quality-pill").forEach(p => p.classList.remove("quality-pill--active"));
       document.querySelector(".quality-pill[data-q='']")?.classList.add("quality-pill--active");
+      $("favFilterBtn")?.classList.remove("quality-pill--active");
       // Placeholder dynamique selon la section
       const ph = { vod:"Rechercher un film…", series:"Rechercher une série…", live:"Rechercher une chaîne…" };
       $("searchInput").placeholder = ph[S.type] || "Rechercher…";
@@ -2886,13 +3725,25 @@ async function boot(){
   $("sortSelect").addEventListener("change",  e => { S.sort = e.target.value; render(); });
 
   // Pilules qualité — remplacent le <select>
-  document.querySelectorAll(".quality-pill").forEach(btn => {
+  document.querySelectorAll(".quality-pill:not(.fav-pill)").forEach(btn => {
     btn.addEventListener("click", () => {
-      S.quality = btn.dataset.q || "";
+      S.quality  = btn.dataset.q || "";
+      S.favOnly  = false;
       document.querySelectorAll(".quality-pill").forEach(p => p.classList.remove("quality-pill--active"));
       btn.classList.add("quality-pill--active");
       render();
     });
+  });
+
+  // Bouton ❤️ Favoris dans la barre (remplace la section mid-page)
+  $("favFilterBtn")?.addEventListener("click", () => {
+    S.favOnly = !S.favOnly;
+    S.quality = "";
+    document.querySelectorAll(".quality-pill").forEach(p => p.classList.remove("quality-pill--active"));
+    if(!S.favOnly) document.querySelector(".quality-pill[data-q='']")?.classList.add("quality-pill--active");
+    $("favFilterBtn")?.classList.toggle("quality-pill--active", S.favOnly);
+    S.shown[S.type] = PER_PAGE;
+    render();
   });
 
   // Clic backdrop
@@ -2910,6 +3761,8 @@ async function boot(){
 
   // ── Retour Android / Échap : ferme le panneau ouvert (sans quitter l'app) ──
   window.addEventListener("popstate", () => {
+    const picker = document.getElementById("livePicker");
+    if(picker){ picker._closePicker?.(true); return; }
     if(S.panel.open && S.panel.isVod) { closeVodPanel(true);  return; }
     if(S.panel.open)                  { closePanel(true);      return; }
     if($("pip-player")?.classList.contains("pip-open")) { PipPlayer.close(); }
@@ -2996,10 +3849,18 @@ async function boot(){
     if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); }
   }
 
+  // Filtrer VOSTFR et catégories adult/porno
+  const noVostfr = t => !/\[vostfr\]/i.test(t || "");
+  const isAdultCatFn = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
+  S.vodAdult = S.vod.filter(x => noVostfr(x.title) && isAdultCatFn(x.category_name));
+  S.vod    = S.vod.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
+  S.series = S.series.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
+
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
     const liveItems = extractArr(liveJson);
-    S.live = liveItems.map((x, i) => ({
+    S._liveRegionIdx = null; // reset index quand les données live changent
+    S.live = liveItems.map((x, i) => ({  // normalisation
       id           : x.id || x.stream_id || String(i),
       stream_id    : x.stream_id || x.id || String(i),
       title        : x.title || x.name || "Sans titre",
@@ -3012,6 +3873,9 @@ async function boot(){
       type         : "live",
       quality      : ""
     }));
+    // Construire l'index régional immédiatement → peupler pipsily_available_regions
+    // pour que les pills de région soient disponibles dès le premier affichage du live.
+    if(S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
   }
 
   // ── Afficher date dernière mise à jour dans la barre fixe ──
@@ -3131,7 +3995,8 @@ async function checkApkInstallBanner(){
 
   const vinfo     = await fetchJson("version.json").catch(() => null);
   const remoteVer = Number(vinfo?.apk_version || 0);
-  const url       = vinfo?.apk_url || "https://github.com/morpheus45/VOD/releases/latest";
+  const _rawUrl   = vinfo?.apk_url || "";
+  const url       = /^https:\/\/github\.com\//.test(_rawUrl) ? _rawUrl : "https://github.com/morpheus45/VOD/releases/latest";
 
   // Si une nouvelle version est disponible → ignorer le timer de dismiss
   const dismissedUntil = Number(localStorage.getItem("pf_apk_install_dismiss") || 0);
@@ -3246,16 +4111,17 @@ async function checkApkUpdate(){
     // Déjà à jour
     if(remoteVer <= localVer) return;
 
-    // Suppression : déjà affiché pour cette version ET timer actif ?
-    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv") || "0", 10);
-    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su") || "0", 10);
+    // Suppression : déjà affiché pour cette version ET timer actif ? (clé v2)
+    // Changement de clé intentionnel : invalide les suppressions stockées sous l'ancienne clé.
+    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv2") || "0", 10);
+    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su2") || "0", 10);
     if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
 
-    // Enregistrer la suppression DÈS L'AFFICHAGE (30 jours).
+    // Enregistrer la suppression DÈS L'AFFICHAGE (3 jours).
     // Ainsi, même si l'utilisateur ferme sans cliquer, la bannière ne revient pas.
     // Si une version PLUS RÉCENTE sort, suppressVer < remoteVer → affichage quand même.
-    localStorage.setItem("pf_apk_sv", String(remoteVer));
-    localStorage.setItem("pf_apk_su", String(Date.now() + 2592000000)); // 30 jours
+    localStorage.setItem("pf_apk_sv2", String(remoteVer));
+    localStorage.setItem("pf_apk_su2", String(Date.now() + 259200000)); // 3 jours
 
     showApkUpdateBanner(vinfo, remoteVer);
   } catch {}
@@ -3349,8 +4215,8 @@ function showApkUpdateBanner(vinfo, remoteVer){
   $("apkDismissBtn").onclick = () => {
     banner.remove();
     // Étendre la suppression à 90 jours si l'utilisateur clique explicitement
-    localStorage.setItem("pf_apk_sv", String(remoteVer));
-    localStorage.setItem("pf_apk_su", String(Date.now() + 7776000000)); // 90 jours
+    localStorage.setItem("pf_apk_sv2", String(remoteVer));
+    localStorage.setItem("pf_apk_su2", String(Date.now() + 7776000000)); // 90 jours
   };
 }
 
