@@ -181,9 +181,12 @@
         }
         // Forcer le profil admin en DB si pas encore fait (fire-and-forget)
         if(prof?.plan !== "admin" && A.supabase){
-          A.supabase.from("profiles")
-            .upsert({ id: _session.user.id, email: _session.user.email, plan: "admin", devices_allowed: 999 })
-            .catch(() => {});
+          (async () => {
+            try {
+              await A.supabase.from("profiles")
+                .upsert({ id: _session.user.id, email: _session.user.email, plan: "admin", devices_allowed: 999 });
+            } catch {}
+          })();
         }
         await loadAdmin();
       } catch(e) {
