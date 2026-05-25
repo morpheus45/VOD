@@ -1850,8 +1850,13 @@ async function playItem(item){
 const _ADULT_RE = /adult|adulte|\+18|18\+|xxx|erot|for adult/i;
 const _isAdultCat = c => _ADULT_RE.test(c || "");
 
+// VOSTFR — toujours masqué (titre ou catégorie)
+const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
+
 function filtered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
+  // VOSTFR toujours masqué, quelle que soit la vue
+  items = items.filter(x => !_isVostfr(x));
   // Sécurité : si le contenu adulte est sélectionné mais que la session n'est plus déverrouillée → reset
   if(S.cat === "__ADULT__" && sessionStorage.getItem("pipsily_adult_unlocked") !== "1") S.cat = "";
   if(S.cat === "__ADULT__"){
@@ -2654,6 +2659,7 @@ function renderNetflixRows(){
   for(const item of all){
     const cat = item.category_name || "Autre";
     if(_isAdultCat(cat)) continue;  // masqué sauf si pill 🔞 sélectionnée
+    if(_isVostfr(item))  continue;  // VOSTFR toujours masqué
     if(!catMap.has(cat)) catMap.set(cat, []);
     catMap.get(cat).push(item);
   }
@@ -2772,7 +2778,7 @@ function render(){
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
   const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
   // Exclure les catégories adultes du <select> pour éviter le contournement du filtre 🔞
-  const catsForSelect = cats.filter(c => !_isAdultCat(c));
+  const catsForSelect = cats.filter(c => !_isAdultCat(c) && !/vostfr/i.test(c));
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
     catsForSelect.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
 
@@ -2837,7 +2843,7 @@ function renderCatPills(cats){
   pills.hidden = false;
 
   // Séparer catégories normales et adultes
-  const normalCats = cats.filter(c => !_isAdultCat(c));
+  const normalCats = cats.filter(c => !_isAdultCat(c) && !/vostfr/i.test(c));
   const hasAdult   = cats.some(c => _isAdultCat(c));
 
   pills.innerHTML =
