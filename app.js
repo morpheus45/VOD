@@ -1847,7 +1847,7 @@ async function playItem(item){
 //  FILTRES / TRI
 // ─────────────────────────────────────────────────────────────────
 
-const _ADULT_RE = /adult|adulte|\+18|xxx|erot|for adult/i;
+const _ADULT_RE = /adult|adulte|\+18|18\+|xxx|erot|for adult/i;
 const _isAdultCat = c => _ADULT_RE.test(c || "");
 
 function filtered(){
@@ -2769,8 +2769,10 @@ function render(){
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
   const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
+  // Exclure les catégories adultes du <select> pour éviter le contournement du filtre 🔞
+  const catsForSelect = cats.filter(c => !_isAdultCat(c));
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
-    cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
+    catsForSelect.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
 
   // Pills catégories (Films / Séries)
   renderCatPills(cats);
@@ -2818,7 +2820,7 @@ function _renderRegionPills(container){
       S._liveRegionIdx = null; // forcer recalcul
       if(val) localStorage.setItem("pipsily_region", val);
       else    localStorage.removeItem("pipsily_region");
-      renderUI();
+      render();
     };
   });
 }
@@ -2843,7 +2845,7 @@ function renderCatPills(cats){
       `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(displayCat(c))}</button>`
     ).join("") +
     (hasAdult && S.type !== "live"
-      ? `<button class="cat-pill cat-pill--adult ${S.cat==="__ADULT__" ? "cat-pill--active" : ""}" data-cat="__ADULT__" style="margin-left:auto;background:rgba(180,0,0,.18);border-color:rgba(220,50,50,.4);color:#ff8899">🔞</button>`
+      ? `<button class="cat-pill cat-pill--adult ${S.cat==="__ADULT__" ? "cat-pill--active" : ""}" data-cat="__ADULT__">🔞</button>`
       : "");
 
   // ── Bouton recherche : ouvre un overlay plein écran ──
@@ -3603,8 +3605,8 @@ async function boot(){
     }
     if(!auth) return; // redirigé vers login.html ou paywall
 
-    S._userId  = auth.session.user.id;
-    S._isAdmin = auth.sub.plan === "admin" || (auth.session.user.email||"").toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL||"").toLowerCase();
+    S._userId  = auth.session?.user?.id || "err";
+    S._isAdmin = auth.sub.plan === "admin" || (auth.session?.user?.email||"").toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL||"").toLowerCase();
     S._unlim   = auth.sub.unlimited;
 
     const userBtns = $("topbarUserBtns");
