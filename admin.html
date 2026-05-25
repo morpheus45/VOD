@@ -170,10 +170,19 @@
       _session = await A.getSession();
       if(!_session){ window.location.href = "./login.html"; return; }
       const prof = await A.getProfile(_session.user.id);
-      if(!prof || (prof.plan !== "admin" && _session.user.email !== A.ADMIN_EMAIL)){
+      // Accès admin si : plan DB = "admin" OU email = ADMIN_EMAIL (insensible à la casse)
+      const _isAdmin = (prof?.plan === "admin") ||
+        ((_session.user.email || "").toLowerCase() === (A.ADMIN_EMAIL || "").toLowerCase());
+      if(!_isAdmin){
         document.getElementById("adminContent").innerHTML =
           '<div style="text-align:center;padding:60px;color:#ff8899">⛔ Accès refusé</div>';
         return;
+      }
+      // Forcer le profil admin en DB si pas encore fait (fire-and-forget)
+      if(prof?.plan !== "admin" && A.supabase){
+        A.supabase.from("profiles")
+          .upsert({ id: _session.user.id, email: _session.user.email, plan: "admin", devices_allowed: 999 })
+          .catch(() => {});
       }
       loadAdmin();
     }
@@ -370,7 +379,7 @@
         const devFees  = userDevs.reduce((s,d)=>s+(d.monthly_fee||0),0);
         const monthly  = (u.plan==="admin"||u.plan==="unlimited"||u.plan==="pending") ? null :
           (exp && exp > new Date() ? fmtMoney(4.99+devFees) : null);
-        const isMe     = u.email === A.ADMIN_EMAIL;
+        const isMe     = (u.email||"").toLowerCase() === (A.ADMIN_EMAIL||"").toLowerCase();
         const devLimit = u.plan==="admin"||u.plan==="unlimited" ? "∞" : (u.devices_allowed||1);
         const isOnline = userSess.length > 0;
 
