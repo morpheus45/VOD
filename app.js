@@ -4181,85 +4181,52 @@ function showApkUpdateBanner(vinfo, remoteVer){
   const banner = document.createElement("div");
   banner.id = "apkUpdateBanner";
 
-  if(isTV){
-    // ── TV : overlay plein écran navigable à la télécommande ──
-    banner.innerHTML = `
-      <div class="apk-tv-modal">
-        <div class="apk-tv-icon">📦</div>
-        <h2 class="apk-tv-title">PIPSILY v${remoteVer} disponible</h2>
-        <p class="apk-tv-changes">${vinfo.changes || "Améliorations & corrections"}</p>
-        <div class="apk-tv-btns">
-          <button id="apkDownloadBtn" type="button" class="apk-tv-btn apk-tv-btn--install" tabindex="0">
-            ✅ Installer maintenant
-          </button>
-          <button id="apkDismissBtn" type="button" class="apk-tv-btn apk-tv-btn--later" tabindex="0">
-            ⏩ Plus tard
-          </button>
-        </div>
-        <p class="apk-tv-hint">Utilisez ↑↓ ou ←→ pour naviguer, OK pour confirmer</p>
-      </div>`;
-    banner.style.cssText =
-      "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.93);" +
-      "display:flex;align-items:center;justify-content:center;";
+  // ── Overlay obligatoire — plein écran, navigation désactivée ──
+  // Même UI pour TV et mobile : modal centré, pas de bouton "Plus tard"
+  banner.innerHTML =
+    '<div class="apk-tv-modal">' +
+      '<div class="apk-tv-icon">📦</div>' +
+      '<h2 class="apk-tv-title">PIPSILY v' + remoteVer + ' disponible</h2>' +
+      '<p class="apk-tv-changes">' + (vinfo.changes || "Améliorations & corrections") + '</p>' +
+      '<div class="apk-tv-btns">' +
+        '<button id="apkDownloadBtn" type="button" class="apk-tv-btn apk-tv-btn--install" tabindex="0">' +
+          '⬇ Mettre à jour' +
+        '</button>' +
+      '</div>' +
+      (isTV ? '<p class="apk-tv-hint">Appuyez sur OK pour installer</p>' : '') +
+    '</div>';
 
-    // Auto-focus après rendu
-    document.body.appendChild(banner);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => $("apkDownloadBtn")?.focus());
-    });
-  } else {
-    // ── Mobile : bandeau compact en haut ──
-    banner.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span style="font-size:22px">📦</span>
-        <div>
-          <div style="font-weight:700;font-size:14px">PIPSILY v${remoteVer} disponible !</div>
-          <div style="font-size:12px;opacity:.8;margin-top:2px">${vinfo.changes||"Améliorations & corrections"}</div>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;flex-shrink:0">
-        <button id="apkDownloadBtn" type="button"
-          style="background:#4caf50;color:#fff;border:none;border-radius:10px;
-                 padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer">
-          Installer
-        </button>
-        <button id="apkDismissBtn" type="button"
-          style="background:rgba(255,255,255,.12);color:#fff;border:none;
-                 border-radius:10px;padding:8px 12px;font-size:14px;cursor:pointer"
-          aria-label="Plus tard">✕</button>
-      </div>`;
-    banner.style.cssText =
-      "position:fixed;top:0;left:0;right:0;z-index:9999;" +
-      "display:flex;align-items:center;justify-content:space-between;gap:16px;" +
-      "background:linear-gradient(135deg,#1a3d1a,#0a2a0a);" +
-      "border-bottom:2px solid #4caf50;padding:12px 18px;color:#fff;" +
-      "box-shadow:0 4px 24px rgba(0,0,0,.6);";
-    document.body.appendChild(banner);
-  }
+  // Overlay plein écran — bloque toute interaction derrière
+  banner.style.cssText =
+    "position:fixed;inset:0;z-index:99999;" +
+    "background:rgba(0,0,0,.96);" +
+    "display:flex;align-items:center;justify-content:center;" +
+    "pointer-events:all;";
 
-  // ── Action : téléchargement direct via bridge Java ──
+  // Empêcher toute touche/clic de traverser vers l'app
+  banner.addEventListener("keydown", e => {
+    if(e.key !== "Enter" && e.key !== " ") e.stopPropagation();
+  }, true);
+
+  document.body.appendChild(banner);
+
+  // Auto-focus sur le bouton
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => $("apkDownloadBtn")?.focus());
+  });
+
+  // ── Action : téléchargement ──
   $("apkDownloadBtn").onclick = () => {
     const url = vinfo.apk_url;
+    const btn = $("apkDownloadBtn");
+    if(btn){ btn.textContent = "📥 Téléchargement en cours…"; btn.disabled = true; }
     if(typeof window.AndroidBridge?.downloadAndInstall === "function"){
       window.AndroidBridge.downloadAndInstall(url);
-      // Feedback pendant téléchargement (la bannière reste visible sur TV)
-      const btn = $("apkDownloadBtn");
-      if(btn){ btn.textContent = "📥 Téléchargement…"; btn.disabled = true; }
-      if(!isTV) banner.remove();
     } else if(typeof window.AndroidBridge?.openDownloadUrl === "function"){
       window.AndroidBridge.openDownloadUrl(url);
-      banner.remove();
     } else {
       window.open(url, "_blank");
-      banner.remove();
     }
-  };
-
-  $("apkDismissBtn").onclick = () => {
-    banner.remove();
-    // Supprimer 24h si l'utilisateur clique "Plus tard"
-    localStorage.setItem("pf_apk_sv4", String(remoteVer));
-    localStorage.setItem("pf_apk_su4", String(Date.now() + 86400000)); // 24h
   };
 }
 
