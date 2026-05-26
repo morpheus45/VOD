@@ -4160,15 +4160,11 @@ async function checkApkUpdate(){
     // Déjà à jour
     if(remoteVer <= localVer) return;
 
-    // Suppression : déjà affiché pour cette version ET timer actif ?
-    // Clé v3 — invalide les anciennes suppressions v2 bloquées 3 jours
-    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv3") || "0", 10);
-    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su3") || "0", 10);
+    // Suppression : uniquement si l'utilisateur a cliqué "Plus tard"
+    // (la bannière réapparaît à chaque lancement tant que l'APK n'est pas installé)
+    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv4") || "0", 10);
+    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su4") || "0", 10);
     if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
-
-    // Enregistrer la suppression dès l'affichage (4h seulement — rappel au prochain lancement)
-    localStorage.setItem("pf_apk_sv3", String(remoteVer));
-    localStorage.setItem("pf_apk_su3", String(Date.now() + 14400000)); // 4h
 
     showApkUpdateBanner(vinfo, remoteVer);
   } catch {}
@@ -4261,9 +4257,9 @@ function showApkUpdateBanner(vinfo, remoteVer){
 
   $("apkDismissBtn").onclick = () => {
     banner.remove();
-    // Étendre la suppression à 90 jours si l'utilisateur clique explicitement
-    localStorage.setItem("pf_apk_sv2", String(remoteVer));
-    localStorage.setItem("pf_apk_su2", String(Date.now() + 7776000000)); // 90 jours
+    // Supprimer 24h si l'utilisateur clique "Plus tard"
+    localStorage.setItem("pf_apk_sv4", String(remoteVer));
+    localStorage.setItem("pf_apk_su4", String(Date.now() + 86400000)); // 24h
   };
 }
 
