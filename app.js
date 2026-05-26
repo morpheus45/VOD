@@ -1847,9 +1847,26 @@ async function playItem(item){
 //  FILTRES / TRI
 // ─────────────────────────────────────────────────────────────────
 
+const _ADULT_RE = /adult|adulte|\+18|18\+|xxx|erot|for adult/i;
+const _isAdultCat = c => _ADULT_RE.test(c || "");
+
+// VOSTFR — toujours masqué (titre ou catégorie)
+const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
+
 function filtered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
-  if(S.cat)    items = items.filter(x => x.category_name === S.cat);
+  // VOSTFR et adulte toujours masqués, quelle que soit la vue
+  items = items.filter(x => !_isVostfr(x));
+  if(S.cat === "__ADULT__") S.cat = ""; // sécurité : jamais accessible
+  if(S.cat === "__ADULT__"){
+    // Pill 🔞 sélectionnée → uniquement les catégories adultes
+    items = items.filter(x => _isAdultCat(x.category_name));
+  } else if(S.cat){
+    items = items.filter(x => x.category_name === S.cat);
+  } else {
+    // "Tout" sélectionné → masquer les catégories adultes
+    items = items.filter(x => !_isAdultCat(x.category_name));
+  }
   if(S.search){
     const q = S.search.toLowerCase();
     items = items.filter(x =>
@@ -2636,10 +2653,12 @@ function renderNetflixRows(){
 
   const all = S.type === "vod" ? S.vod : S.series;
 
-  // Grouper par catégorie (ordre d'apparition original)
+  // Grouper par catégorie (ordre d'apparition original) — adultes exclus du "Tout"
   const catMap = new Map();
   for(const item of all){
     const cat = item.category_name || "Autre";
+    if(_isAdultCat(cat)) continue;  // masqué sauf si pill 🔞 sélectionnée
+    if(_isVostfr(item))  continue;  // VOSTFR toujours masqué
     if(!catMap.has(cat)) catMap.set(cat, []);
     catMap.get(cat).push(item);
   }
@@ -2757,8 +2776,10 @@ function render(){
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
   const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
+  // Exclure les catégories adultes du <select> pour éviter le contournement du filtre 🔞
+  const catsForSelect = cats.filter(c => !_isAdultCat(c) && !/vostfr/i.test(c));
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
-    cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
+    catsForSelect.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
 
   // Pills catégories (Films / Séries)
   renderCatPills(cats);
@@ -2806,7 +2827,7 @@ function _renderRegionPills(container){
       S._liveRegionIdx = null; // forcer recalcul
       if(val) localStorage.setItem("pipsily_region", val);
       else    localStorage.removeItem("pipsily_region");
-      renderUI();
+      render();
     };
   });
 }
@@ -2818,14 +2839,19 @@ function _renderRegionPills(container){
 function renderCatPills(cats){
   const pills = $("catPills");
   if(!pills) return;
-  // Pills affichées dans tous les modes (Films / Séries / Live)
   pills.hidden = false;
+
+  // Séparer catégories normales et adultes
+  const normalCats = cats.filter(c => !_isAdultCat(c) && !/vostfr/i.test(c));
+  const hasAdult   = cats.some(c => _isAdultCat(c));
+
   pills.innerHTML =
     `<button class="cat-pill cat-pill--search" data-search="1" aria-label="Rechercher">🔍</button>` +
     `<button class="cat-pill ${!S.cat ? "cat-pill--active" : ""}" data-cat="">Tout</button>` +
-    cats.map(c =>
+    normalCats.map(c =>
       `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(displayCat(c))}</button>`
-    ).join("");
+    ).join("") +
+    "";
 
   // ── Bouton recherche : ouvre un overlay plein écran ──
   pills.querySelector(".cat-pill--search")?.addEventListener("click", () => openSearchOverlay());
@@ -2849,6 +2875,8 @@ function renderCatPills(cats){
     });
   });
 }
+
+
 
 // ── Overlay de recherche plein écran (TV-friendly) ──
 function openSearchOverlay(){
@@ -3576,13 +3604,16 @@ async function boot(){
       auth = await window.PIPSILY_AUTH.authGate();
     } catch(e) {
       console.error("[PIPSILY] authGate crash (tables manquantes ?):", e.message);
-      // Ne pas bloquer → démarrer en mode dégradé
-      auth = { session: { user: { id: "err" } }, sub: { ok: true, plan: "active", unlimited: false } };
+      let _sess = null;
+      try { _sess = await window.PIPSILY_AUTH.getSession?.(); } catch{}
+      const _em = (_sess?.user?.email || "").toLowerCase();
+      const _adm = _em && _em === (window.PIPSILY_AUTH?.ADMIN_EMAIL || "").toLowerCase();
+      auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm } };
     }
     if(!auth) return; // redirigé vers login.html ou paywall
 
-    S._userId  = auth.session.user.id;
-    S._isAdmin = auth.sub.plan === "admin" || auth.session.user.email === window.PIPSILY_AUTH.ADMIN_EMAIL;
+    S._userId  = auth.session?.user?.id || "err";
+    S._isAdmin = auth.sub.plan === "admin" || (auth.session?.user?.email||"").toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL||"").toLowerCase();
     S._unlim   = auth.sub.unlimited;
 
     const userBtns = $("topbarUserBtns");

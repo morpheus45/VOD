@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>PIPSILY — Administration</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -167,15 +170,32 @@
     let _session  = null;
 
     async function init(){
-      _session = await A.getSession();
-      if(!_session){ window.location.href = "./login.html"; return; }
-      const prof = await A.getProfile(_session.user.id);
-      if(!prof || (prof.plan !== "admin" && _session.user.email !== A.ADMIN_EMAIL)){
+      try {
+        _session = await A.getSession();
+        if(!_session){ window.location.href = "./login.html"; return; }
+        const prof = await A.getProfile(_session.user.id);
+        // Accès admin si : plan DB = "admin" OU email = ADMIN_EMAIL (insensible à la casse)
+        const _isAdmin = (prof?.plan === "admin") ||
+          ((_session.user.email || "").toLowerCase() === (A.ADMIN_EMAIL || "").toLowerCase());
+        if(!_isAdmin){
+          document.getElementById("adminContent").innerHTML =
+            '<div style="text-align:center;padding:60px;color:#ff8899">⛔ Accès refusé</div>';
+          return;
+        }
+        // Forcer le profil admin en DB si pas encore fait (fire-and-forget)
+        if(prof?.plan !== "admin" && A.supabase){
+          (async () => {
+            try {
+              await A.supabase.from("profiles")
+                .upsert({ id: _session.user.id, email: _session.user.email, plan: "admin", devices_allowed: 999 });
+            } catch {}
+          })();
+        }
+        await loadAdmin();
+      } catch(e) {
         document.getElementById("adminContent").innerHTML =
-          '<div style="text-align:center;padding:60px;color:#ff8899">⛔ Accès refusé</div>';
-        return;
+          `<div style="text-align:center;padding:60px;color:#ff8899">⚠ Erreur : ${_esc(e.message||String(e))}<br><br><a href="./admin.html" style="color:#82b4ff;font-size:13px">Réessayer</a></div>`;
       }
-      loadAdmin();
     }
 
     async function loadAdmin(){
@@ -193,18 +213,46 @@
           </div>`;
         return;
       }
-      const [{ data: users }, { data: payments }, { data: devices }, { data: sessions }] = await Promise.all([
-        A.supabase.from("profiles").select("*").order("created_at", { ascending: false }),
-        A.supabase.from("payments").select("*").order("created_at", { ascending: false }),
-        A.supabase.from("devices").select("*"),
-        A.supabase.from("sessions").select("*").order("last_seen", { ascending: false })
+      let users = [], payments = [], devices = [], sessions = [];
+      const errs = [];
+
+      // Wrapper qui loggue les erreurs Supabase (ne throw pas, retourne toujours un tableau)
+      const sq = async (label, fn) => {
+        try {
+          const r = await fn();
+          if(r.error){ errs.push(`${label} : ${r.error.message || JSON.stringify(r.error)}`); return []; }
+          return r.data || [];
+        } catch(e){ errs.push(`${label} (exception) : ${e.message||e}`); return []; }
+      };
+
+      [users, payments, devices] = await Promise.all([
+        sq("profiles", () => A.supabase.from("profiles").select("*").order("created_at", { ascending: false })),
+        sq("payments", () => A.supabase.from("payments").select("*").order("created_at", { ascending: false })),
+        sq("devices",  () => A.supabase.from("devices").select("*"))
       ]);
 
-      _allUsers    = users    || [];
-      window._allDevices  = devices  || [];
-      window._allSessions = sessions || [];
-      window._allPayments = payments || [];
-      renderAdmin(users || [], payments || [], devices || [], sessions || []);
+      // Sessions avec fallback sans order()
+      const rS = await A.supabase.from("sessions").select("*").order("last_seen", { ascending: false });
+      if(!rS.error){ sessions = rS.data || []; }
+      else {
+        const rS2 = await A.supabase.from("sessions").select("*");
+        sessions = rS2.data || [];
+      }
+
+      // Afficher un bandeau d'erreur si certaines tables ont échoué
+      if(errs.length){
+        const banner = document.createElement("div");
+        banner.style.cssText = "background:rgba(232,51,74,.12);border:1px solid rgba(232,51,74,.3);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#ff8899;white-space:pre-wrap";
+        banner.textContent = "⚠ Erreurs de chargement (données partielles) :\n" + errs.join("\n");
+        document.getElementById("adminContent").prepend(banner);
+        console.error("[admin] Erreurs requêtes :", errs);
+      }
+
+      _allUsers           = users;
+      window._allDevices  = devices;
+      window._allSessions = sessions;
+      window._allPayments = payments;
+      renderAdmin(users, payments, devices, sessions);
     }
 
     function fmtDate(iso){ if(!iso) return "—"; return new Date(iso).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) }
@@ -370,7 +418,7 @@
         const devFees  = userDevs.reduce((s,d)=>s+(d.monthly_fee||0),0);
         const monthly  = (u.plan==="admin"||u.plan==="unlimited"||u.plan==="pending") ? null :
           (exp && exp > new Date() ? fmtMoney(4.99+devFees) : null);
-        const isMe     = u.email === A.ADMIN_EMAIL;
+        const isMe     = (u.email||"").toLowerCase() === (A.ADMIN_EMAIL||"").toLowerCase();
         const devLimit = u.plan==="admin"||u.plan==="unlimited" ? "∞" : (u.devices_allowed||1);
         const isOnline = userSess.length > 0;
 
@@ -464,37 +512,55 @@
     }
 
     async function activateUser(userId, days){
-      const expAt = new Date(Date.now() + days*24*3600*1000).toISOString();
-      await A.supabase.from("profiles").update({ plan:"active", subscription_expires_at: expAt }).eq("id",userId);
-      // Enregistrer le paiement
-      await A.supabase.from("payments").insert({
-        user_id: userId, amount: 4.99, type:"subscription",
-        period_start: new Date().toISOString().slice(0,10),
-        period_end: expAt.slice(0,10),
-        confirmed_at: new Date().toISOString(), confirmed_by: _session.user.id
-      });
-      showGlobalMsg("✓ Activé pour " + days + " jours");
-      loadAdmin();
+      try {
+        const expAt = new Date(Date.now() + days*24*3600*1000).toISOString();
+        const { error } = await A.supabase.from("profiles")
+          .update({ plan:"active", subscription_expires_at: expAt }).eq("id", userId);
+        if(error) throw error;
+        // Enregistrer le paiement (fire-and-forget, ne bloque pas l'activation)
+        try {
+          await A.supabase.from("payments").insert({
+            user_id: userId, amount: 4.99, type:"subscription",
+            period_start: new Date().toISOString().slice(0,10),
+            period_end: expAt.slice(0,10),
+            confirmed_at: new Date().toISOString(), confirmed_by: _session?.user?.id
+          });
+        } catch{}
+        showGlobalMsg("✓ Activé pour " + days + " jours");
+        loadAdmin();
+      } catch(err){ alert("Erreur activation : " + (err.message||err)); }
     }
 
     async function setUnlimited(userId){
-      await A.supabase.from("profiles").update({ plan:"unlimited", subscription_expires_at: null, devices_allowed: 999 }).eq("id",userId);
-      showGlobalMsg("✓ Compte illimité");
-      loadAdmin();
+      try {
+        const { error } = await A.supabase.from("profiles")
+          .update({ plan:"unlimited", subscription_expires_at: null, devices_allowed: 999 }).eq("id", userId);
+        if(error) throw error;
+        showGlobalMsg("✓ Compte illimité");
+        loadAdmin();
+      } catch(err){ alert("Erreur illimité : " + (err.message||err)); }
     }
 
     async function setTest(userId){
-      const expAt = new Date(Date.now()+7*24*3600*1000).toISOString();
-      await A.supabase.from("profiles").update({ plan:"active", subscription_expires_at: expAt }).eq("id",userId);
-      showGlobalMsg("✓ Accès test 7 jours");
-      loadAdmin();
+      try {
+        const expAt = new Date(Date.now()+7*24*3600*1000).toISOString();
+        const { error } = await A.supabase.from("profiles")
+          .update({ plan:"active", subscription_expires_at: expAt }).eq("id", userId);
+        if(error) throw error;
+        showGlobalMsg("✓ Accès test 7 jours");
+        loadAdmin();
+      } catch(err){ alert("Erreur test : " + (err.message||err)); }
     }
 
     async function deactivate(userId){
       if(!confirm("Bloquer cet utilisateur ?")) return;
-      await A.supabase.from("profiles").update({ plan:"pending", subscription_expires_at: null }).eq("id",userId);
-      showGlobalMsg("✓ Utilisateur bloqué");
-      loadAdmin();
+      try {
+        const { error } = await A.supabase.from("profiles")
+          .update({ plan:"pending", subscription_expires_at: null }).eq("id", userId);
+        if(error) throw error;
+        showGlobalMsg("✓ Utilisateur bloqué");
+        loadAdmin();
+      } catch(err){ alert("Erreur blocage : " + (err.message||err)); }
     }
 
     // ── Suppression complète d'un compte ──
