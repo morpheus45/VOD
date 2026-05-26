@@ -1855,16 +1855,12 @@ const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.categor
 
 function filtered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
-  // VOSTFR toujours masqué
+  // VOSTFR et adulte toujours masqués, quelle que soit la vue
   items = items.filter(x => !_isVostfr(x));
-  const _adultUnlocked = !!sessionStorage.getItem("pipsily_adult_unlocked");
+  if(S.cat === "__ADULT__") S.cat = ""; // sécurité : jamais accessible
   if(S.cat === "__ADULT__"){
-    if(_adultUnlocked){
-      items = items.filter(x => _isAdultCat(x.category_name));
-    } else {
-      S.cat = "";
-      items = items.filter(x => !_isAdultCat(x.category_name));
-    }
+    // Pill 🔞 sélectionnée → uniquement les catégories adultes
+    items = items.filter(x => _isAdultCat(x.category_name));
   } else if(S.cat){
     items = items.filter(x => x.category_name === S.cat);
   } else {
@@ -2849,37 +2845,20 @@ function renderCatPills(cats){
   const normalCats = cats.filter(c => !_isAdultCat(c) && !/vostfr/i.test(c));
   const hasAdult   = cats.some(c => _isAdultCat(c));
 
-  const _hasAdultPin = !!localStorage.getItem("pipsily_adult_pin");
   pills.innerHTML =
     `<button class="cat-pill cat-pill--search" data-search="1" aria-label="Rechercher">🔍</button>` +
     `<button class="cat-pill ${!S.cat ? "cat-pill--active" : ""}" data-cat="">Tout</button>` +
     normalCats.map(c =>
       `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(displayCat(c))}</button>`
     ).join("") +
-    (hasAdult && _hasAdultPin
-      ? `<button class="cat-pill ${S.cat==="__ADULT__" ? "cat-pill--active" : ""}" data-cat="__ADULT__" style="color:#ff8899">🔞 Adult</button>`
-      : "");
+    "";
 
   // ── Bouton recherche : ouvre un overlay plein écran ──
   pills.querySelector(".cat-pill--search")?.addEventListener("click", () => openSearchOverlay());
 
   pills.querySelectorAll(".cat-pill[data-cat]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const cat = btn.dataset.cat;
-      // Pill adult : demander le PIN si pas encore déverrouillé
-      if(cat === "__ADULT__"){
-        const unlocked = !!sessionStorage.getItem("pipsily_adult_unlocked");
-        if(!unlocked){
-          const stored = localStorage.getItem("pipsily_adult_pin");
-          if(!stored){ alert("Aucun code PIN parental non defini. Configurez-le dans Mon compte."); return; }
-          showPinPrompt(() => {
-            S.cat = "__ADULT__";
-            applyPillCat(pills);
-          });
-          return;
-        }
-      }
-      S.cat = cat;
+      S.cat = btn.dataset.cat;
       const sel = $("categorySelect");
       if(sel) sel.value = S.cat;
       S.shown[S.type] = PER_PAGE;
@@ -2895,59 +2874,6 @@ function renderCatPills(cats){
       else           renderGrid(true);
     });
   });
-}
-
-function applyPillCat(pills){
-  const sel = $("categorySelect");
-  if(sel) sel.value = S.cat;
-  S.shown[S.type] = 40;
-  pills.querySelectorAll(".cat-pill[data-cat]").forEach(b =>
-    b.classList.toggle("cat-pill--active", b.dataset.cat === S.cat)
-  );
-  const g = $("grid");
-  if(g) g.className = "grid";
-  renderGrid(true);
-}
-
-function showPinPrompt(onSuccess){
-  if($("pinPromptOverlay")) return;
-  const ov = document.createElement("div");
-  ov.id = "pinPromptOverlay";
-  ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center";
-  ov.innerHTML = `
-    <div style="background:#0c1422;border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:28px 24px;width:min(340px,90vw);text-align:center">
-      <div style="font-size:28px;margin-bottom:10px">🔞</div>
-      <div style="font-size:16px;font-weight:800;color:#eef4ff;margin-bottom:6px">Contenu adulte</div>
-      <div style="font-size:13px;color:#7a9cc0;margin-bottom:18px">Entrez votre code PIN parental</div>
-      <input id="pinPromptInput" type="password" inputmode="numeric" maxlength="6"
-        placeholder="••••"
-        style="width:100%;padding:12px;border-radius:11px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#eef4ff;font-size:18px;text-align:center;outline:none;letter-spacing:6px;margin-bottom:14px" />
-      <div id="pinPromptErr" style="color:#ff8899;font-size:13px;margin-bottom:10px;display:none">Code incorrect</div>
-      <div style="display:flex;gap:10px">
-        <button id="pinPromptCancel" style="flex:1;padding:11px;border-radius:11px;border:1px solid rgba(255,255,255,.1);background:transparent;color:#7a9cc0;cursor:pointer;font-size:14px">Annuler</button>
-        <button id="pinPromptOk" style="flex:1;padding:11px;border-radius:11px;border:none;background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;cursor:pointer;font-size:14px;font-weight:700">Valider</button>
-      </div>
-    </div>`;
-  document.body.appendChild(ov);
-  const inp = $("pinPromptInput");
-  setTimeout(() => inp?.focus(), 50);
-  const close = () => ov.remove();
-  $("pinPromptCancel").onclick = close;
-  const validate = () => {
-    const entered = inp.value.trim();
-    const stored  = localStorage.getItem("pipsily_adult_pin");
-    if(entered === stored){
-      sessionStorage.setItem("pipsily_adult_unlocked", "1");
-      close();
-      onSuccess();
-    } else {
-      $("pinPromptErr").style.display = "block";
-      inp.value = "";
-      inp.focus();
-    }
-  };
-  $("pinPromptOk").onclick = validate;
-  inp.addEventListener("keydown", e => { if(e.key === "Enter") validate(); if(e.key === "Escape") close(); });
 }
 
 
@@ -3472,7 +3398,7 @@ function _renderPoursuivreRowInner(){
       const rawPct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
       const pct = rawPct > 1 ? rawPct / 100 : rawPct; // normalise format player.js (0-100) → fraction
       return { item, pct, ts: en?.ts || 0 };
-    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0 && !_isAdultCat(x.item?.category_name))
+    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
 
@@ -3481,7 +3407,6 @@ function _renderPoursuivreRowInner(){
   const favItems = getFavs()
     .filter(f => {
       if(!f.item) return false;
-      if(_isAdultCat(f.item?.category_name)) return false;
       const ftype = f.item.type || type;
       return ftype === type && !inProgKeys.has(itemKey(f.item));
     })
