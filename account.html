@@ -326,6 +326,19 @@
           <div class="msg" id="regionMsg"></div>
         </div>
 
+        <!-- Code parental -->
+        <div class="card">
+          <div class="card-title">Code parental</div>
+          <p style="font-size:13px;color:#7a9cc0;margin-bottom:14px;line-height:1.5">
+            Protégez les contenus réservés aux adultes avec un code PIN à 4-6 chiffres.
+          </p>
+          <label>Code parental (4-6 chiffres)</label>
+          <div class="pin-row">
+            <input type="password" id="pinInput" inputmode="numeric" maxlength="6" placeholder="••••" />
+            <button class="btn btn-primary" onclick="savePin()">Enregistrer</button>
+          </div>
+          <div class="msg" id="pinMsg"></div>
+        </div>
 
         <!-- Mot de passe -->
         <div class="card">
@@ -342,12 +355,25 @@
         </div>
       `;
 
+      // Pré-remplir le PIN s'il existe
+      A.getParentalPin(session.user.id).then(pin => {
+        if(pin) document.getElementById("pinInput").placeholder = "Code enregistré (modifier)";
+      });
+
       // Pré-sélectionner la région
       initRegionSelect();
 
       window._userId = session.user.id;
     }
 
+    async function savePin(){
+      const pin = document.getElementById("pinInput").value.trim();
+      const msg = document.getElementById("pinMsg");
+      if(!/^\d{4,6}$/.test(pin)){ showMsg(msg, "error", "4 à 6 chiffres requis."); return; }
+      const { error } = await A.setParentalPin(window._userId, pin);
+      if(error) showMsg(msg, "error", error.message);
+      else showMsg(msg, "success", "✓ Code parental enregistré.");
+    }
 
     async function changePw(){
       const pw  = document.getElementById("newPwInput").value;
