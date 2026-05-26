@@ -244,6 +244,8 @@ const PipPlayer = {
         this._setFrenchAudio();
         video.play().catch(() => {});
       });
+      // Certains flux publient les pistes audio après le manifest → on réessaie
+      this._hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => this._setFrenchAudio());
       this._hls.on(Hls.Events.ERROR, (_, d) => {
         if(d.fatal){
           this._hls.destroy(); this._hls = null;
@@ -535,7 +537,11 @@ const PipPlayer = {
 function storeGet(k, fb){
   try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fb; } catch { return fb; }
 }
-function storeSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function storeSet(k, v){
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+  // Déclencher sync cloud si c'est une donnée utilisateur
+  if((k === STORE.progress || k === STORE.favorites) && _cloudUserId) _cloudSchedulePush();
+}
 
 // ── Cache mémoire — évite des centaines de JSON.parse par render ──
 let _cacheP = null; // cache progression
@@ -561,6 +567,68 @@ function getFavs(){
   return _cacheF;
 }
 function _invalidateCache(){ _cacheP = null; _cacheF = null; }
+
+// ═══════════════════════════════════════════════════════════════
+//  CLOUD SYNC — Favoris + Progression synchronisés sur le compte
+//  Multi-appareils via Supabase user_data (RLS par user_id)
+// ═══════════════════════════════════════════════════════════════
+let _cloudUserId   = null;
+let _cloudSyncTimer = null;
+
+// Debounce : évite de spammer Supabase à chaque seconde de vidéo
+function _cloudSchedulePush(){
+  if(!_cloudUserId) return;
+  clearTimeout(_cloudSyncTimer);
+  _cloudSyncTimer = setTimeout(_cloudDoPush, 4000);
+}
+
+async function _cloudDoPush(){
+  const supa = window.PIPSILY_AUTH?.supabase;
+  if(!supa || !_cloudUserId) return;
+  try {
+    await supa.from("user_data").upsert({
+      user_id    : _cloudUserId,
+      progress   : getProg(),
+      favorites  : getFavs(),
+      updated_at : new Date().toISOString()
+    }, { onConflict: "user_id" });
+  } catch(e){ console.warn("[PIPSILY] cloud push:", e.message); }
+}
+
+// Pull depuis Supabase, merge avec local (ts le plus récent gagne)
+async function _cloudPull(userId){
+  const supa = window.PIPSILY_AUTH?.supabase;
+  if(!supa || !userId) return;
+  try {
+    const { data, error } = await supa
+      .from("user_data").select("progress,favorites")
+      .eq("user_id", userId).maybeSingle();
+    if(error || !data) return;
+
+    // ── Progression : clé la plus récente gagne ──────────────────
+    if(data.progress && typeof data.progress === "object" && !Array.isArray(data.progress)){
+      const local = getProg(); let dirty = false;
+      for(const [k, v] of Object.entries(data.progress)){
+        if(!local[k] || (v?.ts||0) > (local[k]?.ts||0)){ local[k] = v; dirty = true; }
+      }
+      if(dirty){
+        _cacheP = local;
+        try { localStorage.setItem(STORE.progress, JSON.stringify(local)); } catch {}
+      }
+    }
+
+    // ── Favoris : union dédoublonnée par key, tri par date ───────
+    if(Array.isArray(data.favorites) && data.favorites.length){
+      const map = new Map(getFavs().map(x => [x.key, x]));
+      for(const cf of data.favorites){
+        if(!map.has(cf.key) || (cf.at||0) > (map.get(cf.key)?.at||0)) map.set(cf.key, cf);
+      }
+      const merged = [...map.values()].sort((a,b) => (b.at||0)-(a.at||0)).slice(0,500);
+      _cacheF = merged;
+      try { localStorage.setItem(STORE.favorites, JSON.stringify(merged)); } catch {}
+    }
+  } catch(e){ console.warn("[PIPSILY] cloud pull:", e.message); }
+}
 
 // ── Index de progression par série — toujours frais depuis _cacheP (pas de cache séparé) ──
 // _cacheP est déjà en mémoire : Object.entries dessus = ~0ms, pas besoin de double-cache.
@@ -1847,26 +1915,9 @@ async function playItem(item){
 //  FILTRES / TRI
 // ─────────────────────────────────────────────────────────────────
 
-const _ADULT_RE = /adult|adulte|\+18|18\+|xxx|erot|for adult/i;
-const _isAdultCat = c => _ADULT_RE.test(c || "");
-
-// VOSTFR — toujours masqué (titre ou catégorie)
-const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
-
 function filtered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
-  // VOSTFR et adulte toujours masqués, quelle que soit la vue
-  items = items.filter(x => !_isVostfr(x));
-  if(S.cat === "__ADULT__") S.cat = ""; // sécurité : jamais accessible
-  if(S.cat === "__ADULT__"){
-    // Pill 🔞 sélectionnée → uniquement les catégories adultes
-    items = items.filter(x => _isAdultCat(x.category_name));
-  } else if(S.cat){
-    items = items.filter(x => x.category_name === S.cat);
-  } else {
-    // "Tout" sélectionné → masquer les catégories adultes
-    items = items.filter(x => !_isAdultCat(x.category_name));
-  }
+  if(S.cat)    items = items.filter(x => x.category_name === S.cat);
   if(S.search){
     const q = S.search.toLowerCase();
     items = items.filter(x =>
@@ -2312,6 +2363,231 @@ function groupLiveItems(items){
   return [...groups.values()];
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  EPG — Grille Guide TV
+// ═══════════════════════════════════════════════════════════════
+
+const EPG_PX_MIN    = 5;      // pixels par minute
+const EPG_WIN_PAST  = 60;     // minutes avant maintenant visibles
+const EPG_WIN_FUTUR = 240;    // minutes après maintenant
+const EPG_WIN_TOTAL = EPG_WIN_PAST + EPG_WIN_FUTUR; // 300 min = 5h
+const _epgCache     = {};     // streamId → [{title,start,end,live}]
+
+function _epgCreds(){
+  // Extrait les credentials Xtream depuis la première chaîne live
+  for(const ch of (S.live||[])){
+    const url = ch.url || ch.stream_url || "";
+    if(!url) continue;
+    try {
+      const u = new URL(url);
+      const p = u.pathname.split("/").filter(Boolean);
+      if((p[0]==="live"||p[0]==="movie"||p[0]==="series") && p.length>=3)
+        return { base: u.origin, username: p[1], password: p[2] };
+      const usr = u.searchParams.get("username");
+      const pwd = u.searchParams.get("password");
+      if(usr && pwd) return { base: u.origin, username: usr, password: pwd };
+      if(p.length>=2 && !p[0].includes("."))
+        return { base: u.origin, username: p[0], password: p[1] };
+    } catch {}
+  }
+  return null;
+}
+
+function _epgDecode(str){
+  if(!str) return "";
+  try { return decodeURIComponent(escape(atob(str))).trim(); } catch {}
+  try { return atob(str).trim(); } catch {}
+  return String(str).trim();
+}
+
+async function _epgFetch(creds, streamId){
+  if(_epgCache[streamId]) return _epgCache[streamId];
+  try {
+    const url = `${creds.base}/player_api.php`
+      + `?username=${encodeURIComponent(creds.username)}`
+      + `&password=${encodeURIComponent(creds.password)}`
+      + `&action=get_short_epg&stream_id=${streamId}&limit=10`;
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch(url, { credentials:"omit", signal: ctrl.signal });
+    clearTimeout(tid);
+    const d = await r.json();
+    const items = (d?.epg_listings || []).map(e => ({
+      title : _epgDecode(e.title) || "—",
+      desc  : _epgDecode(e.description),
+      start : Number(e.start_timestamp||0) * 1000,
+      end   : Number(e.stop_timestamp||0)  * 1000,
+      live  : !!e.now_playing,
+    })).filter(e => e.end > e.start);
+    _epgCache[streamId] = items;
+    return items;
+  } catch { return []; }
+}
+
+function _epgFmt(ts){
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+}
+
+function _epgRenderRow(row, items, winStart){
+  if(!items.length){
+    row.innerHTML = `<div class="epg-empty">Aucun programme disponible</div>`;
+    return;
+  }
+  let html = "";
+  for(const p of items){
+    const now = Date.now();
+    if(p.end <= winStart) continue;
+    const s    = Math.max(p.start, winStart);
+    const e    = p.end;
+    const left = (s - winStart) / 60000 * EPG_PX_MIN;
+    const wid  = Math.max(4, (e - s)   / 60000 * EPG_PX_MIN - 2);
+    const dur  = Math.round((p.end - p.start) / 60000);
+    const isLive = p.live || (p.start <= now && p.end > now);
+    const pct  = isLive ? Math.min(100, Math.round((now - p.start)/(p.end - p.start)*100)) : 0;
+    html += `<div class="epg-prog${isLive?" epg-prog--live":""}"
+      style="left:${Math.round(left)}px;width:${Math.round(wid)}px"
+      title="${esc(p.title)} · ${_epgFmt(p.start)}–${_epgFmt(p.end)} (${dur} min)${p.desc?"\n"+p.desc:""}">
+      <span class="epg-prog-time">${_epgFmt(p.start)}</span>
+      <span class="epg-prog-title">${esc(p.title)}</span>
+      ${isLive?`<div class="epg-prog-bar" style="width:${pct}%"></div>`:""}
+    </div>`;
+  }
+  row.innerHTML = html || `<div class="epg-empty">Aucun programme</div>`;
+}
+
+function openEPG(){
+  if(document.getElementById("epg-overlay")) return;
+  const creds = _epgCreds();
+  if(!creds){
+    alert("Impossible de récupérer les identifiants. Lance d'abord une chaîne TV.");
+    return;
+  }
+
+  const now      = Date.now();
+  const winStart = now - EPG_WIN_PAST  * 60000;
+  const nowPx    = EPG_WIN_PAST * EPG_PX_MIN; // px depuis le bord gauche
+  const totalPx  = EPG_WIN_TOTAL * EPG_PX_MIN;
+
+  // ── En-tête temporel ──
+  let timeHtml = "";
+  // Première marque alignée sur le demi-heure passé
+  const startRound = Math.floor(winStart / 1800000) * 1800000;
+  for(let t = startRound; t <= winStart + EPG_WIN_TOTAL*60000; t += 1800000){
+    const left = (t - winStart) / 60000 * EPG_PX_MIN;
+    if(left < 0) continue;
+    timeHtml += `<div class="epg-slot-label" style="left:${Math.round(left)}px">${_epgFmt(t)}</div>`;
+  }
+
+  // ── Lignes de grille verticales ──
+  let gridLineHtml = "";
+  for(let t = startRound; t <= winStart + EPG_WIN_TOTAL*60000; t += 1800000){
+    const left = (t - winStart) / 60000 * EPG_PX_MIN;
+    if(left < 0) continue;
+    gridLineHtml += `<div class="epg-grid-line" style="left:${Math.round(left)}px"></div>`;
+  }
+
+  const channels = (S.live || []).slice(0, 200);
+
+  const ov = document.createElement("div");
+  ov.id = "epg-overlay";
+  ov.className = "epg-overlay";
+  ov.innerHTML = `
+    <div class="epg-topbar">
+      <button class="epg-close" id="epgClose">✕ Fermer</button>
+      <div class="epg-topbar-title">📅 Guide TV</div>
+      <button class="epg-now-btn" id="epgNowJump">◎ Maintenant</button>
+    </div>
+    <div class="epg-body">
+      <div class="epg-chan-col" id="epgChanCol">
+        <div class="epg-chan-top-spacer"></div>
+        ${channels.map(ch => `
+          <div class="epg-chan-cell" data-id="${ch.stream_id||ch.id||""}">
+            ${ch.stream_icon?`<img src="${esc(ch.stream_icon)}" class="epg-chan-img" alt="" loading="lazy" onerror="this.style.display='none'">`:""}
+            <span class="epg-chan-name">${esc(ch.title||"")}</span>
+          </div>`).join("")}
+      </div>
+      <div class="epg-right" id="epgRight">
+        <div class="epg-time-header" style="width:${totalPx}px">
+          ${timeHtml}
+        </div>
+        <div class="epg-grid" id="epgGrid" style="width:${totalPx}px">
+          ${gridLineHtml}
+          ${channels.map(ch => `
+            <div class="epg-row" id="epg-row-${ch.stream_id||ch.id||""}"
+                 data-stream-id="${ch.stream_id||ch.id||""}">
+              <div class="epg-row-loading">…</div>
+            </div>`).join("")}
+          <div class="epg-now-line" id="epgNowLine" style="left:${nowPx}px"></div>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(ov);
+  history.pushState({ epg: true }, "");
+
+  // Scroll initial → "maintenant" centré
+  requestAnimationFrame(() => {
+    const right = document.getElementById("epgRight");
+    if(right) right.scrollLeft = Math.max(0, nowPx - right.clientWidth * 0.3);
+
+    // Sync scroll vertical entre colonne chaînes et grille
+    const chanCol = document.getElementById("epgChanCol");
+    right?.addEventListener("scroll", () => {
+      if(chanCol) chanCol.scrollTop = right.scrollTop;
+    });
+  });
+
+  // Boutons
+  document.getElementById("epgClose")?.addEventListener("click", closeEPG);
+  document.getElementById("epgNowJump")?.addEventListener("click", () => {
+    const right = document.getElementById("epgRight");
+    if(right) right.scrollTo({ left: Math.max(0, nowPx - right.clientWidth*0.3), behavior:"smooth" });
+  });
+
+  // Fermeture par Escape
+  const _onKey = e => {
+    if(["Escape","GoBack","BrowserBack","Back"].includes(e.key)){
+      e.stopPropagation(); e.preventDefault(); closeEPG();
+    }
+  };
+  document.addEventListener("keydown", _onKey, true);
+  ov._onKey = _onKey;
+
+  // Lazy-load EPG par chaîne (IntersectionObserver)
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if(!entry.isIntersecting) return;
+      const row = entry.target;
+      if(row.dataset.loaded) return;
+      row.dataset.loaded = "1";
+      obs.unobserve(row);
+      const sid = row.dataset.streamId;
+      if(!sid) return;
+      _epgFetch(creds, sid).then(items => _epgRenderRow(row, items, winStart));
+    });
+  }, { root: document.getElementById("epgGrid"), rootMargin: "400px 0px" });
+
+  document.querySelectorAll(".epg-row[data-stream-id]").forEach(r => obs.observe(r));
+
+  // Mise à jour ligne "maintenant" chaque minute
+  const _timer = setInterval(() => {
+    const line = document.getElementById("epgNowLine");
+    if(!line){ clearInterval(_timer); return; }
+    const drift = (Date.now() - now) / 60000 * EPG_PX_MIN;
+    line.style.left = (nowPx + drift) + "px";
+  }, 60000);
+  ov._timer = _timer;
+}
+
+function closeEPG(){
+  const ov = document.getElementById("epg-overlay");
+  if(!ov) return;
+  clearInterval(ov._timer);
+  if(ov._onKey) document.removeEventListener("keydown", ov._onKey, true);
+  ov.remove();
+}
+
 // ── Sélecteur de qualité Live (overlay) ──
 function openLivePicker(group){
   if(document.getElementById("livePicker")) return;
@@ -2653,12 +2929,10 @@ function renderNetflixRows(){
 
   const all = S.type === "vod" ? S.vod : S.series;
 
-  // Grouper par catégorie (ordre d'apparition original) — adultes exclus du "Tout"
+  // Grouper par catégorie (ordre d'apparition original)
   const catMap = new Map();
   for(const item of all){
     const cat = item.category_name || "Autre";
-    if(_isAdultCat(cat)) continue;  // masqué sauf si pill 🔞 sélectionnée
-    if(_isVostfr(item))  continue;  // VOSTFR toujours masqué
     if(!catMap.has(cat)) catMap.set(cat, []);
     catMap.get(cat).push(item);
   }
@@ -2728,6 +3002,48 @@ function renderNetflixRows(){
     if(rowIdx < rowsArr.length){
       requestAnimationFrame(_renderBatch);
     } else {
+      // ── Rangée FOR ADULT tout en bas (Films uniquement) ──────────────
+      if(S.type === "vod" && S.vodAdult && S.vodAdult.length > 0 && !S.cat && !S.search){
+        const adultRow = document.createElement("div");
+        adultRow.className = "nrow nrow--adult";
+        adultRow.innerHTML = `
+          <div class="nrow-hdr">
+            <h3 class="nrow-title nrow-title--adult">🔞 For Adult</h3>
+          </div>
+          <div class="nrow-adult-locked" id="adultLocked">
+            <button class="adult-unlock-btn" id="adultUnlockBtn">
+              <span>🔒</span><span>Afficher le contenu adulte</span>
+            </button>
+          </div>
+          <div class="nrow-strip" id="adultStrip" style="display:none"></div>`;
+        grid.appendChild(adultRow);
+        totalItems += S.vodAdult.length;
+
+        document.getElementById("adultUnlockBtn")?.addEventListener("click", () => {
+          const strip = document.getElementById("adultStrip");
+          const locked = document.getElementById("adultLocked");
+          if(!strip || !locked) return;
+          locked.style.display = "none";
+          strip.style.display  = "";
+          if(strip.childElementCount === 0){
+            S.vodAdult.slice(0, NROW_MAX).forEach(item => strip.appendChild(makeNrowCard(item)));
+            // Tuile "Voir tout"
+            if(S.vodAdult.length > NROW_MAX){
+              const all = document.createElement("button");
+              all.className = "nrow-card nrow-all-tile";
+              all.type = "button";
+              all.innerHTML = `<div class="nrow-media nrow-all-media"><span class="nrow-all-arrow">→</span><span class="nrow-all-label">Voir tout</span><span class="nrow-all-count">(${S.vodAdult.length})</span></div>`;
+              all.addEventListener("click", () => {
+                S.cat = S.vodAdult[0]?.category_name || "";
+                const g = $("grid"); if(g) g.className = "grid";
+                S.shown[S.type] = PER_PAGE;
+                renderGrid(true);
+              });
+              strip.appendChild(all);
+            }
+          }
+        });
+      }
       $("catalogCount").textContent = `${totalItems} éléments · ${rowsArr.length} catégories`;
     }
   }
@@ -2775,11 +3091,15 @@ function render(){
   }
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
-  // Exclure les catégories adultes du <select> pour éviter le contournement du filtre 🔞
-  const catsForSelect = cats.filter(c => !_isAdultCat(c) && !/vostfr/i.test(c));
+  const _last = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
+  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))]
+    .sort((a, b) => {
+      const la = _last(a), lb = _last(b);
+      if(la !== lb) return la ? 1 : -1;
+      return a.localeCompare(b);
+    });
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
-    catsForSelect.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
+    cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(displayCat(c))}</option>`).join("");
 
   // Pills catégories (Films / Séries)
   renderCatPills(cats);
@@ -2827,7 +3147,7 @@ function _renderRegionPills(container){
       S._liveRegionIdx = null; // forcer recalcul
       if(val) localStorage.setItem("pipsily_region", val);
       else    localStorage.removeItem("pipsily_region");
-      render();
+      renderUI();
     };
   });
 }
@@ -2839,19 +3159,14 @@ function _renderRegionPills(container){
 function renderCatPills(cats){
   const pills = $("catPills");
   if(!pills) return;
+  // Pills affichées dans tous les modes (Films / Séries / Live)
   pills.hidden = false;
-
-  // Séparer catégories normales et adultes
-  const normalCats = cats.filter(c => !_isAdultCat(c) && !/vostfr/i.test(c));
-  const hasAdult   = cats.some(c => _isAdultCat(c));
-
   pills.innerHTML =
     `<button class="cat-pill cat-pill--search" data-search="1" aria-label="Rechercher">🔍</button>` +
     `<button class="cat-pill ${!S.cat ? "cat-pill--active" : ""}" data-cat="">Tout</button>` +
-    normalCats.map(c =>
+    cats.map(c =>
       `<button class="cat-pill ${c===S.cat ? "cat-pill--active" : ""}" data-cat="${esc(c)}">${esc(displayCat(c))}</button>`
-    ).join("") +
-    "";
+    ).join("");
 
   // ── Bouton recherche : ouvre un overlay plein écran ──
   pills.querySelector(".cat-pill--search")?.addEventListener("click", () => openSearchOverlay());
@@ -2875,8 +3190,6 @@ function renderCatPills(cats){
     });
   });
 }
-
-
 
 // ── Overlay de recherche plein écran (TV-friendly) ──
 function openSearchOverlay(){
@@ -3392,13 +3705,14 @@ function _renderPoursuivreRowInner(){
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   } else {
     const all = type === "vod" ? S.vod : S.live;
+    const _hideCat = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
     inProgress = all.map(item => {
       const k1 = itemKey(item), k2 = String(item.id || item.stream_id || "");
       const en = prog[k1] || prog[k2];
       const rawPct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
       const pct = rawPct > 1 ? rawPct / 100 : rawPct; // normalise format player.js (0-100) → fraction
       return { item, pct, ts: en?.ts || 0 };
-    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+    }).filter(x => !_hideCat(x.item?.category_name) && x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
 
@@ -3604,16 +3918,13 @@ async function boot(){
       auth = await window.PIPSILY_AUTH.authGate();
     } catch(e) {
       console.error("[PIPSILY] authGate crash (tables manquantes ?):", e.message);
-      let _sess = null;
-      try { _sess = await window.PIPSILY_AUTH.getSession?.(); } catch{}
-      const _em = (_sess?.user?.email || "").toLowerCase();
-      const _adm = _em && _em === (window.PIPSILY_AUTH?.ADMIN_EMAIL || "").toLowerCase();
-      auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm } };
+      // Ne pas bloquer → démarrer en mode dégradé
+      auth = { session: { user: { id: "err" } }, sub: { ok: true, plan: "active", unlimited: false } };
     }
     if(!auth) return; // redirigé vers login.html ou paywall
 
-    S._userId  = auth.session?.user?.id || "err";
-    S._isAdmin = auth.sub.plan === "admin" || (auth.session?.user?.email||"").toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL||"").toLowerCase();
+    S._userId  = auth.session.user.id;
+    S._isAdmin = auth.sub.plan === "admin" || auth.session.user.email === window.PIPSILY_AUTH.ADMIN_EMAIL;
     S._unlim   = auth.sub.unlimited;
 
     const userBtns = $("topbarUserBtns");
@@ -3625,6 +3936,13 @@ async function boot(){
 
     // Surveillance session : déconnexion forcée si autre appareil se connecte (Standard/Test)
     window.PIPSILY_AUTH.startSessionWatcher?.(S._userId);
+
+    // Sync cloud : pull favoris + progression depuis le compte (arrière-plan, non bloquant)
+    _cloudUserId = S._userId;
+    _cloudPull(S._userId).then(() => {
+      renderPoursuivreRow?.();
+      if(typeof renderFavoritesRow === "function") renderFavoritesRow();
+    }).catch(() => {});
   }
 
   // Navigation type
@@ -3808,6 +4126,19 @@ async function boot(){
     else if(k === "p" || k === "P" || k === "ChannelDown"){ e.preventDefault(); PipPlayer.goPrev(); }
   }, true);
 
+  // ── Bouton Guide TV (EPG) — juste à côté du bouton TV, toujours visible ──
+  (function(){
+    const btn = document.createElement("button");
+    btn.id = "epgOpenBtn";
+    btn.className = "epg-open-btn";
+    btn.innerHTML = "📅 Guide TV";
+    btn.addEventListener("click", openEPG);
+    // Insérer immédiatement après le bouton "📡 TV"
+    const tvBtn = document.querySelector('.nav-btn[data-type="live"]');
+    if(tvBtn) tvBtn.insertAdjacentElement("afterend", btn);
+    else { const nav = document.querySelector(".nav-row"); if(nav) nav.appendChild(btn); }
+  })();
+
   // ── Pré-chargement de l'index épisodes (1 Ko, non bloquant) ──
   getEpMap();  // charge episodes_map.json en avance (1 Ko seulement)
 
@@ -3830,6 +4161,15 @@ async function boot(){
     const seriesM3u = await fetchText("series.m3u");
     if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); }
   }
+
+  // Filtrer VOSTFR et catégories adult/porno
+  const noVostfr = t => !/\[vostfr\]/i.test(t || "");
+  const isAdultCatFn = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
+  const _adultItems = S.vod.filter(x => noVostfr(x.title) && isAdultCatFn(x.category_name));
+  S.vod    = S.vod.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
+  S.series = S.series.filter(x => noVostfr(x.title) && !isAdultCatFn(x.category_name));
+  // Non-énumérable : n'apparaît pas dans Object.keys(S) ni console globale
+  Object.defineProperty(S, 'vodAdult', { value: _adultItems, writable: true, enumerable: false, configurable: true });
 
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
