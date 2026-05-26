@@ -214,22 +214,38 @@
         return;
       }
       let users = [], payments = [], devices = [], sessions = [];
+      const errs = [];
 
-      // Chaque requête est indépendante — une erreur n'en bloque pas une autre
-      const safeQuery = async (fn) => { try { const r = await fn(); return r.data || []; } catch{ return []; } };
+      // Wrapper qui loggue les erreurs Supabase (ne throw pas, retourne toujours un tableau)
+      const sq = async (label, fn) => {
+        try {
+          const r = await fn();
+          if(r.error){ errs.push(`${label} : ${r.error.message || JSON.stringify(r.error)}`); return []; }
+          return r.data || [];
+        } catch(e){ errs.push(`${label} (exception) : ${e.message||e}`); return []; }
+      };
 
       [users, payments, devices] = await Promise.all([
-        safeQuery(() => A.supabase.from("profiles").select("*").order("created_at", { ascending: false })),
-        safeQuery(() => A.supabase.from("payments").select("*").order("created_at", { ascending: false })),
-        safeQuery(() => A.supabase.from("devices").select("*"))
+        sq("profiles", () => A.supabase.from("profiles").select("*").order("created_at", { ascending: false })),
+        sq("payments", () => A.supabase.from("payments").select("*").order("created_at", { ascending: false })),
+        sq("devices",  () => A.supabase.from("devices").select("*"))
       ]);
 
-      // Sessions : essayer avec order, fallback sans si colonne last_seen absente
-      try {
-        const rS = await A.supabase.from("sessions").select("*").order("last_seen", { ascending: false });
-        sessions = rS.data || [];
-      } catch {
-        try { const rS = await A.supabase.from("sessions").select("*"); sessions = rS.data || []; } catch{}
+      // Sessions avec fallback sans order()
+      const rS = await A.supabase.from("sessions").select("*").order("last_seen", { ascending: false });
+      if(!rS.error){ sessions = rS.data || []; }
+      else {
+        const rS2 = await A.supabase.from("sessions").select("*");
+        sessions = rS2.data || [];
+      }
+
+      // Afficher un bandeau d'erreur si certaines tables ont échoué
+      if(errs.length){
+        const banner = document.createElement("div");
+        banner.style.cssText = "background:rgba(232,51,74,.12);border:1px solid rgba(232,51,74,.3);border-radius:12px;padding:12px 16px;margin-bottom:16px;font-size:12px;color:#ff8899;white-space:pre-wrap";
+        banner.textContent = "⚠ Erreurs de chargement (données partielles) :\n" + errs.join("\n");
+        document.getElementById("adminContent").prepend(banner);
+        console.error("[admin] Erreurs requêtes :", errs);
       }
 
       _allUsers           = users;
