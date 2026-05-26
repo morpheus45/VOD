@@ -2871,8 +2871,7 @@ function renderCatPills(cats){
         const unlocked = !!sessionStorage.getItem("pipsily_adult_unlocked");
         if(!unlocked){
           const stored = localStorage.getItem("pipsily_adult_pin");
-          if(!stored){ alert("Aucun code PIN parental défini.
-Configurez-le dans Mon compte → Contrôle parental."); return; }
+          if(!stored){ alert("Aucun code PIN parental non defini. Configurez-le dans Mon compte."); return; }
           showPinPrompt(() => {
             S.cat = "__ADULT__";
             applyPillCat(pills);
