@@ -182,14 +182,14 @@
             '<div style="text-align:center;padding:60px;color:#ff8899">⛔ Accès refusé</div>';
           return;
         }
-        // Forcer le profil admin en DB si pas encore fait (fire-and-forget)
-        if(prof?.plan !== "admin" && A.supabase){
-          (async () => {
-            try {
-              await A.supabase.from("profiles")
-                .upsert({ id: _session.user.id, email: _session.user.email, plan: "admin", devices_allowed: 999 });
-            } catch {}
-          })();
+        // Toujours forcer plan = 'admin' en DB (indispensable pour les politiques RLS)
+        // getProfile() renvoie plan:"admin" côté client (via email match) même si la DB dit "pending"
+        // → le upsert doit toujours s'exécuter pour que RLS "admin all profiles" fonctionne
+        if(A.supabase){
+          try {
+            await A.supabase.from("profiles")
+              .upsert({ id: _session.user.id, email: _session.user.email, plan: "admin", devices_allowed: 999 });
+          } catch(e){ console.warn("[admin] upsert plan admin :", e.message); }
         }
         await loadAdmin();
       } catch(e) {
@@ -267,13 +267,14 @@
       return '<span class="badge badge--pending">⏳ En attente</span>';
     }
 
-    function calcMonthlyRevenue(users, devs){
+    function calcAnnualRevenue(users){
+      // Calcul basé sur les abonnements annuels actifs
       return users.reduce((sum, u) => {
         if(u.plan === "admin" || u.plan === "unlimited" || u.plan === "pending") return sum;
         const exp = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
         if(!exp || exp < new Date()) return sum;
-        const userDevFees = devs.filter(d=>d.user_id===u.id).reduce((s,d)=>s+(d.monthly_fee||0),0);
-        return sum + 4.99 + userDevFees;
+        // Déterminer le plan selon devices_allowed (3 → Multi 53€, 1 → Solo 42€)
+        return sum + (u.devices_allowed >= 3 ? 53 : 42);
       }, 0);
     }
 
@@ -290,7 +291,7 @@
         const exp = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
         return !exp || exp < now;
       });
-      const revenue   = calcMonthlyRevenue(users, devices);
+      const revenue   = calcAnnualRevenue(users);
       const activeCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
       const connected = (sessions||[]).filter(s => s.last_seen && s.last_seen > activeCutoff).length;
       // Paiements en attente de confirmation (Wero déclaré par utilisateur)
@@ -321,11 +322,11 @@
           </div>
           <div class="stat-card stat-card--accent">
             <div class="stat-num">${fmtMoney(revenue)}</div>
-            <div class="stat-label">Revenus/mois</div>
+            <div class="stat-label">CA annuel</div>
           </div>
           <div class="stat-card stat-card--accent">
-            <div class="stat-num">${fmtMoney(revenue * 12)}</div>
-            <div class="stat-label">Revenus/an (est.)</div>
+            <div class="stat-num">${fmtMoney(revenue / 12)}</div>
+            <div class="stat-label">CA mensuel (est.)</div>
           </div>
         </div>
 
@@ -374,8 +375,9 @@
             <input type="email" id="newEmail" placeholder="email@exemple.com" autocomplete="off" />
             <input type="password" id="newPw" placeholder="Mot de passe provisoire" autocomplete="new-password" />
             <select id="newPlan">
-              <option value="active">Standard (4,99 €/mois)</option>
-              <option value="unlimited">Illimité</option>
+              <option value="solo">Solo 42 €/an — 1 appareil (365 j)</option>
+              <option value="multi">Multi 53 €/an — 3 appareils (365 j)</option>
+              <option value="unlimited">Illimité (sans expiration)</option>
               <option value="admin">Admin</option>
               <option value="test">Test (7 jours)</option>
             </select>
@@ -395,9 +397,19 @@
         </div>
       `;
 
-      // Auto-remplir la date d'expiration à 30 jours
-      const d30 = new Date(); d30.setDate(d30.getDate()+30);
-      document.getElementById("newExpiry").value = d30.toISOString().slice(0,10);
+      // Auto-remplir la date d'expiration à 365 jours (plans annuels par défaut)
+      const d365 = new Date(); d365.setDate(d365.getDate()+365);
+      document.getElementById("newExpiry").value = d365.toISOString().slice(0,10);
+      // Mettre à jour la date selon le plan sélectionné
+      document.getElementById("newPlan").addEventListener("change", function(){
+        const inp = document.getElementById("newExpiry");
+        const d = new Date();
+        if(this.value==="solo"||this.value==="multi"){ d.setDate(d.getDate()+365); }
+        else if(this.value==="test"){ d.setDate(d.getDate()+7); }
+        else if(this.value==="unlimited"||this.value==="admin"){ inp.value=""; return; }
+        else { d.setDate(d.getDate()+30); }
+        inp.value = d.toISOString().slice(0,10);
+      });
     }
 
     function fmtRelative(iso){
@@ -454,6 +466,10 @@
             ${isMe
               ? `<div style="font-size:12px;color:#7a9cc0;padding:4px 0">Votre compte administrateur</div>`
               : `<div class="user-card__actions">
+                  <button class="action-btn" style="background:rgba(110,247,176,.12);color:#6ef7b0;border:1px solid rgba(110,247,176,.3);font-weight:800"
+                    onclick="activateAnnual('${u.id}',1)">Solo 42€/an</button>
+                  <button class="action-btn" style="background:rgba(56,168,232,.12);color:#38A8E8;border:1px solid rgba(56,168,232,.3);font-weight:800"
+                    onclick="activateAnnual('${u.id}',3)">Multi 53€/an</button>
                   <button class="action-btn action-btn--green"  onclick="activateUser('${u.id}',30)">+30 jours</button>
                   <button class="action-btn action-btn--blue"   onclick="setUnlimited('${u.id}')">Illimité</button>
                   <button class="action-btn action-btn--gold"   onclick="setTest('${u.id}')">Test 7j</button>
@@ -491,15 +507,20 @@
         if(error) throw error;
         if(!data.user) throw new Error("Utilisateur non créé — vérifiez si l'email est déjà utilisé.");
 
-        const expAt = plan==="test"
+        const expAt = (plan==="solo"||plan==="multi")
+          ? new Date(Date.now()+365*24*3600*1000).toISOString()
+          : plan==="test"
           ? new Date(Date.now()+7*24*3600*1000).toISOString()
           : (expiry ? new Date(expiry).toISOString() : null);
 
+        const dbPlan   = (plan==="solo"||plan==="multi"||plan==="test") ? "active" : plan;
+        const devAllow = plan==="admin"||plan==="unlimited" ? 999 : plan==="multi" ? 3 : 1;
+
         await A.supabase.from("profiles").upsert({
           id: data.user.id, email,
-          plan: plan === "test" ? "active" : plan,
+          plan: dbPlan,
           subscription_expires_at: expAt,
-          devices_allowed: (plan==="admin"||plan==="unlimited") ? 999 : 1
+          devices_allowed: devAllow
         });
 
         showMsg(msg,"success","✓ Compte créé : " + email + " — un e-mail de confirmation lui a été envoyé.");
@@ -509,6 +530,30 @@
       } finally {
         btn.disabled = false; btn.textContent = "Créer";
       }
+    }
+
+    // ── Activation plan annuel Solo (1 appareil) ou Multi (3 appareils) ──
+    async function activateAnnual(userId, devices){
+      const label = devices === 3 ? "Multi 53 €/an (3 appareils)" : "Solo 42 €/an (1 appareil)";
+      const amount = devices === 3 ? 53 : 42;
+      if(!confirm(`Activer ${label} pour cet utilisateur ?\nAccès valable 365 jours.`)) return;
+      try {
+        const expAt = new Date(Date.now() + 365*24*3600*1000).toISOString();
+        const { error } = await A.supabase.from("profiles")
+          .update({ plan:"active", subscription_expires_at: expAt, devices_allowed: devices }).eq("id", userId);
+        if(error) throw error;
+        try {
+          await A.supabase.from("payments").insert({
+            user_id: userId, amount, type:"subscription",
+            period_start: new Date().toISOString().slice(0,10),
+            period_end: expAt.slice(0,10),
+            confirmed_at: new Date().toISOString(), confirmed_by: _session?.user?.id,
+            notes: label
+          });
+        } catch{}
+        showGlobalMsg(`✓ ${label} activé — 365 jours`);
+        loadAdmin();
+      } catch(err){ alert("Erreur activation : " + (err.message||err)); }
     }
 
     async function activateUser(userId, days){
