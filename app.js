@@ -3471,7 +3471,7 @@ function _renderPoursuivreRowInner(){
       const rawPct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
       const pct = rawPct > 1 ? rawPct / 100 : rawPct; // normalise format player.js (0-100) → fraction
       return { item, pct, ts: en?.ts || 0 };
-    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0 && !_isAdultCat(x.item && x.item.category_name))
+    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
 
@@ -3480,7 +3480,6 @@ function _renderPoursuivreRowInner(){
   const favItems = getFavs()
     .filter(f => {
       if(!f.item) return false;
-      if(_isAdultCat(f.item.category_name)) return false;
       const ftype = f.item.type || type;
       return ftype === type && !inProgKeys.has(itemKey(f.item));
     })
