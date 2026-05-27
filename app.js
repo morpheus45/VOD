@@ -1860,6 +1860,9 @@ async function playItem(item){
 
 const _ADULT_RE = /adult|adulte|\+18|18\+|xxx|erot|for adult/i;
 const _isAdultCat = c => _ADULT_RE.test(c || "");
+// Catégorie commençant par "XXX" (majuscules exactes) → contenu adulte à masquer dans Poursuivre.
+// "xXx" (casse mixte) est un titre de film normal — NON filtré.
+const _startsXXX = c => /^XXX/.test(c || "");
 
 // VOSTFR — toujours masqué (titre ou catégorie)
 const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
@@ -3507,6 +3510,7 @@ function _renderPoursuivreRowInner(){
     });
     inProgress = Object.keys(best)
       .map(sid => ({ item: seriesIdx[sid], pct: best[sid].pct, ts: best[sid].ts }))
+      .filter(x => !_startsXXX(x.item?.category_name))
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   } else {
     const all = type === "vod" ? S.vod : S.live;
@@ -3516,7 +3520,7 @@ function _renderPoursuivreRowInner(){
       const rawPct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
       const pct = rawPct > 1 ? rawPct / 100 : rawPct; // normalise format player.js (0-100) → fraction
       return { item, pct, ts: en?.ts || 0 };
-    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0)
+    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0 && !_startsXXX(x.item?.category_name))
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
 
@@ -3525,6 +3529,7 @@ function _renderPoursuivreRowInner(){
   const favItems = getFavs()
     .filter(f => {
       if(!f.item) return false;
+      if(_startsXXX(f.item.category_name)) return false;
       const ftype = f.item.type || type;
       return ftype === type && !inProgKeys.has(itemKey(f.item));
     })
