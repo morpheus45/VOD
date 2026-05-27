@@ -3018,6 +3018,35 @@ function openSearchOverlay(){
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  SON DE NAVIGATION — tick synthétique via Web Audio API
+//  Pas de fichier externe, fonctionne hors-ligne
+// ─────────────────────────────────────────────────────────────────
+
+let _audioCtx = null;
+function _playNavClick(){
+  try {
+    if(!window.AudioContext && !window.webkitAudioContext) return;
+    if(!_audioCtx || _audioCtx.state === "closed"){
+      _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if(_audioCtx.state === "suspended") _audioCtx.resume();
+    const ctx  = _audioCtx;
+    const now  = ctx.currentTime;
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(720, now);
+    osc.frequency.exponentialRampToValueAtTime(360, now + 0.055);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.07);
+    osc.start(now);
+    osc.stop(now + 0.07);
+  } catch(e){}
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  NAVIGATION CLAVIER / D-PAD TV
 // ─────────────────────────────────────────────────────────────────
 
@@ -3037,6 +3066,7 @@ function initTV(){
 
     if(!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)) return;
     e.preventDefault();
+    _playNavClick();
 
     const panelOpen  = !$("seriesPanel")?.hidden;
     const useNetflix = $("grid")?.classList.contains("netflix-rows");
