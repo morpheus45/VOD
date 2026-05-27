@@ -3488,8 +3488,11 @@ function _renderPoursuivreRowInner(){
   // Onglet TV (live) : section non pertinente, masquée
   if(S.type === "live"){ sect.hidden = true; return; }
 
-  const prog = getProg();
-  const type = S.type;
+  const prog         = getProg();
+  const type         = S.type;
+  // PIN parental déverrouillé pour cette session → contenu XXX visible partout
+  const adultOK      = !!sessionStorage.getItem("pipsily_adult_unlocked");
+  const _hideXXX     = c => !adultOK && _startsXXX(c);
 
   // ── 1. Items en cours ──────────────────────────────────────────
   let inProgress = [];
@@ -3514,7 +3517,7 @@ function _renderPoursuivreRowInner(){
     });
     inProgress = Object.keys(best)
       .map(sid => ({ item: seriesIdx[sid], pct: best[sid].pct, ts: best[sid].ts }))
-      .filter(x => !_startsXXX(x.item?.category_name))
+      .filter(x => !_hideXXX(x.item?.category_name))
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   } else {
     const all = type === "vod" ? S.vod : S.live;
@@ -3524,7 +3527,7 @@ function _renderPoursuivreRowInner(){
       const rawPct = en?.pct || (en?.t > 0 && en?.d > 0 ? en.t / en.d : 0);
       const pct = rawPct > 1 ? rawPct / 100 : rawPct; // normalise format player.js (0-100) → fraction
       return { item, pct, ts: en?.ts || 0 };
-    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0 && !_startsXXX(x.item?.category_name))
+    }).filter(x => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0 && !_hideXXX(x.item?.category_name))
       .sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
 
@@ -3533,7 +3536,7 @@ function _renderPoursuivreRowInner(){
   const favItems = getFavs()
     .filter(f => {
       if(!f.item) return false;
-      if(_startsXXX(f.item.category_name)) return false;
+      if(_hideXXX(f.item.category_name)) return false;
       const ftype = f.item.type || type;
       return ftype === type && !inProgKeys.has(itemKey(f.item));
     })
