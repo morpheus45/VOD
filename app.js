@@ -593,15 +593,30 @@ function _getSavedProgressMs(item){
   return 0;
 }
 
+// ── Restaurer le focus sur la vignette jouée (TV : D-pad opérationnel dès le retour) ──
+// Appelé depuis TOUS les points de sortie de onAndroidPlayerClosed
+function _restoreTvFocus(){
+  setTimeout(() => {
+    const f = PipPlayer._lastFocus;
+    PipPlayer._lastFocus = null;
+    if(f && f !== document.body && f.isConnected){
+      f.focus();
+      f.scrollIntoView?.({ behavior:"smooth", block:"nearest" });
+    } else {
+      document.querySelector(".nrow-card, .card")?.focus();
+    }
+  }, 200);
+}
+
 // ── Callback appelé par l'APK Android quand le lecteur ExoPlayer se ferme ──
 // MainActivity.reportProgress() injecte ce JS via webView.evaluateJavascript()
 window.onAndroidPlayerClosed = function(url, posMs, durMs){
-  if(!url || !posMs || posMs < 30000) return;   // moins de 30s regardées → ignorer
+  if(!url || !posMs || posMs < 30000){ _restoreTvFocus(); return; }   // moins de 30s regardées → ignorer
 
   const t   = Math.floor(posMs / 1000);
   const d   = (durMs > 0 && isFinite(durMs)) ? Math.floor(durMs / 1000) : 0;
   const pct = d > 0 ? posMs / durMs : 0;
-  if(d > 0 && pct > 0.97) return;               // presque fini → pas besoin de reprendre
+  if(d > 0 && pct > 0.97){ _restoreTvFocus(); return; }               // presque fini → pas besoin de reprendre
   const prog = getProg();
 
   // ── Épisodes de série : URL connue via _epUrlMap ────────────────
@@ -621,6 +636,7 @@ window.onAndroidPlayerClosed = function(url, posMs, durMs){
       if(typeof _refreshCardProgress === "function") _refreshCardProgress(seriesItem);
     }
     if(S.panel.open && !S.panel.isVod && typeof renderPanel === "function") renderPanel();
+    _restoreTvFocus();
     return;
   }
 
@@ -641,12 +657,7 @@ window.onAndroidPlayerClosed = function(url, posMs, durMs){
 
   // Restaurer le focus sur la vignette jouée (TV : D-pad opérationnel dès le retour)
   // Délai 200 ms pour laisser renderContinueRow() reconstruire le DOM
-  setTimeout(() => {
-    const f = PipPlayer._lastFocus;
-    PipPlayer._lastFocus = null;
-    if(f?.isConnected){ f.focus(); f.scrollIntoView?.({ behavior:"smooth", block:"nearest" }); }
-    else { document.querySelector(".nrow-card, .card")?.focus(); }
-  }, 200);
+  _restoreTvFocus();
 };
 
 function getHist()  { return storeGet(STORE.history, []); }
@@ -2954,6 +2965,7 @@ function showAdultPinPrompt(pills){
       const g = $("grid");
       if(g) g.className = "grid";
       renderGrid(true);
+      if(typeof renderPoursuivreRow === "function") renderPoursuivreRow();
     } else {
       const err = $("adultPinErr");
       if(err) err.textContent = "Code incorrect";
@@ -4265,7 +4277,7 @@ function showApkUpdateBanner(vinfo, remoteVer){
     if(["Escape","GoBack","Back","BrowserBack"].includes(e.key)){
       e.preventDefault(); e.stopPropagation(); // bannière obligatoire — pas de retour
     } else if(e.key !== "Enter" && e.key !== " "){
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation(); // bloquer scroll/navigation D-pad
     }
   }, true);
 
@@ -4283,8 +4295,8 @@ function showApkUpdateBanner(vinfo, remoteVer){
     if(btn){ btn.textContent = "📥 Téléchargement en cours…"; btn.disabled = true; }
 
     // Mémoriser la mise à jour lancée : évite de re-afficher la bannière
-    // au prochain démarrage (24h de suppression + version cible mémorisée)
-    localStorage.setItem("pf_local_apk_ver", String(remoteVer));
+    // au prochain démarrage (24h de suppression)
+    // Note : pf_local_apk_ver est mis à jour uniquement par getApkVersion() (bridge)
     localStorage.setItem("pf_apk_sv4", String(remoteVer));
     localStorage.setItem("pf_apk_su4", String(Date.now() + 86400000)); // 24h
 
