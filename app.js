@@ -82,11 +82,12 @@ function displayCat(name){
 //  Remplace la navigation vers player.html par un overlay intégré
 // ─────────────────────────────────────────────────────────────────
 const PipPlayer = {
-  _hls      : null,
-  _item     : null,
-  _epList   : [],
-  _epIdx    : -1,
-  _progTimer: null,
+  _hls       : null,
+  _item      : null,
+  _epList    : [],
+  _epIdx     : -1,
+  _progTimer : null,
+  _lastFocus : null, // focus à restaurer après fermeture du lecteur natif (TV)
 
   // ── Ouvrir le lecteur avec un item ──────────────────────────────
   open(item){
@@ -104,6 +105,7 @@ const PipPlayer = {
 
     // ── APK : lecteur natif ExoPlayer (HTTP sans mixed content) ────
     if(typeof window.AndroidBridge?.openPlayer === "function"){
+      this._lastFocus = document.activeElement; // restauré dans onAndroidPlayerClosed
       pushHist(item);
       // Alimenter _epUrlMap pour tous les épisodes (TV + non-TV)
       // afin que onAndroidPlayerClosed puisse sauvegarder sous "seriesId||SxxExx"
@@ -636,6 +638,15 @@ window.onAndroidPlayerClosed = function(url, posMs, durMs){
   _invalidateCache();
   if(typeof renderContinueRow === "function") renderContinueRow();
   if(item && typeof _refreshCardProgress === "function") _refreshCardProgress(item);
+
+  // Restaurer le focus sur la vignette jouée (TV : D-pad opérationnel dès le retour)
+  // Délai 200 ms pour laisser renderContinueRow() reconstruire le DOM
+  setTimeout(() => {
+    const f = PipPlayer._lastFocus;
+    PipPlayer._lastFocus = null;
+    if(f?.isConnected){ f.focus(); f.scrollIntoView?.({ behavior:"smooth", block:"nearest" }); }
+    else { document.querySelector(".nrow-card, .card")?.focus(); }
+  }, 200);
 };
 
 function getHist()  { return storeGet(STORE.history, []); }
@@ -3009,7 +3020,7 @@ function initTV(){
     e.preventDefault();
 
     const panelOpen  = !$("seriesPanel")?.hidden;
-    const useNetflix = $("grid")?.className === "netflix-rows";
+    const useNetflix = $("grid")?.classList.contains("netflix-rows");
 
     if(panelOpen)  { _navPanel(k);   return; }
     if(useNetflix) { _navNetflix(k); return; }
@@ -3289,6 +3300,10 @@ function initTV(){
       if(k === "ArrowDown"){
         const first = allRows[0]?.querySelector(CARD);
         if(first){ first.focus(); first.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
+      } else if(k === "ArrowUp"){
+        // Élément détaché du DOM (re-render en cours) → remonter vers pills / nav
+        if(!_focusFirstPill()) document.querySelector(".nav-btn.active,.nav-btn")?.focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
       return;
     }
@@ -3386,6 +3401,36 @@ function initTV(){
       }
       if(k === "ArrowDown"){
         document.querySelector(".card")?.focus();
+        return;
+      }
+      return;
+    }
+
+    // ── Sur une nou-card (Continuer/Favoris) — même logique que _navNetflix ──
+    const isNouCard = active?.classList.contains("nou-card");
+    if(isNouCard){
+      const row   = active.closest(".nou-row");
+      const rCards = row ? [...row.querySelectorAll(".nou-card")] : [];
+      const ci    = rCards.indexOf(active);
+      if(k === "ArrowRight"){
+        const nxt = rCards[ci + 1];
+        if(nxt){ nxt.focus(); nxt.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+        return;
+      }
+      if(k === "ArrowLeft"){
+        const prv = rCards[ci - 1];
+        if(prv){ prv.focus(); prv.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+        return;
+      }
+      if(k === "ArrowUp"){
+        // Remonter aux pills puis aux boutons de nav
+        if(!_focusFirstPill()) document.querySelector(".nav-btn.active,.nav-btn")?.focus();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      if(k === "ArrowDown"){
+        const firstCard = document.querySelector(".card");
+        if(firstCard){ firstCard.focus(); firstCard.scrollIntoView({ behavior:"smooth", block:"nearest" }); }
         return;
       }
       return;
@@ -4203,8 +4248,13 @@ function showApkUpdateBanner(vinfo, remoteVer){
     "pointer-events:all;";
 
   // Empêcher toute touche/clic de traverser vers l'app
+  // GoBack/BrowserBack : preventDefault pour ne pas quitter l'app, mais ignorer
   banner.addEventListener("keydown", e => {
-    if(e.key !== "Enter" && e.key !== " ") e.stopPropagation();
+    if(["Escape","GoBack","Back","BrowserBack"].includes(e.key)){
+      e.preventDefault(); e.stopPropagation(); // bannière obligatoire — pas de retour
+    } else if(e.key !== "Enter" && e.key !== " "){
+      e.stopPropagation();
+    }
   }, true);
 
   document.body.appendChild(banner);
@@ -4219,6 +4269,13 @@ function showApkUpdateBanner(vinfo, remoteVer){
     const url = vinfo.apk_url;
     const btn = $("apkDownloadBtn");
     if(btn){ btn.textContent = "📥 Téléchargement en cours…"; btn.disabled = true; }
+
+    // Mémoriser la mise à jour lancée : évite de re-afficher la bannière
+    // au prochain démarrage (24h de suppression + version cible mémorisée)
+    localStorage.setItem("pf_local_apk_ver", String(remoteVer));
+    localStorage.setItem("pf_apk_sv4", String(remoteVer));
+    localStorage.setItem("pf_apk_su4", String(Date.now() + 86400000)); // 24h
+
     if(typeof window.AndroidBridge?.downloadAndInstall === "function"){
       window.AndroidBridge.downloadAndInstall(url);
     } else if(typeof window.AndroidBridge?.openDownloadUrl === "function"){
