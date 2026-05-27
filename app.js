@@ -1860,9 +1860,13 @@ async function playItem(item){
 
 const _ADULT_RE = /adult|adulte|\+18|18\+|xxx|erot|for adult/i;
 const _isAdultCat = c => _ADULT_RE.test(c || "");
-// Catégorie commençant par "XXX" (majuscules exactes) → contenu adulte à masquer dans Poursuivre.
-// "xXx" (casse mixte) est un titre de film normal — NON filtré.
-const _startsXXX = c => /^XXX/.test(c || "");
+// Catégorie commençant par "xxx" (toutes casses) → masquer dans Poursuivre.
+// Exception : "xXx" (film d'action) commence par la chaîne exacte "xXx" → NON filtré.
+const _startsXXX = c => {
+  if(!c) return false;
+  if(c.startsWith("xXx")) return false; // film "xXx" — garder
+  return /^xxx/i.test(c);              // xxx / XXX / Xxx / … → filtrer
+};
 
 // VOSTFR — toujours masqué (titre ou catégorie)
 const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
