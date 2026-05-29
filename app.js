@@ -4339,8 +4339,13 @@ function showApkUpdateBanner(vinfo, remoteVer){
   const banner = document.createElement("div");
   banner.id = "apkUpdateBanner";
 
-  // ── Overlay obligatoire — plein écran, navigation désactivée ──
-  // Même UI pour TV et mobile : modal centré, pas de bouton "Plus tard"
+  const _dismissApkBanner = () => {
+    banner.remove();
+    // Supprimer 7 jours à chaque "Plus tard" ou Back
+    localStorage.setItem("pf_apk_sv4", String(remoteVer));
+    localStorage.setItem("pf_apk_su4", String(Date.now() + 7 * 86400000));
+  };
+
   banner.innerHTML =
     '<div class="apk-tv-modal">' +
       '<div class="apk-tv-icon">📦</div>' +
@@ -4350,45 +4355,47 @@ function showApkUpdateBanner(vinfo, remoteVer){
         '<button id="apkDownloadBtn" type="button" class="apk-tv-btn apk-tv-btn--install" tabindex="0">' +
           '⬇ Mettre à jour' +
         '</button>' +
+        '<button id="apkLaterBtn" type="button" class="apk-tv-btn" tabindex="0" ' +
+          'style="margin-top:10px;background:rgba(255,255,255,.08);font-size:13px;padding:10px 20px">' +
+          'Plus tard (7 jours)' +
+        '</button>' +
       '</div>' +
-      (isTV ? '<p class="apk-tv-hint">Appuyez sur OK pour installer</p>' : '') +
+      (isTV ? '<p class="apk-tv-hint">OK = installer · Retour = plus tard</p>' : '') +
     '</div>';
 
-  // Overlay plein écran — bloque toute interaction derrière
   banner.style.cssText =
     "position:fixed;inset:0;z-index:99999;" +
     "background:rgba(0,0,0,.96);" +
     "display:flex;align-items:center;justify-content:center;" +
     "pointer-events:all;";
 
-  // Empêcher toute touche/clic de traverser vers l'app
-  // GoBack/BrowserBack : preventDefault pour ne pas quitter l'app, mais ignorer
   banner.addEventListener("keydown", e => {
     if(["Escape","GoBack","Back","BrowserBack"].includes(e.key)){
-      e.preventDefault(); e.stopPropagation(); // bannière obligatoire — pas de retour
+      e.preventDefault(); e.stopPropagation();
+      _dismissApkBanner();
     } else if(e.key !== "Enter" && e.key !== " "){
-      e.preventDefault(); e.stopPropagation(); // bloquer scroll/navigation D-pad
+      e.preventDefault(); e.stopPropagation();
     }
   }, true);
 
   document.body.appendChild(banner);
 
-  // Auto-focus sur le bouton
   requestAnimationFrame(() => {
     requestAnimationFrame(() => $("apkDownloadBtn")?.focus());
   });
 
-  // ── Action : téléchargement ──
+  // ── Plus tard ──
+  $("apkLaterBtn").onclick = _dismissApkBanner;
+
+  // ── Téléchargement ──
   $("apkDownloadBtn").onclick = () => {
     const url = vinfo.apk_url;
     const btn = $("apkDownloadBtn");
     if(btn){ btn.textContent = "📥 Téléchargement en cours…"; btn.disabled = true; }
 
-    // Mémoriser la mise à jour lancée : évite de re-afficher la bannière
-    // au prochain démarrage (24h de suppression)
-    // Note : pf_local_apk_ver est mis à jour uniquement par getApkVersion() (bridge)
+    // Suppression 7 jours après lancement du téléchargement
     localStorage.setItem("pf_apk_sv4", String(remoteVer));
-    localStorage.setItem("pf_apk_su4", String(Date.now() + 86400000)); // 24h
+    localStorage.setItem("pf_apk_su4", String(Date.now() + 7 * 86400000));
 
     if(typeof window.AndroidBridge?.downloadAndInstall === "function"){
       window.AndroidBridge.downloadAndInstall(url);
