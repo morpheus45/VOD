@@ -1,30 +1,31 @@
-// sw.js — PIPSILY v5.0 — mise à jour automatique + notification
-const CACHE = "pipsily-v200";
+// sw.js — PIPSILY v5.1 — install tolerant + activation sans reload forcé
+const CACHE = "pipsily-v201";
 const SHELL = ["./","./index.html","./login.html","./account.html","./admin.html","./player.html","./install.html","./vitrine.html","./merci.html","./samsung-tv.html","./styles.css?v=103","./player.css","./app.js?v=166","./auth.js","./player.js?v=51","./manifest.webmanifest","./logo.svg","./icons/icon-192.png","./icons/icon-512.png","./version.json","./icons/splash/splash-750x1334.png","./icons/splash/splash-1170x2532.png","./icons/splash/splash-1179x2556.png","./icons/splash/splash-1290x2796.png","./icons/splash/splash-1320x2868.png","./icons/splash/splash-1668x2388.png","./icons/splash/splash-2048x2732.png"];
 
 // ── Installation : vider anciens caches + mettre en cache le shell ──
-// skipWaiting() automatique → pas besoin de cliquer "Mettre à jour"
+// Promise.allSettled → une image manquante ne casse plus toute l'installation
 self.addEventListener("install", e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      .then(() => caches.open(CACHE).then(c => c.addAll(SHELL)))
-      .then(() => self.skipWaiting())   // activation immédiate
+      .then(() => caches.open(CACHE).then(c =>
+        Promise.allSettled(SHELL.map(url => c.add(url).catch(() => {})))
+      ))
+      .then(() => self.skipWaiting())
   );
 });
 
-// ── Activation : supprimer vieux caches + prendre le contrôle de toutes les pages ──
+// ── Activation : supprimer vieux caches + prendre le contrôle des pages ──
+// PAS de RELOAD forcé — évite la bannière "mise à jour" à chaque démarrage
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
-      .then(() => self.clients.matchAll({ type:"window" }))
-      .then(clients => clients.forEach(c => c.postMessage({ type:"RELOAD" })))
   );
 });
 
-// ── Message SKIP_WAITING (rétrocompat avec le bouton "Mettre à jour") ──
+// ── Message SKIP_WAITING (bouton "Mettre à jour" dans l'app) ──
 self.addEventListener("message", e => {
   if(e.data?.type === "SKIP_WAITING"){
     self.skipWaiting().then(() => {
@@ -57,4 +58,3 @@ self.addEventListener("fetch", e => {
     })
   );
 });
-
