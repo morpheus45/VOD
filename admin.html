@@ -504,7 +504,10 @@
 
       try {
         // Utilise signUp (pas auth.admin qui nécessite service_role non sûr côté client)
-        const { data, error } = await A.supabase.auth.signUp({ email, password: pw });
+        const { data, error } = await A.supabase.auth.signUp({
+          email, password: pw,
+          options: { emailRedirectTo: "https://morpheus45.github.io/VOD/login.html" }
+        });
         if(error){
           if(/database error/i.test(error.message||"")){
             throw new Error(
