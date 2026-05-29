@@ -167,8 +167,13 @@ document.getElementById('authForm').addEventListener('submit',async e=>{
       const pw2=(document.getElementById('pwConfirm')||{}).value||'';
       if(pw!==pw2){showMsg('error','Mots de passe differents.');return}
       if(pw.length<8){showMsg('error','8 caracteres minimum.');return}
-      const{error}=await _A.signUp(em,pw);
-      if(error){showMsg('error',error.message);return}
+      const{data:sData,error:sErr}=await _A.signUp(em,pw);
+      if(sErr){showMsg('error',sErr.message);return}
+      // Supabase exige une confirmation email → session est null
+      if(!sData?.session){
+        showMsg('success','Compte cree ! Verifiez votre boite mail pour confirmer votre adresse, puis revenez vous connecter.');
+        return;
+      }
       const plan=sp();const lnk=document.getElementById('paypalLink');
       lnk.href=PP[plan];lnk.textContent='Payer '+PL[plan]+' via PayPal';
       document.getElementById('paypalBlock').classList.add('show');
@@ -176,7 +181,17 @@ document.getElementById('authForm').addEventListener('submit',async e=>{
       document.getElementById('tabsBar').style.display='none';
     }else{
       const{error,data}=await _A.signIn(em,pw);
-      if(error){showMsg('error','E-mail ou mot de passe incorrect.');return}
+      if(error){
+        // Afficher l erreur Supabase exacte — plus claire que le message generique
+        const msg=error.message||'';
+        if(/not confirmed/i.test(msg)||/email.*confirm/i.test(msg))
+          showMsg('info','Confirmez d abord votre adresse e-mail (verifiez vos spams).');
+        else if(/invalid.*credentials|invalid login/i.test(msg))
+          showMsg('error','E-mail ou mot de passe incorrect.');
+        else
+          showMsg('error',msg||'Connexion impossible. Reessayez.');
+        return;
+      }
       await _A.registerSession(data.session.user.id).catch(()=>{});
       location.href='./index.html';
     }

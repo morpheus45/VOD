@@ -150,6 +150,14 @@ const PipPlayer = {
       return;
     }
 
+    // ── Navigateur mobile Android (hors APK) : mixed-content HTTP → overlay direct ──
+    const _isMixedContent = /^http:/i.test(url) && location.protocol === "https:";
+    if(_isMixedContent){
+      pushHist(item);
+      this._openOverlay(item);
+      return;
+    }
+
     // ── Navigateur / PWA : lecteur overlay WebView ──────────────────
     const el = $("pip-player");
     el.classList.add("pip-open");
@@ -466,6 +474,15 @@ const PipPlayer = {
     const url = (item.url || item.stream_url || "").trim();
     if(!url) return;
 
+    // Détection mixed-content : flux HTTP sur page HTTPS → bloqué par le navigateur mobile
+    const isHttp = /^http:/i.test(url);
+    const isHttps = location.protocol === "https:";
+    if(isHttp && isHttps){
+      // Fallback direct vers le lecteur overlay (HLS.js tentera de charger nativement)
+      this._openOverlay(item);
+      return;
+    }
+
     document.getElementById("_avp")?.remove();
 
     const vid = document.createElement("video");
@@ -522,15 +539,40 @@ const PipPlayer = {
     vid.addEventListener("webkitendfullscreen", cleanup, { once: true });
     vid.addEventListener("ended",               cleanup, { once: true });
 
-    // Fallback : si rien ne se passe après 3 s → VLC
+    // Fallback : si plein écran natif n'est pas disponible après 3 s
+    // → lecteur overlay PipPlayer (HLS.js) plutôt que VLC
     const fbTimer = setTimeout(() => {
       if(document.getElementById("_avp")){
         cleanup();
-        window.location.href = "vlc://" + url.replace(/^https?:\/\//i, "");
+        this._openOverlay(item);
       }
     }, 3000);
     vid.addEventListener("webkitbeginfullscreen", () => clearTimeout(fbTimer), { once: true });
     vid.addEventListener("webkitendfullscreen",   () => clearTimeout(fbTimer), { once: true });
+  },
+
+  // ── Lecteur overlay (HLS.js) — utilisé comme fallback iOS et mode navigateur ──
+  _openOverlay(item){
+    const url   = item.url || item.stream_url || "";
+    const label = item.episode_label
+      ? `${item.title} — ${item.episode_label}` : item.title || "Lecture";
+    const sub   = item.episode_title || item.category_name || "";
+
+    const el = $("pip-player");
+    if(!el) return;
+    el.classList.add("pip-open");
+    document.body.style.overflow = "hidden";
+    el.scrollTop = 0;
+
+    $("pip-title").textContent = label;
+    $("pip-sub").textContent   = sub;
+    document.title = label + " — PIPSILY";
+    $("pip-plot").textContent  = item.plot || "";
+
+    this._updateEpNav();
+    this._updateFavBtn();
+    this._hideStatus();
+    this._loadVideo(item);
   }
 };
 
