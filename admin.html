@@ -505,7 +505,29 @@
       try {
         // Utilise signUp (pas auth.admin qui nécessite service_role non sûr côté client)
         const { data, error } = await A.supabase.auth.signUp({ email, password: pw });
-        if(error) throw error;
+        if(error){
+          if(/database error/i.test(error.message||"")){
+            throw new Error(
+              "DATABASE ERROR — Le trigger Supabase est cassé.\n\n" +
+              "→ Ouvrez app.supabase.com → SQL Editor → collez et exécutez :\n\n" +
+              "create or replace function handle_new_user()\n" +
+              "returns trigger language plpgsql security definer\n" +
+              "set search_path = public as $$\n" +
+              "begin\n" +
+              "  insert into public.profiles(id,email,plan)\n" +
+              "  values(new.id,new.email,\n" +
+              "    case when new.email='cedric.lago@gmail.com' then 'admin' else 'pending' end)\n" +
+              "  on conflict(id) do nothing;\n" +
+              "  return new;\n" +
+              "exception when others then return new;\n" +
+              "end; $$;\n\n" +
+              "drop trigger if exists on_auth_user_created on auth.users;\n" +
+              "create trigger on_auth_user_created after insert on auth.users\n" +
+              "for each row execute procedure handle_new_user();"
+            );
+          }
+          throw error;
+        }
         if(!data.user) throw new Error("Utilisateur non créé — vérifiez si l'email est déjà utilisé.");
 
         const expAt = (plan==="solo"||plan==="multi")
