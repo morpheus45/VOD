@@ -168,7 +168,16 @@ document.getElementById('authForm').addEventListener('submit',async e=>{
       if(pw!==pw2){showMsg('error','Mots de passe differents.');return}
       if(pw.length<8){showMsg('error','8 caracteres minimum.');return}
       const{data:sData,error:sErr}=await _A.signUp(em,pw);
-      if(sErr){showMsg('error',sErr.message);return}
+      if(sErr){
+        const m=sErr.message||'';
+        if(/database error/i.test(m))
+          showMsg('error','Erreur serveur lors de la creation. Reessayez dans quelques secondes ou contactez l\'administrateur.');
+        else if(/already registered|user already/i.test(m)){
+          showMsg('info','Cet e-mail est deja utilise. Connectez-vous.');
+          switchTab('login');
+        }else showMsg('error',m||'Erreur inconnue.');
+        return;
+      }
       // Supabase exige une confirmation email → session est null
       if(!sData?.session){
         showMsg('success','Compte cree ! Verifiez votre boite mail pour confirmer votre adresse, puis revenez vous connecter.');

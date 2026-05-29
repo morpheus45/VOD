@@ -676,16 +676,25 @@ create table payments (
   created_at    timestamptz default now()
 );
 
--- ⑤ Trigger auto-création profil à l'inscription
+-- ⑤ Trigger auto-création profil à l'inscription (exception-safe)
 create or replace function handle_new_user()
-returns trigger language plpgsql security definer as $$
+returns trigger language plpgsql security definer
+set search_path = public
+as $$
 begin
-  insert into profiles (id, email, plan)
+  insert into public.profiles (id, email, plan)
   values (new.id, new.email,
-    case when new.email = 'cedric.lago@gmail.com' then 'admin' else 'pending' end);
+    case when new.email = 'cedric.lago@gmail.com' then 'admin' else 'pending' end)
+  on conflict (id) do nothing;
+  return new;
+exception when others then
+  -- Ne jamais bloquer la création d'un utilisateur
+  raise warning 'handle_new_user error: %', sqlerrm;
   return new;
 end;
 $$;
+-- Supprimer l'ancien trigger s'il existe avant de recréer
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure handle_new_user();
