@@ -226,22 +226,26 @@ const PipPlayer = {
     video.removeAttribute("src"); video.load();
     if(this._hls){ this._hls.destroy(); this._hls = null; }
 
-    const url = secureUrl(preparePlutoUrl((item.url || item.stream_url || "").trim()));
+    // rawUrl = URL originale (HTTP) — url = version sécurisée tentée en premier
+    const rawUrl = preparePlutoUrl((item.url || item.stream_url || "").trim());
+    const url    = secureUrl(rawUrl);
     if(!url){ this._showStatus("❌ Aucune URL de lecture disponible.", true); return; }
 
     const isHLS = /\.m3u8/i.test(url) || item.type === "live";
+    // PC navigateur de bureau (pas APK Android, pas iOS)
+    const isPcBrowser = !isIOSContext && typeof window.AndroidBridge === "undefined";
 
-    // ── Fallback natif : ouvre le lecteur de l'appareil si la vidéo plante ──
+    // ── Fallback : ouvre dans onglet (rawUrl HTTP) ou lecteur natif Android ──
     const _openNativeFallback = () => {
       if(typeof window.AndroidBridge?.openInVlc === "function"){
         this._showStatus("⚠️ Ouverture du lecteur natif…", false);
         setTimeout(() => {
-          try { window.AndroidBridge.openInVlc(url, this._item?.title || "", false); }
-          catch(e){ window.open(url, "_blank", "noopener"); }
+          try { window.AndroidBridge.openInVlc(rawUrl, this._item?.title || "", false); }
+          catch(e){ window.open(rawUrl, "_blank", "noopener"); }
         }, 600);
       } else {
-        // Navigateur de bureau / iOS : ouvrir dans un nouvel onglet
-        window.open(url, "_blank", "noopener");
+        // PC / navigateur : ouvrir rawUrl (HTTP) dans un nouvel onglet — VLC ou lecteur natif
+        window.open(rawUrl, "_blank", "noopener");
       }
     };
 
@@ -257,13 +261,16 @@ const PipPlayer = {
       this._hls.on(Hls.Events.ERROR, (_, d) => {
         if(d.fatal){
           this._hls.destroy(); this._hls = null;
-          // Essai 1 : lecture native dans l'élément vidéo (Safari / codec supporté)
-          this._showStatus("⚠️ Basculement lecture native…", false);
-          video.src = url;
-          video.play().catch(() => {
-            // Essai 2 : lecteur externe de l'appareil
-            _openNativeFallback();
-          });
+          if(isPcBrowser){
+            // PC : essayer rawUrl directement (contourne l'échec HTTPS)
+            this._showStatus("⚠️ Basculement sur flux original…", false);
+            video.src = rawUrl;
+            video.play().catch(() => _openNativeFallback());
+          } else {
+            this._showStatus("⚠️ Basculement lecture native…", false);
+            video.src = url;
+            video.play().catch(() => _openNativeFallback());
+          }
         }
       });
     } else if(isHLS && video.canPlayType("application/vnd.apple.mpegurl")){
@@ -275,10 +282,16 @@ const PipPlayer = {
       video.play().catch(() => {});
     }
 
-    // Erreur sur l'élément vidéo → ouvrir lecteur natif automatiquement
+    // Erreur sur l'élément vidéo → fallback
     video.onerror = () => {
-      this._showStatus("⚠️ Le flux ne peut pas être lu ici — ouverture du lecteur natif…", false);
-      setTimeout(_openNativeFallback, 800);
+      if(isPcBrowser && video.src !== rawUrl){
+        // PC : réessayer avec l'URL HTTP originale
+        video.src = rawUrl;
+        video.play().catch(() => _openNativeFallback());
+      } else {
+        this._showStatus("⚠️ Le flux ne peut pas être lu ici — ouverture du lecteur natif…", false);
+        setTimeout(_openNativeFallback, 800);
+      }
     };
 
     // Reprendre la progression sauvegardée
@@ -443,6 +456,11 @@ const PipPlayer = {
     if(!this._item) return;
     const rawUrl = (this._item.url || this._item.stream_url || "").trim();
     if(!rawUrl) return;
+    // PC navigateur : ouvrir URL originale (HTTP) dans un onglet — le navigateur peut la lire
+    if(!isIOSContext && typeof window.AndroidBridge === "undefined"){
+      window.open(rawUrl, "_blank", "noopener");
+      return;
+    }
     if(typeof window.AndroidBridge !== "undefined"){
       // Android APK : URL brute — le WebView accepte HTTP nativement, ne pas toucher
       try { window.AndroidBridge.openInVlc(rawUrl, this._item.title || "", false); return; } catch {}
