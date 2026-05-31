@@ -1,6 +1,6 @@
 # PIPSILY — Documentation technique complète
 
-> Version app : **6.9** · APK : **v25** · SW cache : **pipsily-v197** · Date : 2026-05-27
+> Version app : **6.9** · APK : **v25** · SW cache : **pipsily-v206** · Date : 2026-05-31
 
 ---
 
@@ -21,71 +21,68 @@
 13. [AndroidBridge — API Java↔JS](#13-androidbridge--api-javajs)
 14. [Plateformes supportées](#14-plateformes-supportées)
 15. [Samsung TV (Tizen)](#15-samsung-tv-tizen)
-16. [Déploiement](#16-déploiement)
-17. [Bugs corrigés — historique](#17-bugs-corrigés--historique)
+16. [Administration](#16-administration)
+17. [Déploiement](#17-déploiement)
+18. [Bugs corrigés — historique](#18-bugs-corrigés--historique)
 
 ---
 
 ## 1. Vue d'ensemble
 
-PIPSILY est une application **IPTV PWA** (Progressive Web App) hébergée sur GitHub Pages (`morpheus45/VOD`). Elle consomme un flux Xtream Codes pour afficher Films, Séries et TV en direct.
+**PIPSILY** est une application IPTV PWA (Progressive Web App) permettant de regarder Films, Séries et TV en direct via un flux Xtream Codes.
 
-Elle existe sous trois formes :
+| Élément | Valeur |
+|---------|--------|
+| URL production | `https://morpheus45.github.io/VOD/` |
+| Repo GitHub | `morpheus45/VOD` |
+| Branche déployée | `main` |
+| APK Android | v25 — `PIPSILY.apk` |
+| Tizen Samsung TV | v1 — `PIPSILY-TV-signed.wgt` |
+| Supabase projet | `gwmuazostbbgroplnlql` |
+| Admin email | `cedric.lago@gmail.com` |
 
-| Forme | Technologie | Lecteur vidéo |
-|-------|-------------|---------------|
-| **PWA** (navigateur) | GitHub Pages | HLS.js interne (PipPlayer) |
-| **APK Android** (v25) | WebView + ExoPlayer | AndroidBridge → ExoPlayer natif |
-| **App Samsung TV** (Tizen v1) | Widget .wgt | HLS.js interne |
-
-L'URL de production est `https://morpheus45.github.io/VOD/`.
+### Catalogue (mai 2026)
+| Type | Titres | Catégories |
+|------|--------|------------|
+| Films (VOD) | 18 649 | 30 |
+| Séries | 5 288 | 11 |
+| TV Live | 1 263 | — |
 
 ---
 
 ## 2. Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                        index.html                        │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐ │
-│  │ styles.css│  │  app.js  │  │  auth.js │  │player.js│ │
-│  └──────────┘  └────┬─────┘  └────┬─────┘  └─────────┘ │
-│                     │              │                     │
-│          ┌──────────┴──┐    ┌──────┴──────┐             │
-│          │  PipPlayer  │    │  Supabase   │             │
-│          │  (HLS.js)   │    │  Auth / DB  │             │
-│          └──────┬──────┘    └─────────────┘             │
-│                 │                                        │
-│          ┌──────┴──────┐                                 │
-│          │AndroidBridge│  ← Java WebView interface       │
-│          │ (APK only)  │                                 │
-│          └─────────────┘                                 │
-└─────────────────────────────────────────────────────────┘
-         ↓
-   Service Worker (sw.js)
-   Cache shell + network-first JSON/M3U
+┌─────────────────────────────────────────────────┐
+│  GitHub Pages (HTTPS)                           │
+│  index.html + app.js + styles.css               │
+│  ├── Service Worker (sw.js)  — cache shell      │
+│  ├── auth.js  ────────────────── Supabase Auth  │
+│  ├── vod.json / series.json / live.json         │
+│  └── episodes_map.json + episodes_partN.json    │
+└──────────────┬──────────────────────────────────┘
+               │ HTTPS
+┌──────────────▼──────────────────────────────────┐
+│  Supabase (PostgreSQL + Auth)                   │
+│  Tables : profiles · devices · sessions ·      │
+│           payments                              │
+└─────────────────────────────────────────────────┘
+
+Clients :
+  • Navigateur PC/Mac     → PWA, HLS.js overlay
+  • Mobile Android (APK)  → WebView + AndroidBridge
+  • Mobile iOS/Safari     → AVPlayer natif
+  • Android TV / TV APK   → ExoPlayer via bridge
+  • Samsung TV (Tizen)    → tizen-tv/ (projet séparé)
 ```
 
-### État global `S`
-
-Tout l'état de l'application est centralisé dans l'objet `S` (défini dans `app.js`) :
-
-```js
-S = {
-  type      : "vod" | "series" | "live",
-  vod       : [],          // catalogue VOD chargé
-  series    : [],          // catalogue séries
-  live      : [],          // canaux TV
-  cat       : "",          // catégorie sélectionnée
-  search    : "",          // texte de recherche
-  quality   : "",          // filtre qualité (HD, FHD, 4K…)
-  region    : "",          // filtre région TV
-  sort      : "title",     // tri actif
-  shown     : { vod, series, live },  // items affichés (pagination)
-  panel     : { open, series, seasonsMap, seasonsMeta, selSeason },
-  epCache   : {},          // épisodes en mémoire
-  epDb      : {}           // base pré-générée episodes_part*.json
-}
+### Flux de données
+```
+IPTV Xtream API (HTTP) → push-script Python → JSON static → GitHub Pages
+                                                            → série.json
+                                                            → vod.json
+                                                            → live.json
+                                                            → episodes_*.json
 ```
 
 ---
@@ -94,565 +91,581 @@ S = {
 
 ```
 VOD-push/
-├── index.html              Page principale (Films / Séries / TV)
-├── login.html              Connexion Supabase
-├── account.html            Mon compte (abonnement, PIN parental, Wero)
-├── admin.html              Panneau admin (gestion utilisateurs/plans)
-├── player.html             Lecteur standalone (fallback)
-├── install.html            Guide d'installation (7 plateformes)
-├── vitrine.html            Page de présentation publique
-├── merci.html              Page de confirmation paiement
-├── samsung-tv.html         Guide Samsung TV
+├── index.html          — App principale (shell HTML)
+├── login.html          — Connexion / inscription
+├── account.html        — Profil utilisateur & appareils
+├── admin.html          — Panel admin (plans, comptes, paiements)
+├── player.html         — Lecteur standalone (legacy)
+├── install.html        — Guide installation 7 plateformes
+├── vitrine.html        — Page marketing
+├── merci.html          — Page post-paiement
+├── samsung-tv.html     — Guide installation Tizen
 │
-├── app.js                  Logique principale (v6.9, ~4 300 lignes)
-├── auth.js                 Auth Supabase + gestion abonnements
-├── player.js               Lecteur standalone (player.html)
-├── styles.css              Styles globaux (v103)
-├── player.css              Styles lecteur
+├── app.js              — Logique principale (~4400 lignes)
+├── auth.js             — Auth Supabase + sessions + appareils
+├── player.js           — Lecteur standalone (legacy)
 │
-├── sw.js                   Service Worker (cache pipsily-v197)
-├── manifest.webmanifest    Manifest PWA
-├── logo.svg                Logo
+├── styles.css          — CSS global (v103)
+├── player.css          — CSS lecteur standalone
 │
-├── version.json            Versions APK + Tizen + changelogs
+├── sw.js               — Service Worker (cache pipsily-v206)
+├── manifest.webmanifest
 │
-├── live.json               Catalogue TV en direct (~326 Ko)
-├── series.json             Catalogue séries (~3,4 Mo)
-├── episodes_index.json     Index des parties d'épisodes
-├── episodes_map.json       Mapping série → partie JSON
-├── episodes_part1–11.json  Données épisodes (partitionnées)
-├── series_catalog*.json    Catalogue séries enrichi (partitionné)
+├── vod.json            — 18 649 films
+├── series.json         — 5 288 séries
+├── live.json           — 1 263 chaînes TV
+├── version.json        — Versions APK/Tizen + changelog
+├── episodes_map.json   — Index séries → chunks
+├── episodes_part0.json — Épisodes chunk 0
+├── episodes_index.json — Index global épisodes
 │
-├── icons/
-│   ├── icon-192.png
-│   ├── icon-512.png
-│   └── splash/             Splash screens iOS (7 tailles)
-│
-└── tizen-tv/               App Samsung TV (.wgt)
-    ├── config.xml
-    ├── tizen-tv.js
-    ├── tizen-update.js
-    └── build.ps1
+├── logo.svg
+├── icons/              — icon-192, icon-512, splashs iOS
+└── tizen-tv/           — ⚠️ PROJET SÉPARÉ — NE PAS MODIFIER
+    ├── dist/
+    └── build/
 ```
+
+> ⚠️ **RÈGLE ABSOLUE** : ne jamais modifier `tizen-tv/` depuis ce repo.  
+> C'est un projet Android TV/Samsung distinct.
 
 ---
 
 ## 4. Sources de données
 
-### Xtream Codes API
-
-L'app consomme une API Xtream Codes. Les credentials sont saisis par l'utilisateur dans `account.html` et stockés localement.
-
-| Endpoint | Usage |
-|----------|-------|
-| `get_vod_streams` | Films |
-| `get_series` | Séries (métadonnées) |
-| `get_series_info` | Épisodes d'une série |
-| `get_live_streams` | Canaux TV |
-| `get_vod_categories` | Catégories Films |
-| `get_series_categories` | Catégories Séries |
-| `get_live_categories` | Catégories TV |
-
-### Catalogue pré-généré (GitHub Pages)
-
-Pour les séries, les épisodes sont pré-indexés en JSON partitionné (`episodes_part1–11.json`) afin d'éviter les appels API répétés. Le fichier `episodes_map.json` donne la correspondance `seriesId → partie`.
-
-### Version distante (`version.json`)
-
+### Format JSON (utilisé en prod)
 ```json
 {
-  "apk_version": 25,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v25/PIPSILY.apk",
-  "tizen_version": 1,
-  "tizen_url": "https://…/tv-v1/PIPSILY-TV-signed.wgt"
+  "meta": { "generated": "2026-05-28T..." },
+  "categories": [{ "category_id": "1337", "category_name": "FR - DRAME" }],
+  "items": [{
+    "id": 34310,
+    "series_id": 34310,
+    "title": "MacGyver",
+    "category_name": "FR - DRAME",
+    "category_id": "1337",
+    "stream_icon": "https://...",
+    "plot": "...",
+    "stream_url": "http://server/player_api.php?...",
+    "added": 0
+  }]
 }
 ```
 
-Utilisé par `checkApkUpdate()` pour détecter et proposer les mises à jour.
+### Catégories séries (11)
+`FR - ACTION`, `FR - ANIME`, `FR - ASIATIQUE`, `FR - COMÉDIE`, `FR - DOCUMENTAIRE`, `FR - DRAME`, `FR - ENFANTS`, `FR - LATEST SERIES`, `FR - NETFLIX`, `FR - SCI-FICTION`, `FR - TELE REALITE`
+
+### Normalisation (`normalizeItems`)
+Chaque item reçoit les champs normalisés :
+```js
+{
+  id, stream_id, title, category_name, category_id,
+  stream_icon, stream_url, url, plot, type,
+  quality,   // "4K"|"HD"|"SD"|"Autres"|""
+  added,     // timestamp Unix
+  _xtream,   // bool — série avec API Xtream
+  episodes, seasons  // pour séries
+}
+```
 
 ---
 
 ## 5. Authentification & abonnements
 
-**Backend** : Supabase (PostgreSQL + Auth)
-
-**Tables** :
-- `profiles` : `id`, `plan`, `subscription_expires_at`, `devices_allowed`
-- `sessions` : `user_id`, `device_id`, `token`, `last_seen`
+### Supabase Auth
+- Signup avec confirmation email (`emailRedirectTo: https://morpheus45.github.io/VOD/login.html`)
+- Signin avec `signInWithPassword`
+- Session persistée dans localStorage (`pipsily_auth`)
 
 ### Plans
+| Plan | Appareils max | Sessions simultanées | Expiration |
+|------|---------------|----------------------|------------|
+| `pending` | 0 | 0 | — |
+| `active` | 1 | 1 | Date fixe |
+| `unlimited` | 3 | 4 | Aucune |
+| `admin` | ∞ | ∞ | Aucune |
 
-| Plan | Appareils simultanés | Appareils enregistrés |
-|------|---------------------|-----------------------|
-| `active` (défaut) | 1 | 1 |
-| `unlimited` | 4 | 3 |
-| `admin` | ∞ | ∞ |
+### Tables Supabase
+```sql
+profiles  (id, email, plan, subscription_expires_at, devices_allowed, parental_pin)
+devices   (id, user_id, device_id, device_name, monthly_fee, last_seen)
+sessions  (id, user_id, device_id, device_name, token, last_seen)
+payments  (id, user_id, amount, type, period_start, period_end, confirmed_at, notes)
+```
 
-### Flux d'authentification
+### Trigger auto-création profil (exception-safe)
+```sql
+create or replace function handle_new_user()
+returns trigger language plpgsql security definer
+set search_path = public as $$
+begin
+  insert into public.profiles(id, email, plan)
+  values(new.id, new.email,
+    case when new.email = 'cedric.lago@gmail.com' then 'admin' else 'pending' end)
+  on conflict(id) do nothing;
+  return new;
+exception when others then
+  raise warning 'handle_new_user error: %', sqlerrm;
+  return new;
+end; $$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users
+for each row execute procedure handle_new_user();
+```
 
-1. `login.html` → Supabase Magic Link ou email/password
-2. `checkAuth()` dans `auth.js` → vérifie session + plan
-3. Si plan expiré → modal de renouvellement (Wero)
-4. Si trop d'appareils → modal blocage
+### RLS (Row Level Security)
+```sql
+-- Lecture/écriture profil propre
+create policy "own profile" on profiles for all using (auth.uid() = id);
+-- Admin lit tout
+create policy "admin all" on profiles for all
+  using ((select plan from profiles where id = auth.uid()) = 'admin');
+-- Idem pour devices, sessions, payments
+```
 
-### Compte admin
-
-L'email `cedric.lago@gmail.com` est traité comme `plan = "admin"` avec accès illimité et panneau admin visible.
-
-### Paiement Wero
-
-Le numéro Wero est encodé en base64 dans `auth.js` (`WERO_PHONE`). La page `account.html` l'affiche avec un lien de paiement direct.
+### Heartbeat sessions
+- Intervalle : toutes les 5 minutes
+- Purge automatique des sessions > 24h sans activité
+- `startSessionWatcher(userId)` lancé au démarrage
 
 ---
 
 ## 6. Lecteur vidéo — PipPlayer
 
-L'objet `PipPlayer` (défini dans `app.js`) gère la lecture vidéo sous trois modes, sélectionnés automatiquement :
-
-### Mode 1 — AndroidBridge (APK)
-
+### Modes de lecture selon la plateforme
 ```
 PipPlayer.open(item)
-  → AndroidBridge.openPlayer(url, title, sub, epsJson, epIdx)
-  → AndroidBridge.openPlayerAt(url, …, savedMs)  // reprend à la position
+  ├── AndroidBridge disponible → ExoPlayer natif (AndroidBridge.openPlayer)
+  ├── iOS/iPadOS               → AVPlayer (_openAVPlayer)
+  │     ├── HTTP sur HTTPS      → _openOverlay (fallback mixed content)
+  │     └── Timeout 3s          → _openOverlay (si fullscreen échoue)
+  ├── Mixed content HTTP/HTTPS  → _openOverlay direct
+  └── Navigateur standard       → _openOverlay (HLS.js ou video natif)
 ```
 
-ExoPlayer natif s'ouvre, prend le contrôle de l'écran. À la fermeture, Java appelle `window.onAndroidPlayerClosed(url, posMs, durMs)` via `webView.evaluateJavascript()`.
-
-### Mode 2 — iOS AVPlayer
-
-Sur Safari iOS / PWA iOS, le lecteur utilise le tag `<video>` natif avec un overlay plein écran.
-
-### Mode 3 — HLS.js interne (navigateur)
-
-Sur tous les autres contextes (PC, Samsung TV), HLS.js décode le flux `.m3u8` dans un `<video>` dans l'overlay PipPlayer.
-
-### Rappel de position (`openPlayerAt`)
-
-La progression est sauvegardée dans `pf_progress_v4` (localStorage). Avant chaque ouverture :
-
+### `_openOverlay(item)`
+Ouvre le panneau `#pip-player` avec HLS.js :
 ```js
-_getSavedProgressMs(item)  // retourne posMs en ms, 0 si < 10s
-```
-
-Si `savedMs > 0` et que le bridge Android supporte `openPlayerAt`, ExoPlayer reprend à la position.
-
-### Callback `onAndroidPlayerClosed`
-
-```js
-window.onAndroidPlayerClosed = function(url, posMs, durMs)
-```
-
-Reçoit la position finale. Stocke la progression et rafraîchit Poursuivre. Restaure le focus TV via `_restoreTvFocus()`.
-
-**Points de sortie** (tous appellent `_restoreTvFocus()`) :
-1. `posMs < 30 000 ms` → trop court, on ignore
-2. `pct > 0.97` → quasi-terminé, on ignore
-3. Chemin série (épKey trouvé) → sauvegarde épisode
-4. Chemin VOD/Live → sauvegarde item
-
-### `_restoreTvFocus()`
-
-```js
-function _restoreTvFocus(){
-  setTimeout(() => {
-    const f = PipPlayer._lastFocus;
-    PipPlayer._lastFocus = null;
-    if(f && f !== document.body && f.isConnected){
-      f.focus();
-      f.scrollIntoView?.({ behavior:"smooth", block:"nearest" });
-    } else {
-      document.querySelector(".nrow-card, .card")?.focus();
-    }
-  }, 200);
+_openOverlay(item){
+  // Ouvre le panel, met à jour titre/sub/plot
+  // Appelle _loadVideo(item)
 }
 ```
 
-- Restaure l'élément focusé avant l'ouverture du lecteur
-- Exclut `document.body` (isConnected=true mais focus() no-op)
-- Fallback : première `.nrow-card` ou `.card` du DOM
+### `_loadVideo(item)`
+```
+url = secureUrl(preparePlutoUrl(item.url))  // HTTP→HTTPS
+isHLS = /.m3u8/i ou type==="live"
+
+Si isHLS + Hls.isSupported() → HLS.js
+  └── MANIFEST_PARSED → play + sélection piste FR
+  └── ERROR fatal     → video.src direct → onerror → _openNativeFallback
+Si isHLS + Safari natif → video.src direct
+Sinon                   → video.src direct
+onerror → _openNativeFallback (window.open sur PC, VLC sur Android)
+```
+
+### Mixed content (HTTP streams sur HTTPS page)
+`secureUrl()` convertit HTTP→HTTPS avant chargement. Si le serveur IPTV ne supporte pas HTTPS, la lecture échouera et ouvrira dans un onglet. Utiliser le bouton **⎘ Copier le lien** pour VLC.
+
+### Contrôles du lecteur
+| Bouton | Action |
+|--------|--------|
+| `← Retour` | Ferme le lecteur |
+| `⛶ Plein écran` | Fullscreen |
+| `⎘ Copier le lien` | Copie l'URL originale |
+| `▶ Lecture native` | `window.open` ou AndroidBridge |
+| `♡ / ♥ Favoris` | Toggle favori |
+| `⏮ Épisode précédent` | Navigation série |
+| `Épisode suivant ⏭` | Navigation série |
+
+### Progression sauvegardée
+- Sauvegarde toutes les 5s dans localStorage (`pipsily_progress`)
+- Clé : `type||id||title` pour VOD, `seriesId||SxxExx` pour épisodes
+- Reprise au bon timestamp au prochain lancement
 
 ---
 
 ## 7. Navigation TV (D-pad)
 
-La navigation est gérée par un `keydown` global dans `app.js`. Trois modes selon le contexte :
+### Modes de navigation
+| Mode | Contexte | Activé par |
+|------|----------|------------|
+| `_navGrid` | Grille principale | Défaut |
+| `_navNetflix` | Rangées Netflix | Mode Netflix actif |
+| `_navPanel` | Panneau série | Ouverture panel |
 
+### Son de navigation
 ```js
-const panelOpen  = S.panel.open;
-const useNetflix = $("grid")?.classList.contains("netflix-rows");
-
-if(panelOpen)  { _navPanel(k);   return; }
-if(useNetflix) { _navNetflix(k); return; }
-_navGrid(k);
+function _playNavClick(){
+  // Web Audio API : oscillateur 720Hz → 360Hz en 55ms, gain 0.18 → 0
+  // Durée totale : 70ms
+}
 ```
+Appelé à chaque touche directionnelle (ArrowUp/Down/Left/Right).
 
-### `_navGrid` — grille classique
-
-- `ArrowLeft/Right` : navigation dans la rangée
-- `ArrowUp` : remonte aux nav-btns (Films/Séries/TV) si en haut de grille
-- `ArrowDown` : descend dans la grille
-
-**Branche `.nou-card`** (Poursuivre/Favoris) :
-```
-ArrowUp   → focusFirstPill() ou nav-btn
-ArrowDown → première .card de la grille
-ArrowLeft/Right → dans la rangée Poursuivre
-```
-
-### `_navNetflix` — rangées style Netflix
-
-- `rowIdx < 0` (focus dans les pills) :
-  - `ArrowDown` → première carte de la 1re rangée
-  - `ArrowUp` → nav-btn ou premier pill
-- `rowIdx >= 0` : navigation par rangées
-
-### `_navPanel` — panneau série
-
-Navigation dans la liste des épisodes d'une saison.
-
-### Touches spéciales
-
+### Raccourcis clavier TV
 | Touche | Action |
 |--------|--------|
-| `Enter` / ` ` | Activer élément focusé |
-| `Escape` / `GoBack` / `Back` | Fermer panneau / overlay |
-| `BrowserBack` | Retour |
+| Flèches | Navigation D-pad |
+| Enter | Sélectionner |
+| Escape/GoBack/Back | Retour/fermeture |
+| n / N / ChannelUp | Épisode suivant |
+| ArrowRight (lecteur) | +10s |
+| ArrowLeft (lecteur) | -10s |
+
+### Restauration focus après lecteur
+`_restoreTvFocus()` — appelé à TOUS les points de sortie de `onAndroidPlayerClosed` :
+- Cas early return (posMs < 30000)
+- Cas fin normale (pct > 0.97)
+- Cas épisode (epKey trouvé)
+- Cas VOD normal
 
 ---
 
 ## 8. Section Poursuivre
 
-La section "▶ Poursuivre" affiche en haut de l'app :
-1. **Items en cours** (progression 3%–97%) triés par timestamp décroissant (15 max)
-2. **Favoris non commencés** complétant jusqu'à 25 items
+Affiche en haut de page les contenus **en cours** + **favoris** de l'onglet actif.
 
-### Fonction principale
-
+### Logique de filtrage
 ```js
-function renderPoursuivreRow()           // wrapper avec try/catch
-function _renderPoursuivreRowInner()     // logique réelle
-```
+// Masquer le contenu adulte (inchangeable par PIN)
+const _hideXXXItem = item => _isAdultCat(item?.category_name);
 
-Alias : `renderContinueRow()` et `renderFavoritesRow()` redirigent vers `renderPoursuivreRow()`.
-
-### Filtre XXX
-
-```js
-const _hideXXXItem = item =>
-  _startsXXX(item?.category_name) ||
-  _startsXXX(item?.title) ||
-  _startsXXX(item?.name);
-```
-
-```js
-function _startsXXX(c){
+// Adulte = keywords OU xxx en début OU xxx en fin de category_name
+const _isAdultCat = c => {
   if(!c) return false;
-  if(c.startsWith("xXx")) return false;  // film "xXx" — à garder
-  return /^xxx/i.test(c);               // xxx / XXX / Xxx → filtrer
-}
+  if(/adult|adulte|\+18|18\+|erot|for adult/i.test(c)) return true;
+  if(_startsXXX(c)) return true;       // "XXX Films", "🔞 XXX Séries"
+  if(/\bxxx\s*$/i.test(c)) return true; // "Films XXX"
+  return false;
+};
+
+// xxx en début (après emojis/symboles) — exception pour "xXx" (film d'action)
+const _startsXXX = c => {
+  const clean = c.replace(/^[\s\p{Emoji}...]+/u, "").trim();
+  if(clean.startsWith("xXx")) return false;
+  return /^xxx/i.test(clean);
+};
 ```
 
-**Règles** :
-- Le contenu dont la catégorie **OU** le titre **OU** le nom commence par `xxx` (insensible à la casse) est **toujours masqué** dans Poursuivre
-- Cela s'applique **même si le PIN adulte est déverrouillé**
-- Exception : `xXx` (film d'action) est toujours visible
-- Ce filtre s'applique aux inProgress (séries + VOD) et aux favoris
+> **Important :** "xxx" en MILIEU de catégorie (ex: `"SÉRIES | XXX | ACTION"`) n'est PAS considéré adulte — évite les faux positifs des fournisseurs IPTV.
 
-### Clés de progression
+### Ordre d'affichage
+1. **En cours** : items avec 3% < progression < 97%, triés par `ts` desc
+2. **Favoris** : items ❤️ non déjà en cours, mêmes type que l'onglet actif
 
-```
-pf_progress_v4 = {
-  "vod||<id>||<titre>"  : { pct, ts },        // clé itemKey (VOD)
-  "<id>"                : { t, d, ts },        // clé numérique (VOD)
-  "<seriesId>||S01E01"  : { t, d, pct, ts }   // clé épisode série
-}
-```
+### Pourquoi un favori peut disparaître
+- **Image cassée** : `onerror` masquait toute la carte → corrigé, maintenant seule l'image est masquée
+- **Mauvais onglet** : un favori série n'apparaît que sur l'onglet Séries
+- **Progression > 97%** : item considéré terminé, masqué de "en cours"
 
 ---
 
 ## 9. Contrôle parental (PIN adulte)
 
-### Configuration
-
-Dans `account.html` → section "Code parental" → l'utilisateur définit un code PIN 4 chiffres, stocké dans `localStorage.pipsily_adult_pin`.
-
 ### Fonctionnement
+1. Le contenu adulte est détecté par `_isAdultCat(category_name)`
+2. Sans PIN défini : pill 🔞 invisible
+3. Avec PIN défini : pill 🔞 visible, clic demande le PIN
+4. PIN validé : `sessionStorage.setItem("pipsily_adult_unlocked","1")` → session uniquement
 
-La pill de catégorie `__ADULT__` est spéciale :
+### Stockage
+- `localStorage.pipsily_adult_pin` — PIN haché (4-6 chiffres)
+- `sessionStorage.pipsily_adult_unlocked` — déverrouillé pour la session
 
+### API
 ```js
-if(cat === "__ADULT__" && !sessionStorage.getItem("pipsily_adult_unlocked")){
-  showAdultPinPrompt(pills);
-  return;
-}
+getParentalPin(userId)    // lecture depuis profiles.parental_pin
+setParentalPin(userId, pin) // écriture
+promptParentalPin(storedPin) // dialog overlay, retourne Promise<bool>
 ```
 
-Après validation du PIN :
-```js
-sessionStorage.setItem("pipsily_adult_unlocked", "1");
-renderGrid(true);
-if(typeof renderPoursuivreRow === "function") renderPoursuivreRow();
-```
-
-**Note** : le déverrouillage est valable pour la **session en cours uniquement** (`sessionStorage`). Il permet la navigation dans les catégories adulte via la pill, mais n'affecte **pas** la section Poursuivre (XXX toujours masqué).
+### Le PIN ne bypass pas Poursuivre
+Même avec `pipsily_adult_unlocked = "1"`, le contenu adulte reste masqué dans la section Poursuivre/Favoris.
 
 ---
 
 ## 10. Mise à jour APK
 
-### `checkApkUpdate()` (au démarrage, APK uniquement)
+### `checkApkUpdate()` — Flux
+```
+version.json → remoteVer (int)
+AndroidBridge.getApkVersion() → localVer
+  └── fallback : localStorage.pf_local_apk_ver
+Si !localVer → fail-safe, pas de bannière
+Si remoteVer > localVer :
+  Vérifier suppression :
+    pf_apk_sv4 >= remoteVer ET Date.now() < pf_apk_su4 → supprimé
+  Sinon → showApkUpdateBanner()
+```
 
-1. Récupère `version.json` depuis GitHub Pages
-2. Récupère la version installée via `AndroidBridge.getApkVersion()` → stocke dans `pf_local_apk_ver`
-3. Si `remoteVer > localVer` ET pas de suppression active → affiche `showApkUpdateBanner()`
+### Bannière de mise à jour
+- Modal plein écran avec bouton **⬇ Mettre à jour** et **Plus tard (7 jours)**
+- Touche Back/GoBack → ferme avec suppression 7 jours
+- Clic "Mettre à jour" → `AndroidBridge.downloadAndInstall(url)` → suppression 7 jours
+- `pf_local_apk_ver` mis à jour UNIQUEMENT par `getApkVersion()` (bridge), jamais par le clic
 
-### Suppression (éviter les re-affichages)
-
-| Clé localStorage | Valeur | Rôle |
-|-----------------|--------|------|
-| `pf_apk_sv4` | `String(remoteVer)` | Version supprimée (ne plus notifier pour cette version) |
-| `pf_apk_su4` | `Date.now() + 86400000` | Timestamp d'expiration de la suppression (24h) |
-| `pf_local_apk_ver` | `String(ver)` | Version APK connue (mise à jour **uniquement** par le bridge) |
-
-**Important** : `pf_local_apk_ver` n'est **jamais** écrit lors du clic "Télécharger" (pour ne pas masquer la bannière si l'installation échoue). Il est uniquement mis à jour par `AndroidBridge.getApkVersion()` au prochain démarrage après installation.
-
-### Bannière obligatoire
-
-`showApkUpdateBanner()` crée un overlay plein écran (`z-index: 99999`) sans bouton "Fermer". 
-
-**Keydown handler** :
-```js
-banner.addEventListener("keydown", e => {
-  if(["Escape","GoBack","Back","BrowserBack"].includes(e.key)){
-    e.preventDefault(); e.stopPropagation(); // pas de retour arrière
-  } else if(e.key !== "Enter" && e.key !== " "){
-    e.preventDefault(); e.stopPropagation(); // bloque scroll/navigation D-pad
-  }
-}, true);
+### version.json
+```json
+{
+  "apk_version": 25,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v25/PIPSILY.apk",
+  "changes": "...",
+  "tizen_version": 1,
+  "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt"
+}
 ```
 
 ---
 
 ## 11. Service Worker & cache
 
-**Fichier** : `sw.js` — version actuelle : `pipsily-v197`
+### Stratégie
+| Ressource | Stratégie |
+|-----------|-----------|
+| `.json` / `.m3u` | Network-first (toujours frais) |
+| Assets (CSS, JS, images) | Cache-first + update background |
+| Navigation (`index.html`) | Cache fallback si offline |
 
-### Stratégie de cache
+### Versioning
+- Cache name : `pipsily-vXXX` (actuellement `pipsily-v206`)
+- À chaque modification de `sw.js` : incrémenter le numéro
+- Install : vide **tous** les anciens caches + met en cache le shell
+- Activate : `clients.claim()` + envoie `RELOAD` à toutes les fenêtres
 
-| Type de ressource | Stratégie |
-|-------------------|-----------|
-| `.json` / `.m3u` | **Network-first** (cache en fallback) |
-| Shell (HTML/CSS/JS/images) | **Cache-first** + mise à jour réseau en arrière-plan |
-| Navigation (`index.html`) | Fallback cache si réseau indisponible |
-
-### Mise à jour automatique
-
-Au `install` : purge **tous** les anciens caches, met en cache le shell, appelle `skipWaiting()` immédiatement.
-
-Au `activate` : `clients.claim()` + envoi de `{ type: "RELOAD" }` à tous les onglets ouverts → rechargement automatique sans intervention utilisateur.
-
-### Shell (fichiers mis en cache)
-
-```js
-["./", "./index.html", "./login.html", "./account.html", "./admin.html",
- "./player.html", "./install.html", "./vitrine.html", "./merci.html",
- "./samsung-tv.html", "./styles.css?v=103", "./player.css",
- "./app.js?v=166", "./auth.js", "./player.js?v=51",
- "./manifest.webmanifest", "./logo.svg",
- "./icons/icon-192.png", "./icons/icon-512.png", "./version.json",
- + 7 splash screens iOS]
+### Shell mis en cache
+```
+./ index.html login.html account.html admin.html player.html
+install.html vitrine.html merci.html samsung-tv.html
+styles.css?v=103 player.css app.js?v=166 auth.js player.js?v=51
+manifest.webmanifest logo.svg icons/icon-192.png icons/icon-512.png
+version.json + splashs iOS (7 tailles)
 ```
 
-### Bumper le cache
-
-À chaque modification de fichier, incrémenter `CACHE` dans `sw.js` :
-```js
-const CACHE = "pipsily-v198"; // ← incrémenter
-```
-Cela force le rechargement sur tous les clients au prochain démarrage.
+### Mise à jour forcée (bouton "Mettre à jour")
+- **PWA** : vide le cache SW + reload avec `?nocache=timestamp`
+- **APK** : active le SW en attente via `SKIP_WAITING` → RELOAD
 
 ---
 
 ## 12. Clés de stockage local
 
-### `localStorage`
-
+### localStorage
 | Clé | Type | Description |
 |-----|------|-------------|
-| `pf_favorites_v4` | JSON array | Favoris de l'utilisateur |
-| `pf_history_v4` | JSON array | Historique de visionnage (300 entrées max) |
-| `pf_progress_v4` | JSON object | Progression par item (clé → `{pct, t, d, ts}`) |
-| `pipsily_adult_pin` | string | Code PIN parental |
-| `pipsily_region` | string | Filtre région TV actif |
-| `pipsily_available_regions` | JSON array | Régions TV détectées |
-| `pipsily_session_token` | string | Token de session (anti-multi-device) |
-| `pf_local_apk_ver` | string | Version APK installée connue |
-| `pf_apk_sv4` | string | Version APK supprimée (notification) |
-| `pf_apk_su4` | string | Timestamp expiration suppression |
-| `pf_apk_install_dismiss` | string | Suppression bannière d'installation PWA |
-| `pf_apk_install_dismiss_ver` | string | Version supprimée pour installation |
+| `pipsily_device_id` | UUID | Identifiant appareil unique |
+| `pipsily_session_token` | string | Token session actif |
+| `pipsily_progress` | JSON | Progression films/séries |
+| `pipsily_favorites` | JSON | Favoris `{key, item, at}[]` |
+| `pipsily_history` | JSON | Historique lecture |
+| `pipsily_adult_pin` | string | PIN parental |
+| `pf_local_apk_ver` | int | Version APK installée (bridge) |
+| `pf_apk_sv4` | int | Version APK suppress update banner |
+| `pf_apk_su4` | timestamp | Expire suppress update banner (7j) |
+| `pf_apk_install_dismiss` | timestamp | Supprime bannière install APK |
+| `pf_apk_install_dismiss_ver` | int | Version affichée à l'install banner |
 
-### `sessionStorage`
-
+### sessionStorage
 | Clé | Valeur | Description |
 |-----|--------|-------------|
-| `pipsily_adult_unlocked` | `"1"` | PIN adulte déverrouillé (session uniquement) |
-| `iptv_nav_ctx` | JSON | Contexte de navigation IPTV (saison/épisode) |
+| `pipsily_adult_unlocked` | `"1"` | Session adulte déverrouillée |
+
+### STORE (clés internes)
+```js
+const STORE = {
+  progress  : "pipsily_progress",
+  favorites : "pipsily_favorites",
+  history   : "pipsily_history",
+};
+```
 
 ---
 
 ## 13. AndroidBridge — API Java↔JS
 
-L'APK expose une interface Java accessible via `window.AndroidBridge` dans la WebView.
+Toutes les méthodes sont appelées depuis `window.AndroidBridge`.
 
-### Méthodes utilisées
-
-| Méthode | Arguments | Description |
-|---------|-----------|-------------|
-| `openPlayer(url, title, sub, epsJson, epIdx)` | — | Ouvre ExoPlayer |
-| `openPlayerAt(url, title, sub, epsJson, epIdx, posMs)` | — | Ouvre ExoPlayer à une position |
-| `openInVlc(url, title, isLive)` | — | Ouvre VLC natif (fallback) |
-| `downloadAndInstall(url)` | — | Télécharge et installe un APK |
-| `openDownloadUrl(url)` | — | Ouvre l'URL de téléchargement |
-| `getApkVersion()` | → string | Retourne la version APK installée |
-| `fetchJson(url)` | → string JSON | Fetch HTTP depuis Java (contourne mixed-content) |
-| `fetchUrlAsync(url, cbName)` | — | Fetch asynchrone, résultat via callback JS |
+| Méthode | Paramètres | Description |
+|---------|------------|-------------|
+| `openPlayer(url, title, sub, epsJson, epIdx)` | string × 4 + int | Lance ExoPlayer |
+| `openPlayerAt(url, title, sub, epsJson, epIdx, posMs)` | + int ms | Lance à position |
+| `openInVlc(url, title, loop)` | string × 2, bool | Ouvre dans VLC |
+| `getApkVersion()` | — | Retourne version int (ex: 25) |
+| `downloadAndInstall(url)` | string | Télécharge + installe APK |
+| `openDownloadUrl(url)` | string | Ouvre URL de téléchargement |
 | `clearCache()` | — | Vide le cache WebView |
+| `fetchJson(url)` | string | Fetch HTTP depuis Java (bypass CORS) |
 
-### Callback Java → JS
-
+### Callback JS depuis Java
 ```js
 window.onAndroidPlayerClosed(url, posMs, durMs)
-// Appelé par MainActivity.reportProgress() via evaluateJavascript()
+// Appelé par Java quand ExoPlayer se ferme
+// Sauvegarde la progression + restore focus D-pad
 ```
 
 ---
 
 ## 14. Plateformes supportées
 
-| Plateforme | Mode | Notes |
-|------------|------|-------|
-| Android TV / Google TV | APK v25 + WebView | ExoPlayer natif, D-pad complet |
-| Android mobile | APK v25 | Même APK |
-| iOS / iPadOS (Safari) | PWA | AVPlayer natif, splash screens |
-| iOS / iPadOS (Chrome/Firefox) | PWA | HLS.js |
-| macOS (Safari/Chrome) | Web | HLS.js |
-| Windows / Linux | Web | HLS.js |
-| Samsung TV (Tizen 3+) | App .wgt | HLS.js |
-| LG TV (webOS) | Web navigateur | HLS.js |
-
-### Détection iOS
-
-```js
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-           || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const isSafariIOS = isIOS && /Safari/i.test(UA) && !/CriOS|FxiOS/.test(UA);
-const isIOSContext = isIOS; // inclut PWA standalone
-```
-
-### Détection TV (précoce, avant 1er rendu)
-
-```html
-<script>
-  if(/AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) || /\bTV\b/.test(UA)){
-    document.documentElement.classList.add('is-tv');
-  }
-</script>
-```
+| Plateforme | Lecteur | Remarques |
+|------------|---------|-----------|
+| Chrome/Edge PC | HLS.js overlay | Mixed content HTTP → lien à copier |
+| Safari Mac | HLS natif | |
+| Android APK | ExoPlayer + WebView | `window.AndroidBridge` disponible |
+| Android navigateur | HLS.js overlay | Mixed content → overlay |
+| iOS Safari | AVPlayer natif | `webkitEnterFullscreen` |
+| iOS PWA (écran d'accueil) | AVPlayer natif | |
+| iOS Chrome/Firefox | AVPlayer natif | Tous les browsers iOS = WebKit |
+| Android TV APK | ExoPlayer | `PIPSILY_NATIVE = "android_tv"` |
+| Samsung TV Tizen | Tizen player | Projet séparé (`tizen-tv/`) |
 
 ---
 
 ## 15. Samsung TV (Tizen)
 
-Sous-dossier `tizen-tv/`. App packagée en `.wgt` (widget Tizen).
+> **PROJET COMPLÈTEMENT SÉPARÉ** — dossier `tizen-tv/`  
+> Ne jamais modifier depuis ce repo principal.
 
-**ID** : `com.morpheus45.pipsily`  
-**Version** : 1.0.0  
-**Entry point** : `index.html`
-
-### Build
-
-```powershell
-# Dans tizen-tv/
-.\build.ps1
-# Génère dist/PIPSILY-TV.wgt, puis sign_wgt.py signe avec developer.p12
-```
-
-**Fichier signé** : `dist/PIPSILY-TV-signed.wgt`  
-**Distribué via** : GitHub Releases `tv-v1`
-
-### Mise à jour auto Tizen
-
-`tizen-update.js` vérifie `version.json → tizen_version` au démarrage et affiche une notification si une nouvelle version est disponible.
+- Package : `PIPSILY-TV-signed.wgt`
+- Version : 1
+- URL release : `https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt`
+- Installation : guide sur `samsung-tv.html`
 
 ---
 
-## 16. Déploiement
+## 16. Administration
 
-### GitHub Pages (PWA)
+### Accès
+URL : `admin.html` — accessible uniquement si `plan === "admin"` ou email = `cedric.lago@gmail.com`.
 
+### Fonctionnalités
+| Action | Description |
+|--------|-------------|
+| Créer un compte | `auth.signUp` + upsert profil |
+| Solo 42€/an | `plan=active`, 365j, 1 appareil |
+| Multi 53€/an | `plan=active`, 365j, 3 appareils |
+| ∞ Illimité | `plan=unlimited`, sans expiration |
+| +30 jours | Prolonge l'abonnement actif |
+| Test 7j | Accès temporaire |
+| Bloquer | `plan=pending` |
+| Supprimer | Supprime profil + devices + sessions + payments |
+| Confirmer paiement Wero | Marque confirmé + active 30j |
+
+### Statistiques affichées
+CA annuel / CA mensuel estimé / Connectés (15 min) / Actifs / Expirés / En attente
+
+### SQL utiles
+```sql
+-- Mettre un compte en illimité
+update profiles set plan='unlimited', devices_allowed=999,
+  subscription_expires_at=null where email='user@example.com';
+
+-- Voir les comptes actifs
+select email, plan, subscription_expires_at, devices_allowed
+from profiles order by created_at desc;
+```
+
+---
+
+## 17. Déploiement
+
+### Workflow standard
 ```bash
-git add <fichiers modifiés>
+# 1. Modifier les fichiers
+# 2. Bumper CACHE dans sw.js (pipsily-vXXX)
+# 3. Vérifier la syntaxe
+node --check app.js
+
+# 4. Committer et pousser
+git add -p
 git commit -m "fix: description"
 git push origin main
-# → GitHub Pages déploie automatiquement en ~30s
+# GitHub Pages déploie automatiquement en ~30s
 ```
 
-### Règle de bump SW obligatoire
+### Bumper la version SW
+Modifier `sw.js` ligne 2 : `const CACHE = "pipsily-vXXX";`  
+Incrémenter à chaque déploiement modifiant les assets.
 
-**À chaque modification de `app.js`, `styles.css`, `auth.js` ou tout fichier du shell** :
-→ Incrémenter `const CACHE = "pipsily-vXXX"` dans `sw.js`
+### Mettre à jour les données catalogue
+Les fichiers JSON (`vod.json`, `series.json`, `live.json`, `episodes_*.json`) sont générés par un script Python externe et poussés dans le repo.
 
-Sans ce bump, les utilisateurs continuent de voir l'ancienne version jusqu'à la prochaine mise à jour de leur SW (jusqu'à 24h).
+### Déployer une nouvelle version APK
+1. Compiler l'APK Android
+2. Créer une release GitHub avec tag `vXX`
+3. Uploader `PIPSILY.apk` dans les assets de la release
+4. Mettre à jour `version.json` :
+   ```json
+   { "apk_version": 26, "apk_url": "https://github.com/.../v26/PIPSILY.apk", "changes": "..." }
+   ```
+5. `git push origin main` → les APK déjà installés verront la bannière de mise à jour
 
-### APK Android
-
-1. Modifier `versionCode` + `versionName` dans `build.gradle`
-2. Build APK signé
-3. Créer une GitHub Release `v<N>` et uploader l'APK
-4. Mettre à jour `version.json` → `apk_version: <N>`
-5. Commit + push → déclenchement automatique de la bannière de mise à jour
+### Supabase — Configuration URL (obligatoire)
+```
+Authentication → URL Configuration
+  Site URL    : https://morpheus45.github.io/VOD/login.html
+  Redirect URLs : https://morpheus45.github.io/VOD/login.html
+```
 
 ---
 
-## 17. Bugs corrigés — historique
+## 18. Bugs corrigés — historique
 
 ### Session mai 2026
 
-#### Correctifs fonctionnels majeurs
+#### Bug 1 — Focus TV non restauré sur toutes les sorties de `onAndroidPlayerClosed`
+- **Problème** : Le `setTimeout` de restauration focus ne s'exécutait pas sur le chemin série (return anticipé) ni les early guards
+- **Fix** : Helper `_restoreTvFocus()` appelé à tous les points de sortie
 
-| Bug | Description | Fix |
-|-----|-------------|-----|
-| Poursuivre vide | Le filtre adulte masquait tous les films/séries en cours | Supprimé le filtre adulte général, conservé uniquement le filtre XXX |
-| XXX dans Poursuivre | Les items `category_name` ou `title` commençant par "xxx" restaient visibles | `_hideXXXItem()` vérifie category_name + title + name |
-| PIN bypass Poursuivre | `adultOK=true` désactivait le filtre XXX dans Poursuivre | Supprimé `adultOK` de `_hideXXXItem` — filtre toujours actif |
-| `xXx` filtré à tort | Le film "xXx" (vin Diesel) était masqué | Exception `startsWith("xXx")` dans `_startsXXX` |
+#### Bug 2 — `document.body` comme `_lastFocus` bypassait le fallback
+- **Problème** : `body.isConnected = true` mais `body.focus()` = no-op, le querySelector fallback ne s'exécutait pas
+- **Fix** : Condition `f && f !== document.body && f.isConnected`
 
-#### Navigation TV
+#### Bug 3 — `pf_local_apk_ver` écrit prématurément dans le onclick APK
+- **Problème** : La version locale était marquée "à jour" dès le clic download, avant installation
+- **Fix** : Suppression de cette ligne. `pf_local_apk_ver` mis à jour uniquement par `getApkVersion()` (bridge)
 
-| Bug | Description | Fix |
-|-----|-------------|-----|
-| Impossible de remonter aux nav-btns | Après retour de visionnage, ArrowUp ne remontait pas | `_navNetflix` rowIdx<0 + ArrowUp → `_focusFirstPill()` |
-| Boucle infinie nou-card ↔ cards | ArrowDown depuis nou-card focussait cards[0] qui renvoyait vers nou-card | Branche `.nou-card` dédiée dans `_navGrid` |
-| Focus perdu après lecteur natif | `onAndroidPlayerClosed` ne restaurait pas le focus sur le chemin série | `_restoreTvFocus()` appelé à tous les points de sortie |
-| `document.body` comme focus | `body.isConnected=true` → `body.focus()` no-op, fallback jamais atteint | Garde `f !== document.body` dans `_restoreTvFocus()` |
+#### Bug 4 — APK banner : `e.preventDefault()` manquant pour les flèches
+- **Problème** : `e.stopPropagation()` seul ne bloquait pas le scroll/navigation D-pad
+- **Fix** : Ajout de `e.preventDefault()` dans le else-if du keydown handler
 
-#### APK / Bannière mise à jour
+#### Bug 5 — Poursuivre non rafraîchi après déverrouillage PIN adulte
+- **Problème** : `renderGrid(true)` appelé mais pas `renderPoursuivreRow()`
+- **Fix** : Ajout de `renderPoursuivreRow()` après `renderGrid(true)` dans `showAdultPinPrompt`
 
-| Bug | Description | Fix |
-|-----|-------------|-----|
-| Bannière APK à chaque démarrage | Clés de suppression `pf_apk_sv4`/`pf_apk_su4` jamais écrites | Écriture lors du clic "Télécharger" |
-| `pf_local_apk_ver` prématuré | Version mémorisée avant fin de l'installation → masquage permanent si échec | Ligne supprimée du onclick ; seul le bridge met à jour cette clé |
-| GoBack quitte l'app pendant bannière | `e.preventDefault()` manquant sur GoBack/Back | Ajouté dans le keydown handler |
-| Flèches D-pad traversent bannière | `e.preventDefault()` manquant dans le else-if du keydown | Ajouté : `e.preventDefault(); e.stopPropagation()` |
+#### Bug 6 — `DATABASE ERROR` à l'inscription
+- **Problème** : Trigger `handle_new_user()` sans `set search_path = public` + sans exception handler → bloque la création de compte
+- **Fix** : Trigger reécrit avec `set search_path`, `on conflict do nothing`, `exception when others then return new`
 
-#### PIN parental
+#### Bug 7 — Email de confirmation → 404
+- **Problème** : `admin.html createAccount()` appelait `auth.signUp` sans `emailRedirectTo` → Supabase utilisait l'URL par défaut du projet (incorrecte)
+- **Fix** : Ajout de `emailRedirectTo: "https://morpheus45.github.io/VOD/login.html"` dans `createAccount()`
 
-| Bug | Description | Fix |
-|-----|-------------|-----|
-| Poursuivre non rafraîchi après PIN unlock | `renderGrid(true)` appelé mais pas `renderPoursuivreRow()` | `renderPoursuivreRow()` ajouté après `renderGrid(true)` dans `showAdultPinPrompt` |
+#### Bug 8 — Bannière APK mise à jour à chaque démarrage
+- **Problème** : Suppression de 24h seulement, pas de bouton "Plus tard"
+- **Fix** : Bouton "Plus tard (7 jours)" + Back ferme avec 7j de suppression
+
+#### Bug 9 — MacGyver disparaissait de Poursuivre (image cassée)
+- **Problème** : `onerror` sur l'image remontait 2 niveaux DOM et cachait toute la carte `.nou-card`
+- **Fix** : `onerror="this.style.display='none'"` — seule l'image est masquée
+
+#### Bug 10 — Filtre adulte trop large (`_isAdultCat`)
+- **Problème** : `/xxx/i` matchait "xxx" partout dans `category_name` (ex: `"SÉRIES | XXX | ACTION"`)
+- **Fix** : `_isAdultCat` ne filtre que si xxx est en début OU en fin de catégorie (pas au milieu)
+
+#### Bug 11 — Videos mobiles ne se lancent plus (mixed content)
+- **Problème** : Streams HTTP sur page HTTPS → bloqués par le navigateur mobile
+- **Fix** : Détection `_isMixedContent` → `_openOverlay` direct (HLS.js)
+
+#### Bug 12 — Login : "E-mail ou mot de passe incorrect" affiché pour tous les cas
+- **Problème** : Message générique même pour "email not confirmed" 
+- **Fix** : Routing des erreurs Supabase avec messages spécifiques
+
+#### Bug 13 — Pills qualité obstruées sur mobile
+- **Problème** : Conteneur trop étroit, ❤️ Favoris coupé à droite
+- **Fix** : `margin: 0 -10px; padding: 0 10px` + taille réduite sur mobile
 
 ---
 
-*Généré le 2026-05-27 — PIPSILY v6.9 / APK v25 / SW pipsily-v197*
+*Document généré le 2026-05-31 — PIPSILY v6.9 — APK v25 — SW pipsily-v206*
