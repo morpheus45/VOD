@@ -1929,24 +1929,29 @@ async function playItem(item){
 //  FILTRES / TRI
 // ─────────────────────────────────────────────────────────────────
 
-// Mots-clés adultes SANS "xxx" (géré séparément pour éviter les faux positifs)
-const _ADULT_RE = /adult|adulte|\+18|18\+|erot|for adult/i;
-
 // Catégorie commençant par "xxx" (toutes casses) → adulte.
 // Exception : "xXx" (film d'action). On ignore les emojis/espaces en tête.
 const _startsXXX = c => {
   if(!c) return false;
-  // Retirer les emojis/espaces/symboles en tête avant de tester
   const clean = c.replace(/^[\s\p{Emoji_Presentation}\p{Extended_Pictographic}°|•\-_]+/u, "").trim();
   if(!clean) return false;
   if(clean.startsWith("xXx")) return false; // film "xXx" — garder
   return /^xxx/i.test(clean);
 };
 
-// Une catégorie est adulte si : mots-clés adultes OU commence par xxx
-// "xxx" en milieu de chaîne (ex: "SERIES | XXX | ACTION") n'est PAS considéré adulte
-// → évite les faux positifs sur des catégories mal nommées par le fournisseur
-const _isAdultCat = c => _ADULT_RE.test(c || "") || _startsXXX(c);
+// Une catégorie est adulte si :
+//   • mots-clés adultes (adult, +18, erot…)
+//   • xxx en DÉBUT de catégorie  → "XXX Films", "🔞 XXX Séries"
+//   • xxx en FIN  de catégorie   → "Films XXX", "Séries XXX"
+// "xxx" uniquement au MILIEU (ex: "SÉRIES | XXX | ACTION") n'est PAS adulte
+// → évite les faux positifs sur des catégories dont xxx est un code fournisseur
+const _isAdultCat = c => {
+  if(!c) return false;
+  if(/adult|adulte|\+18|18\+|erot|for adult/i.test(c)) return true;
+  if(_startsXXX(c)) return true;                    // xxx en début
+  if(/\bxxx\s*$/i.test(c)) return true;             // xxx en fin
+  return false;
+};
 
 // VOSTFR — toujours masqué (titre ou catégorie)
 const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
@@ -3602,10 +3607,9 @@ function _renderPoursuivreRowInner(){
   const prog         = getProg();
   const type         = S.type;
   // PIN parental ne bypass PAS Poursuivre — XXX toujours masqué dans "en cours"
-  // On vérifie UNIQUEMENT category_name : c'est le seul champ fiable (group-title IPTV).
-  // title/name sont des identifiants flux qui peuvent avoir des préfixes provider ("xxx-MacGyver")
-  // sans que le contenu soit adulte → faux positifs supprimés.
-  const _hideXXXItem = item => _startsXXX(item?.category_name);
+  // Utilise _isAdultCat (début OU fin) sur category_name uniquement.
+  // title/name exclus : ils contiennent des préfixes provider non représentatifs.
+  const _hideXXXItem = item => _isAdultCat(item?.category_name);
 
   // ── 1. Items en cours ──────────────────────────────────────────
   let inProgress = [];
