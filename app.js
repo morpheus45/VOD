@@ -1929,15 +1929,24 @@ async function playItem(item){
 //  FILTRES / TRI
 // ─────────────────────────────────────────────────────────────────
 
-const _ADULT_RE = /adult|adulte|\+18|18\+|xxx|erot|for adult/i;
-const _isAdultCat = c => _ADULT_RE.test(c || "");
-// Catégorie commençant par "xxx" (toutes casses) → masquer dans Poursuivre.
-// Exception : "xXx" (film d'action) commence par la chaîne exacte "xXx" → NON filtré.
+// Mots-clés adultes SANS "xxx" (géré séparément pour éviter les faux positifs)
+const _ADULT_RE = /adult|adulte|\+18|18\+|erot|for adult/i;
+
+// Catégorie commençant par "xxx" (toutes casses) → adulte.
+// Exception : "xXx" (film d'action). On ignore les emojis/espaces en tête.
 const _startsXXX = c => {
   if(!c) return false;
-  if(c.startsWith("xXx")) return false; // film "xXx" — garder
-  return /^xxx/i.test(c);              // xxx / XXX / Xxx / … → filtrer
+  // Retirer les emojis/espaces/symboles en tête avant de tester
+  const clean = c.replace(/^[\s\p{Emoji_Presentation}\p{Extended_Pictographic}°|•\-_]+/u, "").trim();
+  if(!clean) return false;
+  if(clean.startsWith("xXx")) return false; // film "xXx" — garder
+  return /^xxx/i.test(clean);
 };
+
+// Une catégorie est adulte si : mots-clés adultes OU commence par xxx
+// "xxx" en milieu de chaîne (ex: "SERIES | XXX | ACTION") n'est PAS considéré adulte
+// → évite les faux positifs sur des catégories mal nommées par le fournisseur
+const _isAdultCat = c => _ADULT_RE.test(c || "") || _startsXXX(c);
 
 // VOSTFR — toujours masqué (titre ou catégorie)
 const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
