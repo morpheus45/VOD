@@ -3682,7 +3682,7 @@ function _renderPoursuivreRowInner(){
     card.innerHTML = `
       <div class="nou-media">
         ${item.stream_icon
-          ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.parentElement.parentElement.style.display='none'">`
+          ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.style.display='none'">`
           : `<div class="nou-placeholder">${isInProg ? "▶" : "❤️"}</div>`}
         <div class="nou-overlay"><span class="nou-play">▶</span></div>
         ${progBar}
