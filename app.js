@@ -3593,8 +3593,10 @@ function _renderPoursuivreRowInner(){
   const prog         = getProg();
   const type         = S.type;
   // PIN parental ne bypass PAS Poursuivre — XXX toujours masqué dans "en cours"
-  // On vérifie category_name ET title/name car certains flux ont le préfixe XXX dans le titre
-  const _hideXXXItem = item => _startsXXX(item?.category_name) || _startsXXX(item?.title) || _startsXXX(item?.name);
+  // On vérifie UNIQUEMENT category_name : c'est le seul champ fiable (group-title IPTV).
+  // title/name sont des identifiants flux qui peuvent avoir des préfixes provider ("xxx-MacGyver")
+  // sans que le contenu soit adulte → faux positifs supprimés.
+  const _hideXXXItem = item => _startsXXX(item?.category_name);
 
   // ── 1. Items en cours ──────────────────────────────────────────
   let inProgress = [];
