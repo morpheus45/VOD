@@ -726,16 +726,15 @@ button,select,input{ font:inherit }
   /* Search pleine largeur sur mobile */
   .controls-grid--four{
     grid-template-columns:1fr 1fr;
-    grid-template-areas:"s s" "c r" "q q";
+    grid-template-areas:"s s" "c r";
     gap:5px;
   }
   #searchInput    { grid-area:s }
   #categorySelect { grid-area:c }
   #sortSelect     { grid-area:r }
-  #qualityPills   { grid-area:q; margin:0 -10px; padding:0 10px }
-  /* Pills plus compactes sur mobile — tiennent toutes dans la largeur */
-  #qualityPills .quality-pill{ padding:6px 10px; font-size:12px; min-height:30px }
-  #regionPills  { grid-area:q; margin:0 -10px; padding:0 10px }
+  /* Pills qualité masquées sur mobile — évite la ligne supplémentaire */
+  #qualityPills   { display:none !important }
+  #regionPills    { grid-area:q; margin:0 -10px; padding:0 10px }
   .grid{ grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); gap:8px }
   .nav-btn{ padding:10px; font-size:12px; border-radius:10px }
   .sp-hero{ grid-template-columns:75px 1fr }
