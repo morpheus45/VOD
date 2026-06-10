@@ -1903,6 +1903,8 @@ function playEpisode(series, ep, season){
 }
 
 async function playItem(item){
+  stopPreview();
+
   // ── Code parental (catégories for adults) ──
   const isAdultCat = /adult|adulte|\+18|xxx|erot|for adult/i.test(item.category_name || "");
   if(isAdultCat && window.PIPSILY_AUTH && S._userId){
@@ -2615,6 +2617,7 @@ function renderGrid(reset = false){
     card.className   = "card";
     card.tabIndex    = 0;
     card.dataset.key  = key;
+    card._pfItem     = item;
     // taste-skill : stagger animation (max 18 pour éviter les délais trop longs)
     card.style.setProperty("--i", Math.min(_staggerIdx++, 18));
 
@@ -2692,6 +2695,7 @@ function makeNrowCard(item){
   card.className   = "nrow-card" + (isLive ? " nrow-card--live" : "");
   card.tabIndex    = 0;
   card.dataset.key = itemKey(item);
+  card._pfItem     = item;
   const poster   = item.stream_icon || (isLive ? _getLogoFallback(item.title) : "");
   const isSeries = item.type === "series";
   const pct      = isLive ? 0 : getWatchPct(item);
@@ -3121,10 +3125,59 @@ function _playNavClick(){
 }
 
 // ─────────────────────────────────────────────────────────────────
+//  APERÇU VIDÉO "IN-TILE" — lecture live dans la vignette focalisée
+// ─────────────────────────────────────────────────────────────────
+
+let _previewTimer = null;
+let _previewKey   = null;
+
+function managePreview(){
+  const card = document.activeElement?.closest?.(".card, .nrow-card");
+  const item = card?._pfItem;
+
+  if(!item || item.type !== "live"){ stopPreview(); return; }
+
+  const key = card.dataset.key;
+  if(_previewKey === key) return;
+  stopPreview();
+  _previewKey = key;
+
+  const target = (item._variants && item._variants.length > 1)
+    ? item._variants[0]?.item
+    : item;
+  const url = target?.url || target?.stream_url || "";
+  if(!url) return;
+
+  _previewTimer = setTimeout(() => {
+    if(typeof window.AndroidBridge?.startLivePreview !== "function") return;
+    const media = card.querySelector(".card-media, .nrow-media") || card;
+    const r = media.getBoundingClientRect();
+    if(r.width <= 0 || r.height <= 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    try{
+      window.AndroidBridge.startLivePreview(
+        url,
+        Math.round(r.left   * dpr), Math.round(r.top    * dpr),
+        Math.round(r.width  * dpr), Math.round(r.height * dpr)
+      );
+    }catch{}
+  }, 850);
+}
+
+function stopPreview(){
+  if(_previewTimer){ clearTimeout(_previewTimer); _previewTimer = null; }
+  _previewKey = null;
+  try{ window.AndroidBridge?.stopLivePreview?.(); }catch{}
+}
+
+// ─────────────────────────────────────────────────────────────────
 //  NAVIGATION CLAVIER / D-PAD TV
 // ─────────────────────────────────────────────────────────────────
 
 function initTV(){
+  // ── Aperçu live dans la vignette focalisée (D-pad + souris) ──
+  document.addEventListener("focusin", managePreview);
+
   // ── Navigation D-pad TV unifiée — un seul handler, 3 modes clairs ──
   document.addEventListener("keydown", e => {
     const k = e.key;

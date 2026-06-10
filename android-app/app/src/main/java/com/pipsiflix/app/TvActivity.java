@@ -10,7 +10,11 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.Surface;
+import android.view.SurfaceTexture;
+import android.view.TextureView;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
@@ -19,13 +23,25 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 import org.json.JSONArray;
 
+import androidx.annotation.OptIn;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.FragmentActivity;
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.util.UnstableApi;
+import androidx.media3.datasource.okhttp.OkHttpDataSource;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.hls.HlsMediaSource;
+import androidx.media3.exoplayer.source.MediaSource;
+
 import java.io.File;
 import java.lang.ref.WeakReference;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.OkHttpClient;
 
 /**
  * PIPSILY — Activité Android TV / Google TV  v5
@@ -36,7 +52,8 @@ import java.lang.ref.WeakReference;
  *  - clearCache() / getApkVersion() / downloadAndInstall() ajoutés
  *  - PIPSILY_NATIVE injecté (+ compat PIPSIFLIX_NATIVE)
  */
-public class TvActivity extends FragmentActivity {
+@OptIn(markerClass = UnstableApi.class)
+public class TvActivity extends FragmentActivity implements TextureView.SurfaceTextureListener {
 
     private static final String TAG         = "PipsilyTV";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
@@ -46,6 +63,14 @@ public class TvActivity extends FragmentActivity {
     static WeakReference<TvActivity> sInstance;
 
     WebView webView;
+
+    // ── Aperçu vidéo "in-tile" (preview live ExoPlayer superposé au WebView) ──
+    private static OkHttpClient previewOkClient;
+    private FrameLayout rootLayout;
+    private TextureView previewTexture;
+    private ExoPlayer   previewPlayer;
+    private Surface     previewSurface;
+    private String      previewPendingUrl = null;
 
     // ── Téléchargement APK ──────────────────────────────────────────────
     private long             apkDownloadId = -1;
@@ -66,7 +91,8 @@ public class TvActivity extends FragmentActivity {
         );
 
         setContentView(R.layout.activity_tv);
-        webView = findViewById(R.id.tvWebView);
+        webView    = findViewById(R.id.tvWebView);
+        rootLayout = findViewById(R.id.rootLayout);
         sInstance = new WeakReference<>(this);
 
         configureWebView();
@@ -267,11 +293,132 @@ public class TvActivity extends FragmentActivity {
     }
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        stopLivePreview();
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         unregisterApkReceiver();
         sInstance = null;
+        if (previewPlayer != null) { previewPlayer.release(); previewPlayer = null; }
+        if (previewSurface != null) { previewSurface.release(); previewSurface = null; }
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  Aperçu vidéo "in-tile" — TextureView ExoPlayer superposé au WebView
+    // ══════════════════════════════════════════════════════════════════════
+
+    private OkHttpDataSource.Factory buildPreviewDsFactory() {
+        if (previewOkClient == null) {
+            previewOkClient = new OkHttpClient.Builder()
+                    .connectTimeout(8, TimeUnit.SECONDS)
+                    .readTimeout(15, TimeUnit.SECONDS)
+                    .followRedirects(true)
+                    .followSslRedirects(true)
+                    .build();
+        }
+        return new OkHttpDataSource.Factory(previewOkClient)
+                .setUserAgent("okhttp/4.11.0")
+                .setDefaultRequestProperties(
+                    java.util.Collections.singletonMap("Accept", "*/*")
+                );
+    }
+
+    private void ensurePreviewPlayer() {
+        if (previewPlayer != null) return;
+        previewPlayer = new ExoPlayer.Builder(this).build();
+        if (previewSurface != null) previewPlayer.setVideoSurface(previewSurface);
+    }
+
+    private void ensurePreviewTexture() {
+        if (previewTexture != null) return;
+        previewTexture = new TextureView(this);
+        previewTexture.setSurfaceTextureListener(this);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(1, 1);
+        lp.gravity = Gravity.NO_GRAVITY;
+        previewTexture.setLayoutParams(lp);
+        previewTexture.setElevation(500f);
+        previewTexture.setVisibility(View.GONE);
+        rootLayout.addView(previewTexture);
+    }
+
+    private void playPreviewUrl(String url) {
+        ensurePreviewPlayer();
+        MediaSource source = new HlsMediaSource.Factory(buildPreviewDsFactory())
+                .createMediaSource(MediaItem.fromUri(url));
+        previewPlayer.stop();
+        previewPlayer.clearMediaItems();
+        previewPlayer.setMediaSource(source);
+        previewPlayer.setPlayWhenReady(true);
+        previewPlayer.prepare();
+    }
+
+    /** Appelé depuis app.js — démarre l'aperçu live dans la vignette focalisée. x,y,w,h en pixels physiques. */
+    public void startLivePreview(String url, int x, int y, int w, int h) {
+        if (url == null || url.isEmpty() || w <= 0 || h <= 0) return;
+        ensurePreviewPlayer();
+        ensurePreviewTexture();
+
+        String finalUrl = url.startsWith("https://") ? url.replaceFirst("^https://", "http://") : url;
+
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) previewTexture.getLayoutParams();
+        lp.width      = w;
+        lp.height     = h;
+        lp.leftMargin = x;
+        lp.topMargin  = y;
+        lp.gravity    = Gravity.NO_GRAVITY;
+        previewTexture.setLayoutParams(lp);
+        previewTexture.setVisibility(View.VISIBLE);
+        previewTexture.bringToFront();
+
+        if (previewSurface != null) {
+            previewPendingUrl = null;
+            playPreviewUrl(finalUrl);
+        } else {
+            previewPendingUrl = finalUrl;
+        }
+    }
+
+    /** Appelé depuis app.js — arrête l'aperçu live et masque la surface. */
+    public void stopLivePreview() {
+        previewPendingUrl = null;
+        if (previewPlayer != null) {
+            previewPlayer.stop();
+            previewPlayer.clearMediaItems();
+        }
+        if (previewTexture != null) previewTexture.setVisibility(View.GONE);
+    }
+
+    // ── TextureView.SurfaceTextureListener ──────────────────────────────────
+    @Override
+    public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+        previewSurface = new Surface(surface);
+        if (previewPlayer != null) previewPlayer.setVideoSurface(previewSurface);
+        if (previewPendingUrl != null) {
+            String url = previewPendingUrl;
+            previewPendingUrl = null;
+            playPreviewUrl(url);
+        }
+    }
+
+    @Override
+    public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {}
+
+    @Override
+    public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+        if (previewPlayer != null) previewPlayer.clearVideoSurface();
+        if (previewSurface != null) {
+            previewSurface.release();
+            previewSurface = null;
+        }
+        return true;
+    }
+
+    @Override
+    public void onSurfaceTextureUpdated(SurfaceTexture surface) {}
 
     /**
      * Appelé par PlayerActivity.onDestroy() pour remonter la progression au WebView TV.
@@ -401,6 +548,18 @@ public class TvActivity extends FragmentActivity {
 
         @JavascriptInterface
         public String getDeviceType() { return "android_tv"; }
+
+        /** Démarre l'aperçu vidéo dans la vignette focalisée (x,y,w,h en pixels physiques). */
+        @JavascriptInterface
+        public void startLivePreview(String url, int x, int y, int w, int h) {
+            runOnUiThread(() -> TvActivity.this.startLivePreview(url, x, y, w, h));
+        }
+
+        /** Arrête l'aperçu vidéo dans la vignette. */
+        @JavascriptInterface
+        public void stopLivePreview() {
+            runOnUiThread(TvActivity.this::stopLivePreview);
+        }
 
         /**
          * Requête HTTP depuis Java (pas de CORS) — pour récupérer le synopsis Xtream.
