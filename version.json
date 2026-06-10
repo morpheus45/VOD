@@ -1,7 +1,7 @@
 {
-  "apk_version": 25,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v25/PIPSILY.apk",
-  "changes": "Pill Adult avec PIN parental · filtre adulte dans Poursuivre · PIN parental dans Mon compte · install.html 7 plateformes · admin Solo/Multi/Illimite",
+  "apk_version": 26,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v26/PIPSILY.apk",
+  "changes": "Aperçu vidéo en direct dans les vignettes TV (D-pad) — preview live in-tile",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"
