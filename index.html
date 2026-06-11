@@ -52,7 +52,7 @@
   <link rel="apple-touch-startup-image"
         media="(device-width:1024px) and (device-height:1366px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)"
         href="./icons/splash/splash-2048x2732.png" />
-  <link rel="stylesheet" href="styles.css?v=104" />
+  <link rel="stylesheet" href="styles.css?v=106" />
   <script>
     /* Détection TV précoce — avant le 1er rendu, pour éviter tout flash */
     if(/AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||
@@ -64,6 +64,7 @@
 <body>
   <!-- Fond ambiant : poster de la vignette focalisée, flouté plein écran -->
   <div id="ambientBg" aria-hidden="true"></div>
+  <div id="scrollProg" aria-hidden="true"></div>
   <div class="app-shell">
 
     <header class="topbar">
@@ -269,6 +270,32 @@
           bg.classList.add("ambient-on");
         }, 150);
       });
+    })();
+  </script>
+  <script>
+    /* Néo Cinéma : topbar verre au scroll, progression de page, dock nav mobile */
+    (function(){
+      var tb = document.querySelector(".topbar");
+      var sp = document.getElementById("scrollProg");
+      window.addEventListener("scroll", function(){
+        if(tb) tb.classList.toggle("nc-scrolled", window.scrollY > 24);
+        if(sp){
+          var max = document.documentElement.scrollHeight - window.innerHeight;
+          sp.style.width = (max > 0 ? (window.scrollY / max * 100) : 0) + "%";
+        }
+      }, { passive:true });
+      /* Dock mobile : sortir la nav-row de la topbar (son backdrop-filter
+         piège le position:fixed — containing block) */
+      var mq = window.matchMedia("(max-width:740px)");
+      function placeNav(){
+        var nr = document.querySelector(".nav-row");
+        if(!nr || !tb) return;
+        var mobile = mq.matches && !document.documentElement.classList.contains("is-tv");
+        if(mobile){ if(nr.parentElement !== document.body) document.body.appendChild(nr); }
+        else      { if(nr.parentElement !== tb) tb.appendChild(nr); }
+      }
+      placeNav();
+      if(mq.addEventListener) mq.addEventListener("change", placeNav); else mq.addListener(placeNav);
     })();
   </script>
 </body>
