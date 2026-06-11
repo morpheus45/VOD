@@ -3132,6 +3132,36 @@ function _playNavClick(){
 
 let _previewTimer = null;
 let _previewKey   = null;
+let _previewUrls  = [];   // file de candidats : qualité la plus basse → la plus haute
+let _previewIdx   = 0;
+let _previewCard  = null;
+
+function _previewSendRect(){
+  if(typeof window.AndroidBridge?.startLivePreview !== "function") return;
+  const card = _previewCard;
+  const url  = _previewUrls[_previewIdx];
+  if(!card || !card.isConnected || !url) return;
+  const media = card.querySelector(".card-media, .nrow-media") || card;
+  const r = media.getBoundingClientRect();
+  if(r.width <= 0 || r.height <= 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  try{
+    window.AndroidBridge.startLivePreview(
+      url,
+      Math.round(r.left   * dpr), Math.round(r.top    * dpr),
+      Math.round(r.width  * dpr), Math.round(r.height * dpr)
+    );
+  }catch{}
+}
+
+// Appelé par le natif (TvActivity) quand le flux d'aperçu échoue :
+// on tente la qualité suivante du même groupe (les flux SD IPTV sont souvent morts)
+window.onLivePreviewError = function(){
+  if(!_previewKey) return;
+  _previewIdx++;
+  if(_previewIdx >= _previewUrls.length) return;  // plus de candidat → poster
+  _previewSendRect();
+};
 
 function managePreview(){
   const card = document.activeElement?.closest?.(".card, .nrow-card");
@@ -3142,48 +3172,35 @@ function managePreview(){
   const key = card.dataset.key;
   if(_previewKey === key) return;
   stopPreview();
-  _previewKey = key;
+  _previewKey  = key;
+  _previewCard = card;
 
-  // Aperçu : prendre la qualité la PLUS BASSE du groupe (SD de préférence) —
-  // même chaîne, flux léger → pas de saccades dans la petite vignette
-  let target = item;
+  // Candidats : toutes les qualités du groupe, de la plus BASSE (légère,
+  // anti-saccades) à la plus haute — bascule auto si un flux est mort
   if(item._variants && item._variants.length){
-    let low = null, lowRank = -1;
-    for(const v of item._variants){
-      const r = _QUAL_ORDER.indexOf(v.quality);   // index élevé = qualité basse (SD=fin)
-      if(r > lowRank){ lowRank = r; low = v; }
-    }
-    target = (low || item._variants[item._variants.length - 1]).item;
+    // _variants est trié meilleure qualité d'abord → on inverse
+    _previewUrls = [...item._variants].reverse()
+      .map(v => v.item?.url || v.item?.stream_url || "")
+      .filter(Boolean);
+  } else {
+    _previewUrls = [item.url || item.stream_url || ""].filter(Boolean);
   }
-  const url = target?.url || target?.stream_url || "";
-  if(!url) return;
-
-  const sendRect = () => {
-    if(typeof window.AndroidBridge?.startLivePreview !== "function") return;
-    if(!card.isConnected) return;
-    const media = card.querySelector(".card-media, .nrow-media") || card;
-    const r = media.getBoundingClientRect();
-    if(r.width <= 0 || r.height <= 0) return;
-    const dpr = window.devicePixelRatio || 1;
-    try{
-      window.AndroidBridge.startLivePreview(
-        url,
-        Math.round(r.left   * dpr), Math.round(r.top    * dpr),
-        Math.round(r.width  * dpr), Math.round(r.height * dpr)
-      );
-    }catch{}
-  };
+  _previewIdx = 0;
+  if(!_previewUrls.length) return;
 
   _previewTimer = setTimeout(() => {
-    sendRect();
+    _previewSendRect();
     // Re-caler une fois le scroll fluide terminé (le natif repositionne sans redémarrer le flux)
-    setTimeout(() => { if(_previewKey === key) sendRect(); }, 550);
+    setTimeout(() => { if(_previewKey === key) _previewSendRect(); }, 550);
   }, 850);
 }
 
 function stopPreview(){
   if(_previewTimer){ clearTimeout(_previewTimer); _previewTimer = null; }
-  _previewKey = null;
+  _previewKey  = null;
+  _previewCard = null;
+  _previewUrls = [];
+  _previewIdx  = 0;
   try{ window.AndroidBridge?.stopLivePreview?.(); }catch{}
 }
 

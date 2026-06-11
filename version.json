@@ -1,7 +1,7 @@
 {
-  "apk_version": 31,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v31/PIPSILY.apk",
-  "changes": "Correctif aperçu vignettes : image visible à nouveau (retour TextureView) en gardant flux SD + buffer anti-saccades",
+  "apk_version": 32,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v32/PIPSILY.apk",
+  "changes": "Aperçu vignettes fiabilisé : bascule automatique sur la qualité suivante si un flux est mort (plus d'aperçu muet/vide)",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"

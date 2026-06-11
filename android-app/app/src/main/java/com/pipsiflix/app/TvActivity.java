@@ -393,9 +393,15 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
             }
             @Override
             public void onPlayerError(PlaybackException error) {
-                // Flux KO : masquer l'aperçu, la vignette garde son poster
+                // Flux KO : masquer l'aperçu et prévenir le JS, qui essaiera
+                // la qualité suivante du groupe (les flux SD IPTV sont souvent morts)
                 Log.w(TAG, "Preview error: " + error.errorCode);
                 stopLivePreview();
+                if (webView != null) {
+                    webView.evaluateJavascript(
+                        "if(typeof window.onLivePreviewError==='function')window.onLivePreviewError();",
+                        null);
+                }
             }
         });
         if (previewSurface != null) previewPlayer.setVideoSurface(previewSurface);
