@@ -53,7 +53,7 @@
         media="(device-width:1024px) and (device-height:1366px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)"
         href="./icons/splash/splash-2048x2732.png" />
   <link rel="stylesheet" href="styles.css?v=104" />
-  <link rel="stylesheet" href="styles-test.css?v=2" />
+  <link rel="stylesheet" href="styles-test.css?v=3" />
   <script>
     /* Détection TV précoce — avant le 1er rendu, pour éviter tout flash */
     if(/AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||
@@ -64,6 +64,7 @@
 </head>
 <body>
   <span id="testBadge">PRE-VERSION TEST 2</span>
+  <div id="scrollProg" aria-hidden="true"></div>
   <!-- Fond ambiant : poster de la vignette focalisée, flouté plein écran -->
   <div id="ambientBg" aria-hidden="true"></div>
   <div class="app-shell">
@@ -274,11 +275,16 @@
     })();
   </script>
   <script>
-    /* TEST 2 : topbar verre depoli des qu'on scrolle */
+    /* TEST 2 : topbar verre au scroll + barre de progression de page */
     (function(){
       var tb = document.querySelector(".topbar");
+      var sp = document.getElementById("scrollProg");
       window.addEventListener("scroll", function(){
         if(tb) tb.classList.toggle("nc-scrolled", window.scrollY > 24);
+        if(sp){
+          var max = document.documentElement.scrollHeight - window.innerHeight;
+          sp.style.width = (max > 0 ? (window.scrollY / max * 100) : 0) + "%";
+        }
       }, { passive:true });
     })();
   </script>
