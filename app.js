@@ -2424,6 +2424,8 @@ function groupLiveItems(items){
 // ── Sélecteur de qualité Live (overlay) ──
 function openLivePicker(group){
   if(document.getElementById("livePicker")) return;
+  // L'overlay natif du preview flotterait AU-DESSUS du picker (TextureView hors DOM) → stop
+  if(typeof stopPreview === "function") stopPreview();
   // Pousse un état dans l'historique → Back TV/Android ferme le picker, pas l'app
   history.pushState({pip:"picker"}, "");
   const ov = document.createElement("div");
@@ -3148,8 +3150,9 @@ function managePreview(){
   const url = target?.url || target?.stream_url || "";
   if(!url) return;
 
-  _previewTimer = setTimeout(() => {
+  const sendRect = () => {
     if(typeof window.AndroidBridge?.startLivePreview !== "function") return;
+    if(!card.isConnected) return;
     const media = card.querySelector(".card-media, .nrow-media") || card;
     const r = media.getBoundingClientRect();
     if(r.width <= 0 || r.height <= 0) return;
@@ -3161,6 +3164,12 @@ function managePreview(){
         Math.round(r.width  * dpr), Math.round(r.height * dpr)
       );
     }catch{}
+  };
+
+  _previewTimer = setTimeout(() => {
+    sendRect();
+    // Re-caler une fois le scroll fluide terminé (le natif repositionne sans redémarrer le flux)
+    setTimeout(() => { if(_previewKey === key) sendRect(); }, 550);
   }, 850);
 }
 
@@ -3177,6 +3186,13 @@ function stopPreview(){
 function initTV(){
   // ── Aperçu live dans la vignette focalisée (D-pad + souris) ──
   document.addEventListener("focusin", managePreview);
+  // Focus perdu (re-render, élément retiré du DOM) → body redevient actif sans focusin
+  document.addEventListener("focusout", () => {
+    setTimeout(() => {
+      const ae = document.activeElement;
+      if(!ae || ae === document.body) stopPreview();
+    }, 0);
+  });
 
   // ── Navigation D-pad TV unifiée — un seul handler, 3 modes clairs ──
   document.addEventListener("keydown", e => {
@@ -3617,8 +3633,14 @@ function initTV(){
     let idx = cards.indexOf(active);
     if(idx < 0){ cards[0]?.focus(); return; }
 
-    const g    = $("grid");
-    const cols = g ? Math.max(1, Math.round(g.offsetWidth / 200)) : 1;
+    // Nombre réel de colonnes : compter les cartes sur la 1ère ligne (offsetTop identique).
+    // L'ancien forfait offsetWidth/200 était faux en mode TV (colonnes 110px/145px) →
+    // les flèches ↑↓ sautaient en diagonale.
+    let cols = 1;
+    if(cards.length > 1){
+      const top0 = cards[0].offsetTop;
+      while(cols < cards.length && Math.abs(cards[cols].offsetTop - top0) < 4) cols++;
+    }
 
     let next = idx;
     if(k === "ArrowRight")     next = Math.min(idx + 1, cards.length - 1);
@@ -3831,15 +3853,16 @@ function renderNouveautes(){
     const idx   = cards.indexOf(document.activeElement);
     if(idx < 0) return;
     if(e.key === "ArrowRight"){
-      e.preventDefault();
+      // stopPropagation : sinon le handler D-pad global (initTV) rejoue la touche → saut de 2 cartes
+      e.preventDefault(); e.stopPropagation();
       const next = cards[idx + 1];
       if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
     } else if(e.key === "ArrowLeft"){
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       const prev = cards[idx - 1];
       if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
     }
-    // ArrowUp / ArrowDown : navigation spatiale naturelle du navigateur
+    // ArrowUp / ArrowDown : gérés par le handler D-pad global (saut entre rangées)
   });
 
   // Hero : mettre en avant le 1er item avec une belle image

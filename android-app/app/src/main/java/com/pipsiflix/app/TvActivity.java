@@ -31,6 +31,8 @@ import androidx.annotation.OptIn;
 import androidx.core.content.FileProvider;
 import androidx.fragment.app.FragmentActivity;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.okhttp.OkHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
@@ -57,7 +59,8 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
 
     private static final String TAG         = "PipsilyTV";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
-    private static final String APK_VERSION = "19";
+    // Version réelle de l'APK (suivie sur versionCode du build.gradle)
+    private static final String APK_VERSION = String.valueOf(BuildConfig.VERSION_CODE);
 
     // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
     static WeakReference<TvActivity> sInstance;
@@ -71,6 +74,7 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     private ExoPlayer   previewPlayer;
     private Surface     previewSurface;
     private String      previewPendingUrl = null;
+    private String      previewCurrentUrl = null;
 
     // ── Téléchargement APK ──────────────────────────────────────────────
     private long             apkDownloadId = -1;
@@ -330,6 +334,19 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     private void ensurePreviewPlayer() {
         if (previewPlayer != null) return;
         previewPlayer = new ExoPlayer.Builder(this).build();
+        previewPlayer.addListener(new Player.Listener() {
+            @Override
+            public void onRenderedFirstFrame() {
+                // La vidéo est prête : révéler la surface (le poster reste visible jusque-là)
+                if (previewTexture != null) previewTexture.setAlpha(1f);
+            }
+            @Override
+            public void onPlayerError(PlaybackException error) {
+                // Flux KO : masquer l'aperçu, la vignette garde son poster
+                Log.w(TAG, "Preview error: " + error.errorCode);
+                stopLivePreview();
+            }
+        });
         if (previewSurface != null) previewPlayer.setVideoSurface(previewSurface);
     }
 
@@ -341,6 +358,8 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         lp.gravity = Gravity.NO_GRAVITY;
         previewTexture.setLayoutParams(lp);
         previewTexture.setElevation(500f);
+        // Invisible (alpha 0) tant que la 1ère frame n'est pas rendue — évite la vignette noire
+        previewTexture.setAlpha(0f);
         previewTexture.setVisibility(View.GONE);
         rootLayout.addView(previewTexture);
     }
@@ -374,6 +393,11 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         previewTexture.setVisibility(View.VISIBLE);
         previewTexture.bringToFront();
 
+        // Même URL déjà en cours → simple repositionnement, ne pas redémarrer le flux
+        if (finalUrl.equals(previewCurrentUrl)) return;
+        previewCurrentUrl = finalUrl;
+        previewTexture.setAlpha(0f); // masqué jusqu'à la 1ère frame du nouveau flux
+
         if (previewSurface != null) {
             previewPendingUrl = null;
             playPreviewUrl(finalUrl);
@@ -385,11 +409,15 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     /** Appelé depuis app.js — arrête l'aperçu live et masque la surface. */
     public void stopLivePreview() {
         previewPendingUrl = null;
+        previewCurrentUrl = null;
         if (previewPlayer != null) {
             previewPlayer.stop();
             previewPlayer.clearMediaItems();
         }
-        if (previewTexture != null) previewTexture.setVisibility(View.GONE);
+        if (previewTexture != null) {
+            previewTexture.setAlpha(0f);
+            previewTexture.setVisibility(View.GONE);
+        }
     }
 
     // ── TextureView.SurfaceTextureListener ──────────────────────────────────
