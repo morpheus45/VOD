@@ -1,0 +1,226 @@
+/* ═══════════════════════════════════════════════════════════════════
+   PIPSILY — PRÉ-VERSION TEST 2 « Néo Cinéma »
+   Modernisation maximale. Chargé uniquement par index-test.html —
+   la prod n'est pas affectée. Si validé : fusionner dans styles.css.
+   Tous les effets coûteux (blur, hover lift) sont désactivés sur TV.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root{
+  --nc-a1:#7B5FE8; --nc-a2:#38A8E8;
+  --nc-grad:linear-gradient(135deg,#7B5FE8,#38A8E8);
+  --nc-glass:rgba(10,16,30,.58);
+  --nc-line:rgba(123,95,232,.22);
+  --nc-ring:0 0 0 3px #7B5FE8, 0 0 30px rgba(123,95,232,.55);
+}
+
+/* ── 1. Typo : Outfit partout (déjà chargée par index.html) ── */
+html, body, button, select, input, textarea{
+  font-family:'Outfit','Segoe UI',system-ui,sans-serif !important;
+}
+
+/* ── 2. Fond plus profond + halos colorés ── */
+html, body{
+  background:
+    radial-gradient(ellipse at 18% -8%, rgba(123,95,232,.20), transparent 50%),
+    radial-gradient(ellipse at 82% 0%,  rgba(56,168,232,.12), transparent 45%),
+    #04060d !important;
+}
+::selection{ background:rgba(123,95,232,.4) }
+::-webkit-scrollbar{ width:8px; height:8px }
+::-webkit-scrollbar-track{ background:transparent }
+::-webkit-scrollbar-thumb{ background:rgba(123,95,232,.35); border-radius:99px }
+::-webkit-scrollbar-thumb:hover{ background:rgba(123,95,232,.6) }
+
+/* ── 3. Topbar : transparente en haut, verre dépoli au scroll ── */
+.topbar{ background:transparent !important; border-bottom:none !important }
+html:not(.is-tv) .topbar.nc-scrolled{
+  background:rgba(4,6,13,.72) !important;
+  backdrop-filter:blur(18px) saturate(1.4);
+  -webkit-backdrop-filter:blur(18px) saturate(1.4);
+  box-shadow:0 6px 30px rgba(0,0,0,.5);
+}
+.nav-btn{
+  border-radius:999px !important;
+  border:1px solid var(--nc-line) !important;
+  background:var(--nc-glass) !important;
+  transition:transform .15s ease, box-shadow .2s ease, background .2s ease;
+}
+html:not(.is-tv) .nav-btn:hover{ transform:translateY(-1px) }
+.nav-btn.active, .nav-btn:focus-visible{
+  background:var(--nc-grad) !important; color:#fff !important;
+  border-color:transparent !important;
+  box-shadow:0 6px 24px rgba(123,95,232,.45);
+  outline:none !important;
+}
+
+/* ── 4. Contrôles (recherche, sélecteurs, pills) ── */
+.sticky-controls{ background:transparent !important }
+#categorySelect, #searchInput, #sortSelect{
+  background:var(--nc-glass) !important;
+  border:1px solid var(--nc-line) !important;
+  border-radius:12px !important;
+  transition:border-color .2s, box-shadow .2s;
+}
+#searchInput:focus, #categorySelect:focus, #sortSelect:focus{
+  border-color:var(--nc-a1) !important;
+  box-shadow:0 0 0 3px rgba(123,95,232,.25) !important;
+  outline:none !important;
+}
+.quality-pill, .cat-pill{
+  border-radius:999px !important;
+  border:1px solid rgba(123,95,232,.18) !important;
+  background:rgba(10,16,30,.5) !important;
+  transition:transform .12s, background .2s;
+}
+.quality-pill:active, .cat-pill:active{ transform:scale(.95) }
+.quality-pill--active, .cat-pill--active,
+.quality-pill:focus-visible, .cat-pill:focus-visible{
+  background:var(--nc-grad) !important; color:#fff !important;
+  border-color:transparent !important;
+  box-shadow:0 4px 16px rgba(123,95,232,.4);
+  outline:none !important;
+}
+
+/* ── 5. Hero cinéma : liseré, vignettage, titre dégradé ── */
+.hero{
+  border-radius:22px !important;
+  border:1px solid rgba(123,95,232,.25) !important;
+  box-shadow:inset 0 -90px 90px -40px rgba(4,6,13,.95), 0 16px 50px rgba(0,0,0,.5);
+  overflow:hidden; position:relative;
+}
+.hero::after{
+  content:""; position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(120deg,rgba(123,95,232,.18),transparent 35%,transparent 70%,rgba(56,168,232,.14));
+}
+#heroTitle{
+  background:linear-gradient(90deg,#ffffff,#cfd9ff);
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent;
+  letter-spacing:-.5px;
+}
+.hero-stats span{
+  background:var(--nc-glass) !important;
+  border:1px solid rgba(123,95,232,.25) !important;
+  border-radius:999px !important;
+}
+
+/* ── 6. Titres de rangées : barre dégradée lumineuse ── */
+.nrow-hdr{ position:relative; padding-left:14px }
+.nrow-hdr::before{
+  content:""; position:absolute; left:0; top:50%; transform:translateY(-50%);
+  width:4px; height:72%; border-radius:99px; background:var(--nc-grad);
+  box-shadow:0 0 12px rgba(123,95,232,.6);
+}
+.nrow-title::before{ display:none !important }
+
+/* ── 7. Vignettes : relief, reflet, badges verre ── */
+.card-media, .nrow-media, .nou-media{
+  border-radius:14px !important;
+  box-shadow:0 6px 22px rgba(0,0,0,.45);
+}
+.nrow-media::after, .nou-media::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.07),transparent 22%);
+}
+.nrow-media, .nou-media{ position:relative }
+.card-badge, .card-qual, .nrow-qual, .nou-qual{
+  background:rgba(8,12,24,.6) !important;
+  border:1px solid rgba(255,255,255,.14) !important;
+  border-radius:8px !important;
+  font-weight:700 !important;
+}
+/* Badge LIVE : point rouge pulsant */
+.card-badge--live{
+  background:rgba(229,9,20,.25) !important;
+  border-color:rgba(229,9,20,.5) !important;
+}
+.card-badge--live::before{
+  content:""; display:inline-block; width:6px; height:6px; border-radius:50%;
+  background:#ff3b30; margin-right:5px; vertical-align:1px;
+  animation:ncPulse 1.6s ease-in-out infinite;
+}
+@keyframes ncPulse{
+  0%,100%{ opacity:1;  box-shadow:0 0 0 0 rgba(255,59,48,.5) }
+  50%    { opacity:.5; box-shadow:0 0 0 4px rgba(255,59,48,0) }
+}
+/* Barre de progression dégradée */
+.card-prog-bar{ height:4px !important; border-radius:99px; overflow:hidden;
+                background:rgba(255,255,255,.12) !important }
+.card-prog-fill{ background:var(--nc-grad) !important;
+                 box-shadow:0 0 8px rgba(123,95,232,.7) }
+/* Placeholders shimmer */
+.card-placeholder, .nrow-placeholder{
+  background:linear-gradient(110deg,#0a1020 30%,#141d33 45%,#0a1020 60%);
+  background-size:220% 100%;
+  animation:ncShimmer 1.8s linear infinite;
+}
+@keyframes ncShimmer{ to{ background-position:-120% 0 } }
+/* Apparition en cascade (backwards : ne pas écraser le transform du focus) */
+@keyframes ncIn{ from{ opacity:0; transform:translateY(10px) } to{ opacity:1 } }
+.card{ animation:ncIn .4s ease backwards; animation-delay:calc(var(--i,0)*30ms) }
+
+/* ── 8. Hover (souris) + Focus (D-pad) ── */
+.card, .nrow-card, .nou-card{ transition:transform .18s ease }
+html:not(.is-tv) .card:hover,
+html:not(.is-tv) .nrow-card:hover,
+html:not(.is-tv) .nou-card:hover{ transform:translateY(-4px) scale(1.03) }
+.card.is-tv-focused,  .card:focus-visible,
+.nrow-card.is-tv-focused, .nrow-card:focus-visible,
+.nou-card.is-tv-focused,  .nou-card:focus-visible{
+  transform:scale(1.08); z-index:6; outline:none !important;
+}
+.card.is-tv-focused  .card-media,  .card:focus-visible  .card-media,
+.nrow-card.is-tv-focused .nrow-media, .nrow-card:focus-visible .nrow-media,
+.nou-card.is-tv-focused  .nou-media,  .nou-card:focus-visible  .nou-media{
+  box-shadow:var(--nc-ring), 0 18px 50px rgba(0,0,0,.65);
+}
+.card.is-tv-focused .card-title,
+.nrow-card.is-tv-focused .nrow-name{ color:#fff }
+
+/* ── 9. Overlay lecture ── */
+.nrow-overlay{ background:linear-gradient(180deg,transparent 40%,rgba(4,6,13,.75)) !important }
+.nrow-play{
+  background:var(--nc-grad) !important;
+  border-radius:50% !important;
+  box-shadow:0 8px 24px rgba(123,95,232,.5);
+}
+
+/* ── 10. Panneaux série/VOD + sélecteur qualité en verre ── */
+.series-panel{
+  background:rgba(8,12,24,.93) !important;
+  border-left:1px solid rgba(123,95,232,.25) !important;
+  box-shadow:-30px 0 80px rgba(0,0,0,.6) !important;
+}
+html:not(.is-tv) .series-panel{ backdrop-filter:blur(22px) saturate(1.3) }
+.live-picker__box{
+  background:rgba(8,12,24,.93) !important;
+  border:1px solid rgba(123,95,232,.3) !important;
+  border-radius:20px !important;
+  box-shadow:0 30px 90px rgba(0,0,0,.7);
+}
+html:not(.is-tv) .live-picker__box{ backdrop-filter:blur(20px) }
+.live-picker__btn{ border-radius:14px !important; transition:transform .15s, box-shadow .2s }
+.live-picker__btn--focus{
+  background:var(--nc-grad) !important;
+  box-shadow:0 8px 26px rgba(123,95,232,.45);
+  transform:scale(1.04);
+}
+
+/* ── 11. Tuile "Voir tout" ── */
+.nrow-all-media{
+  background:linear-gradient(135deg,rgba(123,95,232,.16),rgba(56,168,232,.12)) !important;
+  border:1.5px dashed rgba(123,95,232,.45) !important;
+  border-radius:14px !important;
+}
+
+/* ── 12. Fond ambiant : un peu plus présent qu'en prod ── */
+#ambientBg.ambient-on{ opacity:.6 }
+
+/* ── 13. Badge pré-version (repère, retiré en prod) ── */
+#testBadge{
+  position:fixed; right:12px; bottom:12px; z-index:99998;
+  background:var(--nc-grad);
+  color:#fff; font:800 11px/1 'Outfit',sans-serif;
+  padding:6px 12px; border-radius:999px; letter-spacing:.5px;
+  opacity:.9; pointer-events:none;
+}
