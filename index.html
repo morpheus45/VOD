@@ -52,7 +52,7 @@
   <link rel="apple-touch-startup-image"
         media="(device-width:1024px) and (device-height:1366px) and (-webkit-device-pixel-ratio:2) and (orientation:portrait)"
         href="./icons/splash/splash-2048x2732.png" />
-  <link rel="stylesheet" href="styles.css?v=103" />
+  <link rel="stylesheet" href="styles.css?v=104" />
   <script>
     /* Détection TV précoce — avant le 1er rendu, pour éviter tout flash */
     if(/AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent) ||
@@ -62,6 +62,8 @@
   </script>
 </head>
 <body>
+  <!-- Fond ambiant : poster de la vignette focalisée, flouté plein écran -->
+  <div id="ambientBg" aria-hidden="true"></div>
   <div class="app-shell">
 
     <header class="topbar">
@@ -248,6 +250,26 @@
         });
       });
     }
+  </script>
+  <script>
+    /* Ambient Glass : le poster de la vignette focalisée devient le fond */
+    (function(){
+      var bg = document.getElementById("ambientBg");
+      var last = "", t = null;
+      document.addEventListener("focusin", function(){
+        clearTimeout(t);
+        t = setTimeout(function(){
+          var ae = document.activeElement;
+          var card = ae && ae.closest ? ae.closest(".card,.nrow-card,.nou-card") : null;
+          var img = card ? card.querySelector("img") : null;
+          var src = img ? (img.currentSrc || img.src || "") : "";
+          if(!src || src === last) return;
+          last = src;
+          bg.style.backgroundImage = 'url("' + src + '")';
+          bg.classList.add("ambient-on");
+        }, 150);
+      });
+    })();
   </script>
 </body>
 </html>
