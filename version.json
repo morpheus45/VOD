@@ -1,7 +1,7 @@
 {
-  "apk_version": 28,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v28/PIPSILY.apk",
-  "changes": "Mise à jour fiabilisée (permission installation TV, vérification téléchargement) + correctifs aperçu live in-tile et navigation D-pad",
+  "apk_version": 29,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v29/PIPSILY.apk",
+  "changes": "Aperçu vignettes fluide — flux SD le plus léger pour l'aperçu live (fin des saccades)",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"

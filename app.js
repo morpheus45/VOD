@@ -3144,9 +3144,17 @@ function managePreview(){
   stopPreview();
   _previewKey = key;
 
-  const target = (item._variants && item._variants.length > 1)
-    ? item._variants[0]?.item
-    : item;
+  // Aperçu : prendre la qualité la PLUS BASSE du groupe (SD de préférence) —
+  // même chaîne, flux léger → pas de saccades dans la petite vignette
+  let target = item;
+  if(item._variants && item._variants.length){
+    let low = null, lowRank = -1;
+    for(const v of item._variants){
+      const r = _QUAL_ORDER.indexOf(v.quality);   // index élevé = qualité basse (SD=fin)
+      if(r > lowRank){ lowRank = r; low = v; }
+    }
+    target = (low || item._variants[item._variants.length - 1]).item;
+  }
   const url = target?.url || target?.stream_url || "";
   if(!url) return;
 

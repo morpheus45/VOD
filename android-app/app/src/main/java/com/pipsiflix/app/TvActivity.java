@@ -367,7 +367,12 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
 
     private void ensurePreviewPlayer() {
         if (previewPlayer != null) return;
-        previewPlayer = new ExoPlayer.Builder(this).build();
+        // Plafonner la qualité à SD : la vignette est petite, un flux léger
+        // suffit et évite les saccades (décodage FHD inutile sur TV modeste)
+        androidx.media3.exoplayer.trackselection.DefaultTrackSelector ts =
+            new androidx.media3.exoplayer.trackselection.DefaultTrackSelector(this);
+        ts.setParameters(ts.buildUponParameters().setMaxVideoSizeSd());
+        previewPlayer = new ExoPlayer.Builder(this).setTrackSelector(ts).build();
         previewPlayer.addListener(new Player.Listener() {
             @Override
             public void onRenderedFirstFrame() {
