@@ -4409,10 +4409,13 @@ async function checkApkUpdate(){
     // Déjà à jour
     if(remoteVer <= localVer) return;
 
-    // Suppression : uniquement si l'utilisateur a cliqué "Plus tard"
-    // (la bannière réapparaît à chaque lancement tant que l'APK n'est pas installé)
-    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv4") || "0", 10);
-    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su4") || "0", 10);
+    // Migration : les anciennes clés sv4/su4 étaient aussi posées au clic
+    // "Mettre à jour" (7 jours) → une installation ÉCHOUÉE bloquait la bannière.
+    localStorage.removeItem("pf_apk_sv4");
+    localStorage.removeItem("pf_apk_su4");
+    // Suppression : "Plus tard" = 7 jours ; "Mettre à jour" = 10 min seulement
+    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv5") || "0", 10);
+    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su5") || "0", 10);
     if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
 
     showApkUpdateBanner(vinfo, remoteVer);
@@ -4433,8 +4436,8 @@ function showApkUpdateBanner(vinfo, remoteVer){
   const _dismissApkBanner = () => {
     banner.remove();
     // Supprimer 7 jours à chaque "Plus tard" ou Back
-    localStorage.setItem("pf_apk_sv4", String(remoteVer));
-    localStorage.setItem("pf_apk_su4", String(Date.now() + 7 * 86400000));
+    localStorage.setItem("pf_apk_sv5", String(remoteVer));
+    localStorage.setItem("pf_apk_su5", String(Date.now() + 7 * 86400000));
   };
 
   banner.innerHTML =
@@ -4484,9 +4487,10 @@ function showApkUpdateBanner(vinfo, remoteVer){
     const btn = $("apkDownloadBtn");
     if(btn){ btn.textContent = "📥 Téléchargement en cours…"; btn.disabled = true; }
 
-    // Suppression 7 jours après lancement du téléchargement
-    localStorage.setItem("pf_apk_sv4", String(remoteVer));
-    localStorage.setItem("pf_apk_su4", String(Date.now() + 7 * 86400000));
+    // Suppression COURTE (10 min) le temps d'installer — si l'installation
+    // échoue, la bannière est re-proposée au prochain lancement
+    localStorage.setItem("pf_apk_sv5", String(remoteVer));
+    localStorage.setItem("pf_apk_su5", String(Date.now() + 10 * 60000));
 
     if(typeof window.AndroidBridge?.downloadAndInstall === "function"){
       window.AndroidBridge.downloadAndInstall(url);

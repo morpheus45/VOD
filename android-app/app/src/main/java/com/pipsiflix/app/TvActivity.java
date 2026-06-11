@@ -251,7 +251,26 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
                         long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
                         if (id != apkDownloadId) return;
                         unregisterApkReceiver();
-                        installDownloadedApk(dest);
+                        // Vérifier que le téléchargement a réellement réussi
+                        boolean ok = false;
+                        try {
+                            android.database.Cursor c = dm.query(
+                                new DownloadManager.Query().setFilterById(id));
+                            if (c != null) {
+                                if (c.moveToFirst()) {
+                                    int st = c.getInt(c.getColumnIndexOrThrow(
+                                        DownloadManager.COLUMN_STATUS));
+                                    ok = (st == DownloadManager.STATUS_SUCCESSFUL);
+                                }
+                                c.close();
+                            }
+                        } catch (Exception ignored) {}
+                        if (ok) {
+                            installDownloadedApk(dest);
+                        } else {
+                            Toast.makeText(TvActivity.this,
+                                "❌ Échec du téléchargement — réessayez", Toast.LENGTH_LONG).show();
+                        }
                     }
                 };
                 IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
@@ -274,6 +293,21 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
                 if (!apkFile.exists()) {
                     Toast.makeText(this, "Fichier APK introuvable", Toast.LENGTH_LONG).show();
                     return;
+                }
+                // Android 8+ : vérifier la permission "Installer des applis inconnues"
+                // (sinon l'installeur échoue silencieusement — cause classique sur TV)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    if (!getPackageManager().canRequestPackageInstalls()) {
+                        Uri settingsUri = Uri.parse("package:" + getPackageName());
+                        Intent allow = new Intent(
+                            android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, settingsUri);
+                        allow.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(allow);
+                        Toast.makeText(this,
+                            "Activez \"Installer des applis inconnues\" puis relancez la mise à jour.",
+                            Toast.LENGTH_LONG).show();
+                        return;
+                    }
                 }
                 Uri uri = FileProvider.getUriForFile(this, "com.pipsiflix.app.provider", apkFile);
                 Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);

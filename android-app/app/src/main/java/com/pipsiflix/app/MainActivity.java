@@ -263,7 +263,26 @@ public class MainActivity extends AppCompatActivity {
                         long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
                         if (id != apkDownloadId) return;
                         unregisterApkReceiver();
-                        installDownloadedApk(dest);
+                        // Vérifier que le téléchargement a réellement réussi
+                        boolean ok = false;
+                        try {
+                            android.database.Cursor c = dm.query(
+                                new DownloadManager.Query().setFilterById(id));
+                            if (c != null) {
+                                if (c.moveToFirst()) {
+                                    int st = c.getInt(c.getColumnIndexOrThrow(
+                                        DownloadManager.COLUMN_STATUS));
+                                    ok = (st == DownloadManager.STATUS_SUCCESSFUL);
+                                }
+                                c.close();
+                            }
+                        } catch (Exception ignored) {}
+                        if (ok) {
+                            installDownloadedApk(dest);
+                        } else {
+                            Toast.makeText(MainActivity.this,
+                                "❌ Échec du téléchargement — réessayez", Toast.LENGTH_LONG).show();
+                        }
                     }
                 };
                 IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
