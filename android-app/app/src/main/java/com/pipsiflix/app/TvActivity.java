@@ -10,11 +10,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
-import android.graphics.SurfaceTexture;
 import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.Surface;
-import android.view.TextureView;
+import android.view.SurfaceView;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
@@ -35,9 +33,11 @@ import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.okhttp.OkHttpDataSource;
+import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.source.MediaSource;
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 
 import java.io.File;
 import java.lang.ref.WeakReference;
@@ -55,7 +55,7 @@ import okhttp3.OkHttpClient;
  *  - PIPSILY_NATIVE injecté (+ compat PIPSIFLIX_NATIVE)
  */
 @OptIn(markerClass = UnstableApi.class)
-public class TvActivity extends FragmentActivity implements TextureView.SurfaceTextureListener {
+public class TvActivity extends FragmentActivity {
 
     private static final String TAG         = "PipsilyTV";
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
@@ -70,11 +70,11 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     // ── Aperçu vidéo "in-tile" (preview live ExoPlayer superposé au WebView) ──
     private static OkHttpClient previewOkClient;
     private FrameLayout rootLayout;
-    private TextureView previewTexture;
+    private SurfaceView previewSurfaceView;
     private ExoPlayer   previewPlayer;
-    private Surface     previewSurface;
-    private String      previewPendingUrl = null;
     private String      previewCurrentUrl = null;
+    private boolean     previewFrameReady = false;
+    private int previewX, previewY, previewW, previewH;
 
     // ── Téléchargement APK ──────────────────────────────────────────────
     private long             apkDownloadId = -1;
@@ -342,11 +342,11 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         unregisterApkReceiver();
         sInstance = null;
         if (previewPlayer != null) { previewPlayer.release(); previewPlayer = null; }
-        if (previewSurface != null) { previewSurface.release(); previewSurface = null; }
     }
 
     // ══════════════════════════════════════════════════════════════════════
-    //  Aperçu vidéo "in-tile" — TextureView ExoPlayer superposé au WebView
+    //  Aperçu vidéo "in-tile" — SurfaceView ExoPlayer superposé au WebView
+    //  (SurfaceView = composition matérielle, bien plus fluide que TextureView)
     // ══════════════════════════════════════════════════════════════════════
 
     private OkHttpDataSource.Factory buildPreviewDsFactory() {
@@ -369,15 +369,23 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         if (previewPlayer != null) return;
         // Plafonner la qualité à SD : la vignette est petite, un flux léger
         // suffit et évite les saccades (décodage FHD inutile sur TV modeste)
-        androidx.media3.exoplayer.trackselection.DefaultTrackSelector ts =
-            new androidx.media3.exoplayer.trackselection.DefaultTrackSelector(this);
+        DefaultTrackSelector ts = new DefaultTrackSelector(this);
         ts.setParameters(ts.buildUponParameters().setMaxVideoSizeSd());
-        previewPlayer = new ExoPlayer.Builder(this).setTrackSelector(ts).build();
+        // Buffer élargi : absorbe le jitter réseau des flux IPTV live
+        DefaultLoadControl lc = new DefaultLoadControl.Builder()
+                .setBufferDurationsMs(20000, 60000, 1500, 5000)
+                .build();
+        previewPlayer = new ExoPlayer.Builder(this)
+                .setTrackSelector(ts)
+                .setLoadControl(lc)
+                .build();
         previewPlayer.addListener(new Player.Listener() {
             @Override
             public void onRenderedFirstFrame() {
-                // La vidéo est prête : révéler la surface (le poster reste visible jusque-là)
-                if (previewTexture != null) previewTexture.setAlpha(1f);
+                // La vidéo est prête : étendre la surface à la taille de la vignette
+                // (elle était en 1×1 px — le poster restait visible pendant le buffering)
+                previewFrameReady = true;
+                applyPreviewRect();
             }
             @Override
             public void onPlayerError(PlaybackException error) {
@@ -386,21 +394,32 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
                 stopLivePreview();
             }
         });
-        if (previewSurface != null) previewPlayer.setVideoSurface(previewSurface);
+        if (previewSurfaceView != null) previewPlayer.setVideoSurfaceView(previewSurfaceView);
     }
 
-    private void ensurePreviewTexture() {
-        if (previewTexture != null) return;
-        previewTexture = new TextureView(this);
-        previewTexture.setSurfaceTextureListener(this);
+    private void ensurePreviewView() {
+        if (previewSurfaceView != null) return;
+        previewSurfaceView = new SurfaceView(this);
+        // Surface au-dessus de la fenêtre (donc du WebView) — composée par le
+        // hardware overlay, sans passe GPU supplémentaire comme TextureView
+        previewSurfaceView.setZOrderOnTop(true);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(1, 1);
         lp.gravity = Gravity.NO_GRAVITY;
-        previewTexture.setLayoutParams(lp);
-        previewTexture.setElevation(500f);
-        // Invisible (alpha 0) tant que la 1ère frame n'est pas rendue — évite la vignette noire
-        previewTexture.setAlpha(0f);
-        previewTexture.setVisibility(View.GONE);
-        rootLayout.addView(previewTexture);
+        previewSurfaceView.setLayoutParams(lp);
+        previewSurfaceView.setVisibility(View.GONE);
+        rootLayout.addView(previewSurfaceView);
+        if (previewPlayer != null) previewPlayer.setVideoSurfaceView(previewSurfaceView);
+    }
+
+    /** Applique le rect demandé à la surface — seulement quand la 1ère frame est rendue. */
+    private void applyPreviewRect() {
+        if (previewSurfaceView == null || !previewFrameReady) return;
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) previewSurfaceView.getLayoutParams();
+        lp.width      = previewW;
+        lp.height     = previewH;
+        lp.leftMargin = previewX;
+        lp.topMargin  = previewY;
+        previewSurfaceView.setLayoutParams(lp);
     }
 
     private void playPreviewUrl(String url) {
@@ -417,75 +436,44 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     /** Appelé depuis app.js — démarre l'aperçu live dans la vignette focalisée. x,y,w,h en pixels physiques. */
     public void startLivePreview(String url, int x, int y, int w, int h) {
         if (url == null || url.isEmpty() || w <= 0 || h <= 0) return;
+        ensurePreviewView();
         ensurePreviewPlayer();
-        ensurePreviewTexture();
 
         String finalUrl = url.startsWith("https://") ? url.replaceFirst("^https://", "http://") : url;
+        previewX = x; previewY = y; previewW = w; previewH = h;
 
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) previewTexture.getLayoutParams();
-        lp.width      = w;
-        lp.height     = h;
+        // Même URL déjà en cours → simple repositionnement, ne pas redémarrer le flux
+        if (finalUrl.equals(previewCurrentUrl)) {
+            applyPreviewRect();
+            return;
+        }
+        previewCurrentUrl = finalUrl;
+        previewFrameReady = false;
+
+        // 1×1 px en attendant la 1ère frame : la surface existe (le décodage
+        // démarre) mais la vignette garde son poster — pas de carré noir
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) previewSurfaceView.getLayoutParams();
+        lp.width      = 1;
+        lp.height     = 1;
         lp.leftMargin = x;
         lp.topMargin  = y;
         lp.gravity    = Gravity.NO_GRAVITY;
-        previewTexture.setLayoutParams(lp);
-        previewTexture.setVisibility(View.VISIBLE);
-        previewTexture.bringToFront();
+        previewSurfaceView.setLayoutParams(lp);
+        previewSurfaceView.setVisibility(View.VISIBLE);
 
-        // Même URL déjà en cours → simple repositionnement, ne pas redémarrer le flux
-        if (finalUrl.equals(previewCurrentUrl)) return;
-        previewCurrentUrl = finalUrl;
-        previewTexture.setAlpha(0f); // masqué jusqu'à la 1ère frame du nouveau flux
-
-        if (previewSurface != null) {
-            previewPendingUrl = null;
-            playPreviewUrl(finalUrl);
-        } else {
-            previewPendingUrl = finalUrl;
-        }
+        playPreviewUrl(finalUrl);
     }
 
     /** Appelé depuis app.js — arrête l'aperçu live et masque la surface. */
     public void stopLivePreview() {
-        previewPendingUrl = null;
         previewCurrentUrl = null;
+        previewFrameReady = false;
         if (previewPlayer != null) {
             previewPlayer.stop();
             previewPlayer.clearMediaItems();
         }
-        if (previewTexture != null) {
-            previewTexture.setAlpha(0f);
-            previewTexture.setVisibility(View.GONE);
-        }
+        if (previewSurfaceView != null) previewSurfaceView.setVisibility(View.GONE);
     }
-
-    // ── TextureView.SurfaceTextureListener ──────────────────────────────────
-    @Override
-    public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-        previewSurface = new Surface(surface);
-        if (previewPlayer != null) previewPlayer.setVideoSurface(previewSurface);
-        if (previewPendingUrl != null) {
-            String url = previewPendingUrl;
-            previewPendingUrl = null;
-            playPreviewUrl(url);
-        }
-    }
-
-    @Override
-    public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {}
-
-    @Override
-    public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-        if (previewPlayer != null) previewPlayer.clearVideoSurface();
-        if (previewSurface != null) {
-            previewSurface.release();
-            previewSurface = null;
-        }
-        return true;
-    }
-
-    @Override
-    public void onSurfaceTextureUpdated(SurfaceTexture surface) {}
 
     /**
      * Appelé par PlayerActivity.onDestroy() pour remonter la progression au WebView TV.
