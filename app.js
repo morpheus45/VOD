@@ -2091,7 +2091,7 @@ function filtered(){
       "ARTE":7, "C8":8, "W9":9, "TMC":10, "TFX":11, "NRJ12":12,
       "LCP":13, "LCPAN":13, "FRANCE4":14, "BFMTV":15, "CNEWS":16,
       "CSTAR":17, "GULLI":18,
-      "TF1SERIESFILMS":20, "LEQUIPE":21, "6TER":22, "RMCSTORY":23,
+      "TF1SERIESFILMS":20, "LEQUIPE":21, "LEQUIPELIVE21":21, "6TER":22, "RMCSTORY":23,
       "RMCDECOUVERTE":24, "CHERIE25":25, "LCI":26, "FRANCEINFO":27
     };
     // Normalisation : décoratifs/accents/espaces/ponctuation supprimés
