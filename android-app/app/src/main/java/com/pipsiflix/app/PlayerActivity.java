@@ -208,7 +208,14 @@ public class PlayerActivity extends FragmentActivity {
             ts.setParameters(ts.buildUponParameters()
                     .setPreferredAudioLanguage("fra")
                     .setPreferredAudioRoleFlags(C.ROLE_FLAG_MAIN));
-            player = new ExoPlayer.Builder(this).setTrackSelector(ts).build();
+            // Renderers + décodeur FFmpeg logiciel (E-AC3/AC3/DTS) en repli :
+            // décodage matériel d'abord, FFmpeg quand la plateforme ne sait pas
+            // (TV sans licence Dolby → la VF E-AC3 redevient lisible)
+            androidx.media3.exoplayer.DefaultRenderersFactory rf =
+                new androidx.media3.exoplayer.DefaultRenderersFactory(this)
+                    .setExtensionRendererMode(
+                        androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
+            player = new ExoPlayer.Builder(this, rf).setTrackSelector(ts).build();
             playerView.setPlayer(player);
             playerView.setKeepScreenOn(true);
 

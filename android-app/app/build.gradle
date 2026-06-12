@@ -14,8 +14,8 @@ android {
         applicationId "com.pipsiflix.app"
         minSdk 21                // Android 5.0+ (TV inclus)
         targetSdk 34
-        versionCode 33
-        versionName "33.0"
+        versionCode 34
+        versionName "34.0"
     }
 
     // Signing config release (utilisé par GitHub Actions ou Android Studio)
@@ -56,6 +56,8 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+        // Requis par media3-ffmpeg-decoder (API java.time dans l'AAR Jellyfin)
+        coreLibraryDesugaringEnabled true
     }
 
     // Générer APK universel (phone + TV en un seul fichier)
@@ -88,4 +90,8 @@ dependencies {
     implementation 'androidx.media3:media3-datasource:1.3.1'
     // OkHttp datasource — meilleure gestion des redirects CDN et headers Accept
     implementation 'androidx.media3:media3-datasource-okhttp:1.3.1'
+    // Décodeur audio FFmpeg (build Jellyfin) — E-AC3/AC3/DTS en LOGICIEL quand
+    // l'appareil n'a pas la licence Dolby (sinon : repli sur l'audiodescription AAC)
+    implementation 'org.jellyfin.media3:media3-ffmpeg-decoder:1.3.1+2'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
 }
