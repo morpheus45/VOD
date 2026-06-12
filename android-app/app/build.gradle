@@ -14,8 +14,11 @@ android {
         applicationId "com.pipsiflix.app"
         minSdk 21                // Android 5.0+ (TV inclus)
         targetSdk 34
-        versionCode 34
-        versionName "34.0"
+        versionCode 35
+        versionName "35.0"
+        // ARM uniquement : TV et téléphones réels — x86 = émulateurs seulement.
+        // Allège l'APK (~1,5 Mo de libs FFmpeg en moins) → install plus fiable
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
     }
 
     // Signing config release (utilisé par GitHub Actions ou Android Studio)
