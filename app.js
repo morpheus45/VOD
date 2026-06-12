@@ -2099,7 +2099,20 @@ function filtered(){
       .replace(_DECO_RE, " ")
       .normalize("NFD").replace(/[̀-ͯ]/g, "")
       .toUpperCase().replace(/[^A-Z0-9+]/g, "");
-    const _lcn = title => _TNT_LCN[_tntNorm(title)] ?? 9999;
+    const _lcn = title => {
+      const n = _TNT_LCN[_tntNorm(title)];
+      if(n) return n;
+      // Région choisie : la variante régionale hérite du numéro de sa base
+      // ("FRANCE 3 ALSACE" → numéro 3) — une seule variante survit au filtre
+      if(S.region && S._liveRegionIdx){
+        const r = _isChannelRegional(title, S._liveRegionIdx.regionSet);
+        if(r){
+          const nb = _TNT_LCN[_tntNorm(r.base)];
+          if(nb) return nb;
+        }
+      }
+      return 9999;
+    };
     const _CAT_PRI = {
       "EU | FRANCE GENERAL":       0,
       "EU | FRANCE NEWS":          1,
@@ -2300,7 +2313,10 @@ function _buildLiveRegionIdx(items){
  * même quand "Via Stella" est accroché à la fin et masque le nom géographique.
  */
 function _isChannelRegional(cleanTitle, regionSet){
-  const words = cleanTitle.trim().split(/\s+/);
+  // Neutraliser les tirets isolés : "FRANCE 3 NORD - PAS DE CALAIS" →
+  // "FRANCE 3 NORD PAS DE CALAIS" (sinon le tiret casse le découpage en mots
+  // et la région n'est jamais reconnue → chaîne traitée comme nationale)
+  const words = cleanTitle.replace(/\s+[-–—]\s+/g, " ").trim().split(/\s+/);
   if(words.length < 2) return null;
 
   // ── Étape 1 : suffixes de longueur décroissante (4 → 1 mots) ──
