@@ -14,9 +14,13 @@ import android.widget.Toast;
 
 import androidx.annotation.OptIn;
 import androidx.fragment.app.FragmentActivity;
+import androidx.media3.common.C;
+import androidx.media3.common.Format;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.TrackSelectionOverride;
+import androidx.media3.common.Tracks;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.datasource.okhttp.OkHttpDataSource;
@@ -24,6 +28,7 @@ import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.hls.HlsMediaSource;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.media3.exoplayer.source.ProgressiveMediaSource;
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.ui.PlayerView;
 
 import okhttp3.OkHttpClient;
@@ -196,7 +201,14 @@ public class PlayerActivity extends FragmentActivity {
         hlsRetried = false;
 
         if (player == null) {
-            player = new ExoPlayer.Builder(this).build();
+            // Préférer la piste audio française PRINCIPALE (pas l'audiodescription).
+            // ROLE_FLAG_MAIN écarte les pistes "describes video" quand elles sont
+            // correctement étiquetées dans le conteneur.
+            DefaultTrackSelector ts = new DefaultTrackSelector(this);
+            ts.setParameters(ts.buildUponParameters()
+                    .setPreferredAudioLanguage("fra")
+                    .setPreferredAudioRoleFlags(C.ROLE_FLAG_MAIN));
+            player = new ExoPlayer.Builder(this).setTrackSelector(ts).build();
             playerView.setPlayer(player);
             playerView.setKeepScreenOn(true);
 
@@ -205,6 +217,33 @@ public class PlayerActivity extends FragmentActivity {
                 public void onPlaybackStateChanged(int state) {
                     if (state == Player.STATE_ENDED && currentIdx < epUrls.length - 1) {
                         goEp(currentIdx + 1);
+                    }
+                }
+
+                @Override
+                public void onTracksChanged(Tracks tracks) {
+                    // Détecter le repli silencieux : la piste audio PAR DÉFAUT du fichier
+                    // (VF principale) n'est pas celle jouée → souvent l'audiodescription
+                    // (ex : VF E-AC3 5.1 non décodable par l'appareil → bascule AAC).
+                    boolean defaultExists = false, defaultSelected = false, otherSelected = false;
+                    int audioGroups = 0;
+                    for (Tracks.Group g : tracks.getGroups()) {
+                        if (g.getType() != C.TRACK_TYPE_AUDIO) continue;
+                        audioGroups++;
+                        for (int i = 0; i < g.length; i++) {
+                            boolean isDefault =
+                                (g.getTrackFormat(i).selectionFlags & C.SELECTION_FLAG_DEFAULT) != 0;
+                            if (isDefault) defaultExists = true;
+                            if (g.isTrackSelected(i)) {
+                                if (isDefault) defaultSelected = true; else otherSelected = true;
+                            }
+                        }
+                    }
+                    if (audioGroups > 1 && defaultExists && !defaultSelected && otherSelected) {
+                        Toast.makeText(PlayerActivity.this,
+                            "⚠️ Piste VF principale non supportée par cet appareil — " +
+                            "piste secondaire utilisée (souvent audiodescription).\n" +
+                            "Touche ⬆ : changer de piste audio.", Toast.LENGTH_LONG).show();
                     }
                 }
 
@@ -352,11 +391,57 @@ public class PlayerActivity extends FragmentActivity {
         btnNext.setAlpha(currentIdx < epUrls.length - 1 ? 1f : 0.4f);
     }
 
+    // ─── Bascule de piste audio (VF principale ↔ audiodescription, etc.) ──
+    private void cycleAudioTrack() {
+        if (player == null) return;
+        List<Tracks.Group> audio = new ArrayList<>();
+        for (Tracks.Group g : player.getCurrentTracks().getGroups())
+            if (g.getType() == C.TRACK_TYPE_AUDIO) audio.add(g);
+        if (audio.size() < 2) {
+            Toast.makeText(this, "Une seule piste audio disponible", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int cur = 0;
+        for (int i = 0; i < audio.size(); i++) if (audio.get(i).isSelected()) cur = i;
+        // Prochaine piste SUPPORTÉE par l'appareil
+        for (int step = 1; step <= audio.size(); step++) {
+            Tracks.Group g = audio.get((cur + step) % audio.size());
+            if (!g.isSupported()) continue;
+            TrackSelectionOverride ov = new TrackSelectionOverride(g.getMediaTrackGroup(), 0);
+            player.setTrackSelectionParameters(player.getTrackSelectionParameters()
+                    .buildUpon()
+                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                    .addOverride(ov)
+                    .build());
+            Format f = g.getTrackFormat(0);
+            String codec = f.sampleMimeType != null
+                ? f.sampleMimeType.replace("audio/", "").toUpperCase() : "?";
+            String label = (f.label != null && !f.label.isEmpty() ? f.label
+                          : (f.language != null ? f.language.toUpperCase() : "Piste"))
+                + " · " + f.channelCount + " canaux · " + codec;
+            Toast.makeText(this, "🔊 Piste audio : " + label, Toast.LENGTH_LONG).show();
+            return;
+        }
+        Toast.makeText(this, "Aucune autre piste audio supportée par cet appareil",
+                Toast.LENGTH_LONG).show();
+    }
+
     // ─── Télécommande TV ─────────────────────────────────────────────
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (player == null) return super.onKeyDown(keyCode, event);
         switch (keyCode) {
+
+            // ⬆ (controller masqué) ou touche dédiée : changer de piste audio
+            case KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK:
+                cycleAudioTrack();
+                return true;
+            case KeyEvent.KEYCODE_DPAD_UP:
+                if (!controllerShown) {
+                    cycleAudioTrack();
+                    return true;
+                }
+                return false;
 
             // OK / Sélection : afficher si masqué, masquer si visible
             case KeyEvent.KEYCODE_DPAD_CENTER:
