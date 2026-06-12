@@ -2081,21 +2081,25 @@ function filtered(){
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
   if(S.type === "live") items = groupLiveItems(items);
 
-  // ── Live : TNT France d'abord (ordre LCN officiel), puis catégories ──
-  if(S.type === "live" && !S.cat && !S.search){
-    // Ordre officiel des chaînes TNT gratuites françaises (numéro logique LCN)
-    const _TNT = [
-      "TF1","FRANCE 2","FRANCE 3","CANAL+","FRANCE 5","M6","ARTE",
-      "C8","W9","TMC","TFX","TF1 SERIES","TF1 SÉRIES","LCI","FRANCE 4",
-      "FRANCEINFO","FRANCE INFO","BFM TV","BFMTV","CNEWS","CSTAR","C STAR",
-      "GULLI","NRJ12","NEON","CHERIE 25","CHÉRIE 25","L'EQUIPE","L EQUIPE",
-      "RMC STORY","RMC DECOUVERTE","RMC DÉCOUVERTE","6TER","PARAMOUNT"
-    ];
-    const _tntIdx = title => {
-      const u = title.replace(_DECO_RE," ").toUpperCase().replace(/\s+/g," ").trim();
-      for(let i = 0; i < _TNT.length; i++) if(u.startsWith(_TNT[i])) return i;
-      return -1;
+  // ── Live : ordre TNT française (numéros LCN comme chez Free), puis catégories ──
+  // Correspondance EXACTE sur le nom normalisé — l'ancien startsWith faisait
+  // matcher "FRANCE 24"→"FRANCE 2", "France 3 Alsace"→"France 3", etc.
+  if(S.type === "live" && !S.search){
+    // Numéros de chaînes Free / TNT (LCN)
+    const _TNT_LCN = {
+      "TF1":1, "FRANCE2":2, "FRANCE3":3, "CANAL+":4, "FRANCE5":5, "M6":6,
+      "ARTE":7, "C8":8, "W9":9, "TMC":10, "TFX":11, "NRJ12":12,
+      "LCP":13, "LCPAN":13, "FRANCE4":14, "BFMTV":15, "CNEWS":16,
+      "CSTAR":17, "GULLI":18,
+      "TF1SERIESFILMS":20, "LEQUIPE":21, "6TER":22, "RMCSTORY":23,
+      "RMCDECOUVERTE":24, "CHERIE25":25, "LCI":26, "FRANCEINFO":27
     };
+    // Normalisation : décoratifs/accents/espaces/ponctuation supprimés
+    const _tntNorm = t => (t || "")
+      .replace(_DECO_RE, " ")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toUpperCase().replace(/[^A-Z0-9+]/g, "");
+    const _lcn = title => _TNT_LCN[_tntNorm(title)] ?? 9999;
     const _CAT_PRI = {
       "EU | FRANCE GENERAL":       0,
       "EU | FRANCE NEWS":          1,
@@ -2111,13 +2115,13 @@ function filtered(){
       "EU | FRANCE LIGUE 1+":     11,
     };
     items.sort((a, b) => {
-      const ai = _tntIdx(a.title), bi = _tntIdx(b.title);
-      if(ai >= 0 && bi >= 0) return ai - bi;   // deux TNT → ordre LCN
-      if(ai >= 0) return -1;                    // a=TNT, b=autre → a devant
-      if(bi >= 0) return  1;                    // b=TNT, a=autre → b devant
+      const la = _lcn(a.title), lb = _lcn(b.title);
+      if(la !== lb) return la - lb;             // ordre LCN TNT d'abord
+      if(la !== 9999) return a.title.localeCompare(b.title); // même numéro (doublons)
       const pa = _CAT_PRI[a.category_name] ?? 99;
       const pb = _CAT_PRI[b.category_name] ?? 99;
-      return pa - pb;                           // aucun TNT → ordre catégorie
+      if(pa !== pb) return pa - pb;             // hors TNT → ordre catégorie
+      return a.title.localeCompare(b.title);    // puis alphabétique (ordre stable)
     });
   }
 
