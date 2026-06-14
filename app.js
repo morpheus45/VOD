@@ -251,18 +251,42 @@ const PipPlayer = {
 
     // ── Lecture via HLS.js (Live + m3u8) ──
     if(isHLS && window.Hls?.isSupported()){
-      this._hls = new Hls({ maxBufferLength: 30, enableWorker: false });
-      this._hls.loadSource(url);
-      this._hls.attachMedia(video);
-      this._hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        this._setFrenchAudio();
-        video.play().catch(() => {});
-      });
-      this._hls.on(Hls.Events.ERROR, (_, d) => {
-        if(d.fatal){
-          this._hls.destroy(); this._hls = null;
+      // Helper : une tentative HLS.js sur une source, avec rappel en cas d'échec fatal
+      const tryHls = (src, onFatal) => {
+        this._hls = new Hls({ maxBufferLength: 30, enableWorker: false });
+        this._hls.loadSource(src);
+        this._hls.attachMedia(video);
+        this._hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          this._setFrenchAudio();
+          video.play().catch(() => {});
+        });
+        this._hls.on(Hls.Events.ERROR, (_, d) => {
+          if(d.fatal){
+            this._hls.destroy(); this._hls = null;
+            onFatal();
+          }
+        });
+      };
+
+      if(isPcBrowser && rawUrl !== url){
+        // PC + page HTTPS : le serveur IPTV n'a pas de HTTPS → l'upgrade échoue.
+        // 1) tenter HTTPS  2) retenter HLS.js sur l'URL HTTP d'origine
+        //    (fonctionne si "Contenu non sécurisé : Autoriser" est activé pour le site)
+        // 3) sinon : expliquer le réglage au lieu d'ouvrir un onglet inutile
+        tryHls(url, () => {
+          this._showStatus("⚠️ Nouvel essai sur le flux HTTP d'origine…", false);
+          tryHls(rawUrl, () => {
+            this._showStatus(
+              "❌ Le navigateur bloque les flux HTTP sur ce site HTTPS. " +
+              "Pour lire les vidéos sur PC : cliquez le cadenas 🔒 dans la barre d'adresse → " +
+              "« Paramètres du site » → « Contenu non sécurisé » → Autoriser, puis rechargez la page. " +
+              "Sinon, utilisez 🔗 Copier le lien et ouvrez-le dans VLC.", true);
+          });
+        });
+      } else {
+        tryHls(url, () => {
           if(isPcBrowser){
-            // PC : essayer rawUrl directement (contourne l'échec HTTPS)
+            // PC en HTTP local : essayer rawUrl directement
             this._showStatus("⚠️ Basculement sur flux original…", false);
             video.src = rawUrl;
             video.play().catch(() => _openNativeFallback());
@@ -271,8 +295,8 @@ const PipPlayer = {
             video.src = url;
             video.play().catch(() => _openNativeFallback());
           }
-        }
-      });
+        });
+      }
     } else if(isHLS && video.canPlayType("application/vnd.apple.mpegurl")){
       // Safari natif HLS
       video.src = url;
