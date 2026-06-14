@@ -1,7 +1,7 @@
 {
-  "apk_version": 37,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v37/PIPSILY.apk",
-  "changes": "PIPSILY comme launcher (démarrage direct au boot) + sélecteur interface TV + correctifs",
+  "apk_version": 38,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v38/PIPSILY.apk",
+  "changes": "Logo PIPSILY au lancement (splash) + sélecteur interface TV + démarrage launcher",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash de lancement : logo PIPSILY centré sur fond sombre -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#060b16" />
+        </shape>
+    </item>
+    <item>
+        <bitmap
+            android:src="@drawable/splash_logo"
+            android:gravity="center" />
+    </item>
+</layer-list>

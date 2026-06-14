@@ -581,6 +581,26 @@ html,body{
 </head>
 <body>
 
+<!-- Splash de lancement : logo PIPSILY à chaque ouverture -->
+<div id="pfSplash" aria-hidden="true"><img src="./logo.svg" alt="PIPSILY" /></div>
+<style>
+  #pfSplash{position:fixed;inset:0;z-index:99999;background:#060b16;display:flex;
+    align-items:center;justify-content:center;transition:opacity .5s ease}
+  #pfSplash img{width:min(40vw,520px);filter:drop-shadow(0 0 30px rgba(123,95,232,.55));
+    animation:pfSplashPulse 1.6s ease-in-out infinite}
+  #pfSplash.hide{opacity:0;pointer-events:none}
+  @keyframes pfSplashPulse{0%,100%{transform:scale(1);opacity:.92}50%{transform:scale(1.04);opacity:1}}
+</style>
+<script>
+  (function(){
+    function hide(){var s=document.getElementById('pfSplash');if(!s)return;
+      s.classList.add('hide');setTimeout(function(){if(s)s.style.display='none';},600);}
+    if(document.readyState==='complete')setTimeout(hide,1100);
+    else window.addEventListener('load',function(){setTimeout(hide,1100);});
+    setTimeout(hide,4500);
+  })();
+</script>
+
 <div id="bg">
   <div class="blob b1"></div>
   <div class="blob b2"></div>
