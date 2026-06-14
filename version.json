@@ -1,7 +1,7 @@
 {
-  "apk_version": 35,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v35/PIPSILY.apk",
-  "changes": "VF Dolby lisible partout (décodeur intégré) — APK allégé pour installation fiable",
+  "apk_version": 36,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v36/PIPSILY.apk",
+  "changes": "Sélecteur d interface TV (Xstream / Cosmos TV) + démarrage auto au boot + correctifs affichage",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"

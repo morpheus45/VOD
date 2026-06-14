@@ -347,11 +347,37 @@
           <div class="msg" id="pwMsg"></div>
         </div>
 
+        <!-- Interface (TV uniquement) -->
+        <div class="card" id="ifaceCard" style="display:none">
+          <div class="card-title">Interface (TV)</div>
+          <label>Choisissez l'apparence de l'application</label>
+          <select id="ifaceSelect">
+            <option value="xstream">PIPSILY Xstream (par défaut)</option>
+            <option value="cosmos">Cosmos TV (style Google TV)</option>
+          </select>
+          <button class="btn btn-primary" onclick="applyIface()">Appliquer</button>
+          <div class="msg" id="ifaceMsg"></div>
+        </div>
+
         <!-- Déconnexion -->
         <div class="logout-wrap">
           <button class="btn-logout" onclick="logout()">Se déconnecter</button>
         </div>
       `;
+
+      // Interface : carte visible UNIQUEMENT sur TV (mobile = toujours Xstream)
+      try{
+        const _isTV = /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent)
+                   || /\bTV\b/.test(navigator.userAgent)
+                   || window.PIPSILY_NATIVE === "android_tv";
+        const card = document.getElementById("ifaceCard");
+        if(card && _isTV){
+          card.style.display = "";
+          card.parentNode.prepend(card);   // l'afficher EN PREMIER dans les réglages
+          const sel = document.getElementById("ifaceSelect");
+          if(sel) sel.value = localStorage.getItem("pf_theme") === "cosmos" ? "cosmos" : "xstream";
+        }
+      }catch(e){}
 
       // Initialiser le PIN parental
       initPinSection();
@@ -430,6 +456,17 @@
     async function logout(){
       await A.signOut();
       window.location.href = "./login.html";
+    }
+
+    // ── Bascule d'interface (Xstream ↔ Cosmos TV) — n'affecte que l'apparence ──
+    function applyIface(){
+      const sel = document.getElementById("ifaceSelect");
+      const choice = sel && sel.value === "cosmos" ? "cosmos" : "xstream";
+      try{ localStorage.setItem("pf_theme", choice); }catch(e){}
+      const msg = document.getElementById("ifaceMsg");
+      if(msg){ msg.style.color = "#7CE2A8"; msg.textContent = "Interface appliquée — ouverture…"; }
+      // index.html route automatiquement vers la bonne interface selon pf_theme
+      setTimeout(() => { window.location.href = "./index.html"; }, 500);
     }
 
     // ── Déclaration de paiement Wero (statut "en attente" jusqu'à confirmation admin) ──
