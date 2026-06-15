@@ -1617,8 +1617,18 @@ function doPlayEp(ei,startMs){
 // ══════ PLAYBACK ════════════════════════════════════════════════════════
 function playItem(item,startMs){
   const url=(item.url||'').replace(/^https?:\/\//i,'http://');
-  if(window.AndroidBridge?.openInVlc){
-    try{AndroidBridge.openInVlc(url,item.title||'',!!item.isLive);return;}catch{}
+  if(!url)return;
+  const title=item.title||'';
+  const B=window.AndroidBridge;
+  if(B){
+    // Lecteur natif ExoPlayer — MÊME méthode que PIPSILY Xstream (openPlayerAt,
+    // éprouvée + reprise). Replis : openPlayer → openInVlc → openVideo.
+    try{
+      if(B.openPlayerAt){ B.openPlayerAt(url,title,'','[]',-1,Math.max(0,startMs||0)); return; }
+      if(B.openPlayer){ B.openPlayer(url,title,'','[]',-1); return; }
+      if(B.openInVlc){ B.openInVlc(url,title,!!item.isLive); return; }
+      if(B.openVideo){ B.openVideo(url,title); return; }
+    }catch(e){}
   }
   window.location.href=url;
 }
