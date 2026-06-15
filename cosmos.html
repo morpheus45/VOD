@@ -577,6 +577,13 @@ html,body{
 .t-btn-ok{background:var(--accent);color:#fff}
 .t-btn-later{background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.2)}
 .t-btn.foc{box-shadow:0 0 0 2.5px #fff}
+.seeall-card .card-iw{display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,rgba(79,142,247,.18),rgba(140,80,240,.14));
+  border:2px dashed rgba(120,160,255,.45)}
+.seeall-inner{text-align:center;color:#cfe0ff}
+.seeall-arrow{font-size:40px;line-height:1;color:#7da8ff}
+.seeall-txt{font-size:15px;font-weight:800;margin-top:6px}
+.seeall-card.foc .card-iw{border-color:#fff;background:linear-gradient(135deg,rgba(79,142,247,.35),rgba(140,80,240,.3))}
 </style>
 </head>
 <body>
@@ -1355,6 +1362,18 @@ function renderRows(rows){
 
 // ══════ CARD ════════════════════════════════════════════════════════════
 function mkCard(item,ri,ci,isLive){
+  if(item.seeAll){
+    const el=document.createElement('div');
+    el.className='card poster seeall-card';
+    el.dataset.ri=ri;el.dataset.ci=ci;
+    const iw=document.createElement('div');iw.className='card-iw';
+    iw.innerHTML='<div class="seeall-inner"><div class="seeall-arrow">→</div><div class="seeall-txt">Voir tout</div></div>';
+    el.appendChild(iw);
+    const info=document.createElement('div');info.className='cinfo';
+    const title=document.createElement('div');title.className='ctitle';title.textContent=item.title||'Voir tout';
+    info.appendChild(title);el.appendChild(info);
+    return el;
+  }
   if(item.isApp){
     const el=document.createElement('div');
     el.className='card app-card'+(item.banner?'':' app-icon');
@@ -1412,12 +1431,14 @@ function mkCard(item,ri,ci,isLive){
 }
 
 // ══════ GRID ════════════════════════════════════════════════════════════
-function openGrid(type){
-  $('grid-title').textContent=type==='movies'?'Films':'Séries';
+function openGrid(type,cat){
+  showOnlyView('grid-view');
+  $('grid-title').textContent=cat||(type==='movies'?'Films':'Séries');
   S.gridAll=(type==='movies'?S.allVod:S.allSeries).filter(isClean);
-  S.gridFilter='';S.gridQuality='';S.gridFavOnly=false;S.gridSort='recent';
+  S.gridFilter=cat||'';S.gridQuality='';S.gridFavOnly=false;S.gridSort='recent';
+  S.sec='grid';
   buildFilters();applyGrid();
-  S.zone='filter';S.filterIdx=0;S.gridIdx=0;focus();
+  S.zone=S.gridItems.length?'grid':'filter';S.filterIdx=0;S.gridIdx=0;focus();
 }
 function buildFilters(){
   const cats=[...new Set(S.gridAll.map(i=>i.category).filter(Boolean))].sort();
@@ -1753,6 +1774,7 @@ function openSearchResults(q){
 }
 function openItem(item){
   stopPreview();
+  if(item.seeAll){openGrid(item.gridType,item.gridCat);return;}
   if(item.isApp){window.AndroidBridge?.launchApp?.(item.pkg);return;}
   if(item.isGroup){openQualPicker(item);return;}
   if(item.isLive){S.lastProgItem=item;playItem(item,0);pushHist(item);return;}
@@ -1807,8 +1829,11 @@ function gotoSection(s){
 }
 
 function showOnlyView(id){
-  qAll('.view').forEach(v=>v.classList.remove('view-active'));
-  const el=$(id);if(el)el.classList.add('view-active');
+  // Gérer l'attribut hidden ET la classe : les vues annexes (grid/search/
+  // settings/mylist) ont [hidden] dans le markup → il faut le retirer pour
+  // que la vue cible s'affiche (sinon [hidden]{display:none} l'emporte).
+  qAll('.view').forEach(v=>{v.classList.remove('view-active');v.hidden=true;});
+  const el=$(id);if(el){el.hidden=false;el.classList.add('view-active');}
 }
 
 // ── Rendus par tab ───────────────────────────────────────────────────────
@@ -1841,7 +1866,7 @@ function renderTabMovies(){
   if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms});
   const byCat={};
   S.allVod.filter(isClean).forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
-  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=3).slice(0,16).forEach(([cat,items])=>rows.push({title:cat,items:items.slice(0,25)}));
+  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=3).slice(0,16).forEach(([cat,items])=>rows.push({title:cat,items:items.length>25?[...items.slice(0,25),{seeAll:true,gridType:(items[0]&&items[0].series_id?'shows':'movies'),gridCat:cat,title:'Voir tout'}]:items.slice(0,25)}));
   S.rows=rows;
   if(S.allVod.length){const pool=S.allVod.filter(i=>isClean(i)&&i.image);setHero(pool[Math.floor(Math.random()*Math.min(pool.length,30))]);}
   renderRows(rows);S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();
@@ -1853,7 +1878,7 @@ function renderTabShows(){
   if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries});
   const byCat={};
   S.allSeries.filter(isClean).forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
-  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=3).slice(0,16).forEach(([cat,items])=>rows.push({title:cat,items:items.slice(0,25)}));
+  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=3).slice(0,16).forEach(([cat,items])=>rows.push({title:cat,items:items.length>25?[...items.slice(0,25),{seeAll:true,gridType:(items[0]&&items[0].series_id?'shows':'movies'),gridCat:cat,title:'Voir tout'}]:items.slice(0,25)}));
   S.rows=rows;
   if(S.allSeries.length){const pool=S.allSeries.filter(i=>isClean(i)&&i.image);setHero(pool[Math.floor(Math.random()*Math.min(pool.length,30))]);}
   renderRows(rows);S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();
