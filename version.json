@@ -1,7 +1,7 @@
 {
-  "apk_version": 38,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v38/PIPSILY.apk",
-  "changes": "Logo PIPSILY au lancement (splash) + sélecteur interface TV + démarrage launcher",
+  "apk_version": 39,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v39/PIPSILY.apk",
+  "changes": "Freebox démarre sur Cosmos (Google TV) par défaut + logo au lancement + correctifs",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"

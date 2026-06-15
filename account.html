@@ -375,7 +375,10 @@
           card.style.display = "";
           card.parentNode.prepend(card);   // l'afficher EN PREMIER dans les réglages
           const sel = document.getElementById("ifaceSelect");
-          if(sel) sel.value = localStorage.getItem("pf_theme") === "cosmos" ? "cosmos" : "xstream";
+          const _theme = localStorage.getItem("pf_theme");
+          const _isFreebox = /Freebox/i.test(navigator.userAgent);
+          // Cosmos si choisi, ou par défaut sur Freebox
+          if(sel) sel.value = (_theme === "cosmos" || (_theme === null && _isFreebox)) ? "cosmos" : "xstream";
         }
       }catch(e){}
 

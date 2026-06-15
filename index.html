@@ -9,7 +9,10 @@
       var _isTV = /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent)
                || /\bTV\b/.test(navigator.userAgent)
                || window.PIPSILY_NATIVE === 'android_tv';
-      if(_isTV && localStorage.getItem('pf_theme')==='cosmos'){ location.replace('./cosmos.html'); }
+      var _isFreebox = /Freebox/i.test(navigator.userAgent);
+      var _theme = localStorage.getItem('pf_theme');
+      // Cosmos si choisi explicitement, OU par défaut sur Freebox (aucun choix encore)
+      if(_isTV && (_theme==='cosmos' || (_theme===null && _isFreebox))){ location.replace('./cosmos.html'); }
     }catch(e){}
   </script>
   <meta charset="UTF-8" />

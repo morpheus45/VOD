@@ -136,9 +136,12 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         ws.setLoadWithOverviewMode(true);
         ws.setUseWideViewPort(true);
 
-        // User-Agent TV — contient "AndroidTV" pour que isTV=true dans le JS
+        // User-Agent TV — contient "AndroidTV" pour que isTV=true dans le JS,
+        // + le modèle de l'appareil (ex "Freebox Player POP") pour que le routage
+        // web puisse choisir une interface par défaut selon la TV (Freebox → Cosmos).
         String ua = ws.getUserAgentString().replace("Mobile", "TV");
-        ws.setUserAgentString(ua + " AndroidTV PIPSILY/5.0");
+        String model = (Build.MODEL != null ? Build.MODEL : "").replace(" ", "_");
+        ws.setUserAgentString(ua + " AndroidTV PIPSILY/5.0 Model/" + model);
 
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
