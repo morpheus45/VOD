@@ -872,18 +872,55 @@ function getProg(){if(!_cacheP)_cacheP=storeGet(STORE.prog,{});return _cacheP;}
 function saveProg(k,data){const p=getProg();p[k]=data;storeSet(STORE.prog,p);_cacheP=p;}
 function getFavs(){return storeGet(STORE.favs,[]);}
 function getHist(){return storeGet(STORE.hist,[]);}
-function itemKey(i){return i.series_id?'s_'+i.series_id:i.stream_id?'v_'+i.stream_id:'t_'+(i.title||'');}
-function isFav(i){const k=itemKey(i);return getFavs().some(x=>x.k===k);}
+// itemKey ALIGNÉ sur PIPSILY Xstream : `${type}||${id}||${titre}` (cleanTitle
+// identique des deux côtés) → favoris/progression PARTAGÉS entre les 2 interfaces.
+function itemKey(i){
+  const t = i.isLive ? 'live' : (i.series_id ? 'series' : 'vod');
+  const id = i.stream_id || i.series_id || '';
+  return t + '||' + id + '||' + (i.title || '');
+}
+function isFav(i){const k=itemKey(i);return getFavs().some(x=>(x.key||x.k)===k);}
 function toggleFav(i){
-  const f=getFavs(),k=itemKey(i),ix=f.findIndex(x=>x.k===k);
-  if(ix>=0)f.splice(ix,1);else f.unshift({k,item:i,at:Date.now()});
+  const f=getFavs(),k=itemKey(i),ix=f.findIndex(x=>(x.key||x.k)===k);
+  if(ix>=0)f.splice(ix,1);else f.unshift({key:k,item:i,at:Date.now()});
   storeSet(STORE.favs,f.slice(0,500));return isFav(i);
 }
 function pushHist(i){
   if(!i||i.isLive)return;
-  const h=getHist().filter(x=>x.k!==itemKey(i));
-  h.unshift({k:itemKey(i),item:i,at:Date.now()});
+  const h=getHist().filter(x=>(x.key||x.k)!==itemKey(i));
+  h.unshift({key:itemKey(i),item:i,at:Date.now()});
   storeSet(STORE.hist,h.slice(0,200));
+}
+// Progression d'un item — format PIPSILY (clé = String(stream_id), {t,d,ts}).
+function progPct(i){
+  if(!i||!i.stream_id)return 0;
+  const p=getProg()[String(i.stream_id)];
+  if(!p)return 0;
+  if(p.pct!=null)return p.pct;
+  return (p.d>0)?Math.round(p.t/p.d*100):0;
+}
+// Re-résout un favori/progression vers l'item du catalogue Cosmos (les blobs
+// stockés par l'autre interface ont une forme différente → on relit par id).
+function favId(entry){return String((entry&&(entry.key||entry.k))||'').split('||')[1]||'';}
+function resolveItem(entry){
+  const id=favId(entry);
+  if(id){
+    const m=[...S.allVod,...S.allSeries].find(x=>String(x.stream_id)===id||String(x.series_id)===id);
+    if(m)return m;
+  }
+  return (entry&&entry.item)||null;
+}
+// Items "en cours" depuis la progression PARTAGÉE (comme PIPSILY Poursuivre).
+function inProgressItems(){
+  const prog=getProg(), byId={};
+  [...S.allVod,...S.allSeries].forEach(x=>{if(x.stream_id)byId[String(x.stream_id)]=x;});
+  const out=[];
+  Object.keys(prog).forEach(k=>{
+    const p=prog[k]||{}; const pct=p.pct!=null?p.pct:(p.d>0?p.t/p.d*100:0);
+    const it=byId[k];
+    if(it&&pct>2&&pct<95&&!it.isLive&&isClean(it))out.push({it,ts:p.ts||0});
+  });
+  return out.sort((a,b)=>b.ts-a.ts).map(x=>x.it).slice(0,15);
 }
 function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
 function isClean(i){return !ADULT_RE.test(i.category||'')&&!ADULT_RE.test(i.title||'');}
@@ -1217,9 +1254,9 @@ function buildContent(allVod,allSeries,liveRaw){
     .sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
 
   const rows=[];
-  const histItems=getHist().slice(0,15).map(h=>h.item).filter(i=>i&&!i.isLive&&isClean(i));
+  const histItems=inProgressItems();
   if(histItems.length)rows.push({title:'▶ Continuer a regarder',items:histItems});
-  const favItems=getFavs().slice(0,30).map(f=>f.item).filter(i=>i&&isClean(i));
+  const favItems=getFavs().slice(0,30).map(resolveItem).filter(i=>i&&isClean(i));
   if(favItems.length)rows.push({title:'♥ Mes favoris',items:favItems});
   if(trending.length)rows.push({title:'Nouveautes Films',items:trending});
   if(newSeries.length)rows.push({title:'Nouveautes Series',items:newSeries});
@@ -1351,8 +1388,8 @@ function mkCard(item,ri,ci,isLive){
   iw.appendChild(img);
   // Progress bar
   if(!live&&item.stream_id){
-    const pk='vid_'+item.stream_id;el.dataset.progKey=pk;
-    const pct=getProg()[pk]?.pct||0;
+    const pk=String(item.stream_id);el.dataset.progKey=pk;
+    const pct=progPct(item);
     if(pct>2){
       const pb=document.createElement('div');pb.className='cprog';
       const pf=document.createElement('div');pf.className='cprog-fill';
@@ -1412,7 +1449,7 @@ function applyGrid(){
   let items=S.gridAll;
   if(S.gridFilter)items=items.filter(i=>i.category===S.gridFilter);
   if(S.gridQuality)items=items.filter(i=>i.quality===S.gridQuality);
-  if(S.gridFavOnly){const favKeys=new Set(getFavs().map(f=>f.k));items=items.filter(i=>favKeys.has(itemKey(i)));}
+  if(S.gridFavOnly){const favKeys=new Set(getFavs().map(f=>(f.key||f.k)));items=items.filter(i=>favKeys.has(itemKey(i)));}
   if(S.gridSort==='recent')items=[...items].sort((a,b)=>Number(b.added)-Number(a.added));
   else items=[...items].sort((a,b)=>(a.title||'').localeCompare(b.title||''));
   S.gridItems=items;renderGrid();
@@ -1724,13 +1761,14 @@ function openItem(item){
 }
 // Lecture effective d'un film (avec reprise) — appelée par le bouton Lecture de la fiche
 function playMovie(item){
-  S.lastProgKey=item.stream_id?'vid_'+item.stream_id:null;
+  S.lastProgKey=item.stream_id?String(item.stream_id):null;
   S.lastProgItem=item;
   if(item.stream_id){
-    const prog=getProg()['vid_'+item.stream_id];
-    if(prog&&prog.pct>10&&prog.pct<92){
-      S.resumeStartMs=prog.t||0;S.resumeBtn=0;S.resumeEpIdx=null;
-      $('resume-sub').textContent=`${item.title} · ${Math.round(prog.pct)}% vu`;
+    const prog=getProg()[String(item.stream_id)];
+    const _pct=progPct(item);
+    if(_pct>10&&_pct<92){
+      S.resumeStartMs=(prog&&prog.t)||0;S.resumeBtn=0;S.resumeEpIdx=null;
+      $('resume-sub').textContent=`${item.title} · ${Math.round(_pct)}% vu`;
       $('resume-modal').hidden=false;S.zone='resume';focus();return;
     }
   }
@@ -1776,9 +1814,9 @@ function showOnlyView(id){
 // ── Rendus par tab ───────────────────────────────────────────────────────
 function renderTabHome(){
   const rows=[];
-  const hist=getHist().slice(0,15).map(h=>h.item).filter(i=>i&&!i.isLive&&isClean(i));
+  const hist=inProgressItems();
   if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().slice(0,20).map(f=>f.item).filter(i=>i&&isClean(i));
+  const favs=getFavs().slice(0,20).map(resolveItem).filter(i=>i&&isClean(i));
   if(favs.length)rows.push({title:'Ma liste',items:favs});
   if(S.appItems.length)rows.push({title:'Applications',items:S.appItems,isApps:true});
   const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
@@ -1847,9 +1885,9 @@ function renderTabLive(){
 
 function renderTabMyList(){
   const rows=[];
-  const hist=getHist().slice(0,20).map(h=>h.item).filter(i=>i&&isClean(i));
+  const hist=inProgressItems();
   if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().slice(0,40).map(f=>f.item).filter(i=>i&&isClean(i));
+  const favs=getFavs().slice(0,40).map(resolveItem).filter(i=>i&&isClean(i));
   if(favs.length)rows.push({title:'Ma liste',items:favs});
   if(!rows.length){$('content').innerHTML='<div style="padding:60px var(--safe);font-size:20px;color:var(--dim)">Rien ici — ajoutez des films avec ♡</div>';S.rows=[];return;}
   S.rows=rows;
@@ -1860,9 +1898,9 @@ function renderTabMyList(){
 function renderMyList(){
   const c=$('mylist-content');c.innerHTML='';
   const rows=[];
-  const hist=getHist().slice(0,20).map(h=>h.item).filter(i=>i&&isClean(i));
+  const hist=inProgressItems();
   if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().slice(0,40).map(f=>f.item).filter(i=>i&&isClean(i));
+  const favs=getFavs().slice(0,40).map(resolveItem).filter(i=>i&&isClean(i));
   if(favs.length)rows.push({title:'Ma liste',items:favs});
   if(!rows.length){
     c.innerHTML='<div style="padding:60px var(--safe);font-size:18px;color:var(--dim)">Rien ici pour l instant — ajoutez des films a votre liste avec ♡</div>';
