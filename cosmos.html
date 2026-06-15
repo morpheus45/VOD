@@ -1990,12 +1990,14 @@ function managePreview(){
   _pvTimer=setTimeout(()=>{
     const r=rectEl.getBoundingClientRect();
     if(r.width<10)return;
-    // Fractions (0..1) du viewport — Java multiplie par la taille reelle du WebView.
-    // 100% independant de la densite/devicePixelRatio (fix du mauvais placement).
-    const W=window.innerWidth||1920, H=window.innerHeight||1080;
+    // PIXELS PHYSIQUES (= CSS px × devicePixelRatio) : c'est ce qu'attend
+    // l'APK VOD (TvActivity.startLivePreview place la surface en px). Même
+    // convention que l'interface Xstream → aperçu correctement positionné.
+    const dpr=window.devicePixelRatio||1;
     try{
       window.AndroidBridge.startLivePreview(url,
-        r.left/W, r.top/H, r.width/W, r.height/H);
+        Math.round(r.left*dpr), Math.round(r.top*dpr),
+        Math.round(r.width*dpr), Math.round(r.height*dpr));
       _pvKey=key;
     }catch(e){}
   },850);
