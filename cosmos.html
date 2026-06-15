@@ -1839,10 +1839,13 @@ function showOnlyView(id){
 // ── Rendus par tab ───────────────────────────────────────────────────────
 function renderTabHome(){
   const rows=[];
-  const hist=inProgressItems();
-  if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().slice(0,20).map(resolveItem).filter(i=>i&&isClean(i));
-  if(favs.length)rows.push({title:'Ma liste',items:favs});
+  // PIPSILY : une seule rangée "Poursuivre" = en cours + favoris (dédupliqués)
+  const inprog=inProgressItems();
+  const inprogKeys=new Set(inprog.map(itemKey));
+  const favsOnly=getFavs().slice(0,30).map(resolveItem)
+    .filter(i=>i&&isClean(i)&&!inprogKeys.has(itemKey(i)));
+  const poursuivre=[...inprog,...favsOnly].slice(0,25);
+  if(poursuivre.length)rows.push({title:'Poursuivre',items:poursuivre});
   if(S.appItems.length)rows.push({title:'Applications',items:S.appItems,isApps:true});
   const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
   if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms});
@@ -2056,7 +2059,17 @@ function focus(){
     const items=$('ri'+S.rowIdx)?.querySelectorAll('.card');
     if(items&&items[S.cardIdx]){
       items[S.cardIdx].classList.add('foc');
-      items[S.cardIdx].scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});
+      // Centrage horizontal DANS la rangée uniquement (jamais via scrollIntoView
+      // inline:center qui décale tout l'écran quand on atteint le bord/Voir tout).
+      const cont=$('ri'+S.rowIdx), card=items[S.cardIdx];
+      if(cont&&card){
+        const cr=cont.getBoundingClientRect(), kr=card.getBoundingClientRect();
+        const delta=(kr.left+kr.width/2)-(cr.left+cr.width/2);
+        const maxL=cont.scrollWidth-cont.clientWidth;
+        cont.scrollTo({left:Math.max(0,Math.min(maxL,cont.scrollLeft+delta)),behavior:'smooth'});
+      }
+      // Sécurité : annuler tout décalage horizontal du body/page
+      if(window.scrollX!==0) window.scrollTo(0,window.scrollY);
     }
   }
   else if(z==='filter'){
@@ -2396,6 +2409,18 @@ function hideUpdateToast(){
   $('update-toast').hidden=true;
   _toastZone=false;
 }
+// Vérification auto de mise à jour (comme PIPSILY Xstream) : compare version.json
+// à la version installée → propose la MAJ dans Cosmos aussi.
+async function cosmosCheckUpdate(){
+  if(!window.AndroidBridge?.getApkVersion) return;
+  try{
+    const v=await fetch(GH+'version.json?cb='+Date.now()).then(r=>r.json());
+    if(!v||!v.apk_version||!v.apk_url) return;
+    const remote=parseInt(v.apk_version,10);
+    const local=parseInt(window.AndroidBridge.getApkVersion()||'0',10);
+    if(remote>local) showUpdateToast('v'+remote, v.apk_url);
+  }catch(e){}
+}
 
 // Toast button clicks
 $('toast-btn-ok').addEventListener('click',()=>{
@@ -2452,6 +2477,7 @@ setTimeout(()=>{$('loading').hidden=true;},25000);
   }
   loadContent();
   loadApps();
+  setTimeout(cosmosCheckUpdate, 2500); // propose la MAJ dans Cosmos aussi
 })();
 
 // ══════ APPLICATIONS (etagere style Google TV) ═══════════════════════════
