@@ -4478,14 +4478,12 @@ async function checkApkUpdate(){
     // Déjà à jour
     if(remoteVer <= localVer) return;
 
-    // Migration : les anciennes clés sv4/su4 étaient aussi posées au clic
-    // "Mettre à jour" (7 jours) → une installation ÉCHOUÉE bloquait la bannière.
+    // Mise à jour OBLIGATOIRE : plus de "Plus tard", plus de suppression.
+    // Nettoyage des anciennes clés de suppression (versions précédentes).
     localStorage.removeItem("pf_apk_sv4");
     localStorage.removeItem("pf_apk_su4");
-    // Suppression : "Plus tard" = 7 jours ; "Mettre à jour" = 10 min seulement
-    const suppressVer   = parseInt(localStorage.getItem("pf_apk_sv5") || "0", 10);
-    const suppressUntil = parseInt(localStorage.getItem("pf_apk_su5") || "0", 10);
-    if(suppressVer >= remoteVer && Date.now() < suppressUntil) return;
+    localStorage.removeItem("pf_apk_sv5");
+    localStorage.removeItem("pf_apk_su5");
 
     showApkUpdateBanner(vinfo, remoteVer);
   } catch {}
@@ -4502,28 +4500,24 @@ function showApkUpdateBanner(vinfo, remoteVer){
   const banner = document.createElement("div");
   banner.id = "apkUpdateBanner";
 
-  const _dismissApkBanner = () => {
-    banner.remove();
-    // Supprimer 7 jours à chaque "Plus tard" ou Back
-    localStorage.setItem("pf_apk_sv5", String(remoteVer));
-    localStorage.setItem("pf_apk_su5", String(Date.now() + 7 * 86400000));
-  };
-
   banner.innerHTML =
     '<div class="apk-tv-modal">' +
       '<div class="apk-tv-icon">📦</div>' +
       '<h2 class="apk-tv-title">PIPSILY v' + remoteVer + ' disponible</h2>' +
       '<p class="apk-tv-changes">' + (vinfo.changes || "Améliorations & corrections") + '</p>' +
+      '<div id="apkProgWrap" style="display:none;margin:16px auto 6px;max-width:340px">' +
+        '<div style="height:10px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden">' +
+          '<div id="apkProgBar" style="height:100%;width:0%;border-radius:6px;' +
+            'background:linear-gradient(90deg,#7B5FE8,#38A8E8);transition:width .25s"></div>' +
+        '</div>' +
+        '<p id="apkProgTxt" style="margin:9px 0 0;font-size:14px;color:#cdd6e6">Téléchargement… 0%</p>' +
+      '</div>' +
       '<div class="apk-tv-btns">' +
         '<button id="apkDownloadBtn" type="button" class="apk-tv-btn apk-tv-btn--install" tabindex="0">' +
           '⬇ Mettre à jour' +
         '</button>' +
-        '<button id="apkLaterBtn" type="button" class="apk-tv-btn" tabindex="0" ' +
-          'style="margin-top:10px;background:rgba(255,255,255,.08);font-size:13px;padding:10px 20px">' +
-          'Plus tard (7 jours)' +
-        '</button>' +
       '</div>' +
-      (isTV ? '<p class="apk-tv-hint">OK = installer · Retour = plus tard</p>' : '') +
+      (isTV ? '<p class="apk-tv-hint">OK = installer la mise à jour</p>' : '') +
     '</div>';
 
   banner.style.cssText =
@@ -4532,11 +4526,9 @@ function showApkUpdateBanner(vinfo, remoteVer){
     "display:flex;align-items:center;justify-content:center;" +
     "pointer-events:all;";
 
+  // Mise à jour obligatoire : Retour/Échap ne ferment PAS la bannière.
   banner.addEventListener("keydown", e => {
-    if(["Escape","GoBack","Back","BrowserBack"].includes(e.key)){
-      e.preventDefault(); e.stopPropagation();
-      _dismissApkBanner();
-    } else if(e.key !== "Enter" && e.key !== " "){
+    if(e.key !== "Enter" && e.key !== " "){
       e.preventDefault(); e.stopPropagation();
     }
   }, true);
@@ -4547,19 +4539,21 @@ function showApkUpdateBanner(vinfo, remoteVer){
     requestAnimationFrame(() => $("apkDownloadBtn")?.focus());
   });
 
-  // ── Plus tard ──
-  $("apkLaterBtn").onclick = _dismissApkBanner;
+  // ── Affichage de la progression ──
+  const setApkProg = (pct) => {
+    const wrap = $("apkProgWrap"), bar = $("apkProgBar"), txt = $("apkProgTxt");
+    if(wrap) wrap.style.display = "block";
+    pct = Math.max(0, Math.min(100, parseInt(pct, 10) || 0));
+    if(bar) bar.style.width = pct + "%";
+    if(txt) txt.textContent = pct >= 100 ? "Installation…" : ("Téléchargement… " + pct + "%");
+  };
 
-  // ── Téléchargement ──
-  $("apkDownloadBtn").onclick = () => {
+  // ── Lancer / relancer le téléchargement ──
+  const startDownload = () => {
     const url = vinfo.apk_url;
     const btn = $("apkDownloadBtn");
-    if(btn){ btn.textContent = "📥 Téléchargement en cours…"; btn.disabled = true; }
-
-    // Suppression COURTE (10 min) le temps d'installer — si l'installation
-    // échoue, la bannière est re-proposée au prochain lancement
-    localStorage.setItem("pf_apk_sv5", String(remoteVer));
-    localStorage.setItem("pf_apk_su5", String(Date.now() + 10 * 60000));
+    if(btn){ btn.textContent = "📥 Téléchargement…"; btn.disabled = true; }
+    setApkProg(0);
 
     if(typeof window.AndroidBridge?.downloadAndInstall === "function"){
       window.AndroidBridge.downloadAndInstall(url);
@@ -4569,6 +4563,18 @@ function showApkUpdateBanner(vinfo, remoteVer){
       window.open(url, "_blank");
     }
   };
+
+  // ── Callbacks natifs (DownloadManager → JS) ──
+  window.onApkDownloadProgress = (pct) => { if($("apkUpdateBanner")) setApkProg(pct); };
+  window.onApkDownloadFailed = (reason) => {
+    if(!$("apkUpdateBanner")) return;
+    const btn = $("apkDownloadBtn"), txt = $("apkProgTxt"), wrap = $("apkProgWrap");
+    if(wrap) wrap.style.display = "block";
+    if(txt) txt.textContent = "❌ Échec : " + (reason || "réessayez");
+    if(btn){ btn.textContent = "🔄 Relancer"; btn.disabled = false; setTimeout(() => btn.focus(), 50); }
+  };
+
+  $("apkDownloadBtn").onclick = startDownload;
 }
 
 window.addEventListener("load", boot);

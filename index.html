@@ -2,17 +2,16 @@
 <html lang="fr">
 <head>
   <script>
-    /* Routage interface — RÉSERVÉ À LA TV : le choix Cosmos ne s'applique que sur
-       Android TV / Google TV. Sur mobile et navigateur, on reste TOUJOURS sur
-       l'interface PIPSILY Xstream (optimisée tactile). */
+    /* Routage interface — le choix s'applique PARTOUT : si l'utilisateur a choisi
+       Cosmos (sélecteur dans Réglages), on l'ouvre quel que soit l'appareil.
+       Par défaut (aucun choix), Cosmos seulement sur Freebox TV ; sinon Xstream. */
     try{
       var _isTV = /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent)
                || /\bTV\b/.test(navigator.userAgent)
                || window.PIPSILY_NATIVE === 'android_tv';
       var _isFreebox = /Freebox/i.test(navigator.userAgent);
       var _theme = localStorage.getItem('pf_theme');
-      // Cosmos si choisi explicitement, OU par défaut sur Freebox (aucun choix encore)
-      if(_isTV && (_theme==='cosmos' || (_theme===null && _isFreebox))){ location.replace('./cosmos.html'); }
+      if(_theme==='cosmos' || (_theme===null && _isTV && _isFreebox)){ location.replace('./cosmos.html'); }
     }catch(e){}
   </script>
   <meta charset="UTF-8" />
@@ -261,7 +260,7 @@
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" onerror="console.warn('HLS.js indisponible')"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="./auth.js"></script>
-  <script src="app.js?v=175"></script>
+  <script src="app.js?v=176"></script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {

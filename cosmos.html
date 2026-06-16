@@ -804,10 +804,14 @@ html,body{
     <div class="t-text">
       <div class="t-title" id="toast-title">Mise a jour disponible</div>
       <div class="t-sub"  id="toast-sub">Nouvelle version disponible</div>
+      <div id="toast-prog-wrap" style="display:none;margin-top:10px;width:260px;max-width:60vw">
+        <div style="height:8px;border-radius:5px;background:rgba(255,255,255,.14);overflow:hidden">
+          <div id="toast-prog-bar" style="height:100%;width:0%;border-radius:5px;background:linear-gradient(90deg,#7B5FE8,#38A8E8);transition:width .25s"></div>
+        </div>
+      </div>
     </div>
     <div class="t-btns">
       <button class="t-btn t-btn-ok"    id="toast-btn-ok">Installer</button>
-      <button class="t-btn t-btn-later" id="toast-btn-later">Plus tard</button>
     </div>
   </div>
 
@@ -2163,16 +2167,11 @@ function scrollToRow(){
 
 // ══════ D-PAD ════════════════════════════════════════════════════════════
 function onKey(type){
-  // Toast update intercept (prioritaire)
+  // Toast update intercept (prioritaire) — mise à jour OBLIGATOIRE :
+  // un seul bouton (Installer / Relancer), Retour ne ferme pas.
   if(_toastZone){
-    if(type==='L'){qAll('.t-btn').forEach(b=>b.classList.remove('foc'));$('toast-btn-ok').classList.add('foc');}
-    else if(type==='R'){qAll('.t-btn').forEach(b=>b.classList.remove('foc'));$('toast-btn-later').classList.add('foc');}
-    else if(type==='E'){
-      const okFoc=$('toast-btn-ok').classList.contains('foc');
-      if(okFoc&&_updateUrl)window.AndroidBridge?.downloadAndInstall?.(_updateUrl);
-      hideUpdateToast();
-    }
-    else if(type==='B'){hideUpdateToast();}
+    if(type==='E'){ startCosmosUpdate(); }
+    // L / R / B : ignorés (pas de "Plus tard")
     return;
   }
 
@@ -2412,6 +2411,8 @@ function showUpdateToast(tagName,downloadUrl){
   _updateUrl=downloadUrl;
   $('toast-title').textContent='Mise a jour '+tagName+' disponible !';
   $('toast-sub').textContent='Appuyez sur Installer pour telecharger et mettre a jour';
+  const w=$('toast-prog-wrap'); if(w)w.style.display='none';
+  const bk=$('toast-btn-ok'); if(bk)bk.textContent='Installer';
   $('update-toast').hidden=false;
   _toastZone=true;
   // Focus on OK button
@@ -2421,6 +2422,15 @@ function showUpdateToast(tagName,downloadUrl){
 function hideUpdateToast(){
   $('update-toast').hidden=true;
   _toastZone=false;
+}
+// Lance (ou relance) le telechargement + installation. Le toast reste affiche.
+function startCosmosUpdate(){
+  if(!_updateUrl)return;
+  const bk=$('toast-btn-ok'); if(bk)bk.textContent='Telechargement...';
+  $('toast-sub').textContent='Telechargement... 0%';
+  const w=$('toast-prog-wrap'); if(w)w.style.display='block';
+  const bar=$('toast-prog-bar'); if(bar)bar.style.width='0%';
+  try{window.AndroidBridge?.downloadAndInstall?.(_updateUrl);}catch(e){}
 }
 // Vérification auto de mise à jour (comme PIPSILY Xstream) : compare version.json
 // à la version installée → propose la MAJ dans Cosmos aussi.
@@ -2435,12 +2445,8 @@ async function cosmosCheckUpdate(){
   }catch(e){}
 }
 
-// Toast button clicks
-$('toast-btn-ok').addEventListener('click',()=>{
-  if(_updateUrl)window.AndroidBridge?.downloadAndInstall?.(_updateUrl);
-  hideUpdateToast();
-});
-$('toast-btn-later').addEventListener('click',hideUpdateToast);
+// Toast button click (un seul bouton : Installer / Relancer)
+$('toast-btn-ok').addEventListener('click',startCosmosUpdate);
 
 window._onUpdateResult=function(data){
   if(!data)return;
@@ -2465,13 +2471,24 @@ window._onUpdateResult=function(data){
 };
 
 window._onDownloadProgress=function(pct){
-  $('toast-title').textContent='Telechargement... '+pct+'%';
+  pct=Math.max(0,Math.min(100,parseInt(pct,10)||0));
+  const w=$('toast-prog-wrap'); if(w)w.style.display='block';
+  const bar=$('toast-prog-bar'); if(bar)bar.style.width=pct+'%';
+  const sub=$('toast-sub'); if(sub)sub.textContent=pct>=100?'Installation...':('Telechargement... '+pct+'%');
   qAll('.set-item').forEach(el=>{
     if(el.dataset.action==='update'){
       const d=el.querySelector('.set-desc');
-      if(d)d.textContent='Telechargement... '+pct+'%';
+      if(d)d.textContent=pct>=100?'Installation...':('Telechargement... '+pct+'%');
     }
   });
+};
+// Alias pour le callback unifie (Xstream + Cosmos)
+window.onApkDownloadProgress=window._onDownloadProgress;
+// Echec / blocage du telechargement → bouton "Relancer"
+window.onApkDownloadFailed=function(reason){
+  const sub=$('toast-sub'); if(sub)sub.textContent='Echec : '+(reason||'reessayez');
+  const bk=$('toast-btn-ok'); if(bk)bk.textContent='Relancer';
+  if(!$('update-toast').hidden){_toastZone=true;qAll('.t-btn').forEach(b=>b.classList.remove('foc'));$('toast-btn-ok').classList.add('foc');}
 };
 
 // ══════ INIT ═════════════════════════════════════════════════════════════
@@ -2483,7 +2500,9 @@ setTimeout(()=>{$('loading').hidden=true;},25000);
   var _isTV = /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent)
            || /\bTV\b/.test(navigator.userAgent)
            || window.PIPSILY_NATIVE === 'android_tv';
-  if(!_isTV){ location.replace('./index.html'); return; }
+  // Hors TV : on reste sur Cosmos UNIQUEMENT si l'utilisateur l'a choisi explicitement.
+  var _wantsCosmos = false; try{ _wantsCosmos = localStorage.getItem('pf_theme') === 'cosmos'; }catch(e){}
+  if(!_isTV && !_wantsCosmos){ location.replace('./index.html'); return; }
   // Auth identique à VOD : même Supabase, même session partagée (origine commune)
   if(window.PIPSILY_AUTH&&window.PIPSILY_AUTH.authGate){
     try{ const a=await window.PIPSILY_AUTH.authGate(); if(!a) return; }catch(e){}

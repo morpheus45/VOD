@@ -51,6 +51,12 @@ public class MainActivity extends AppCompatActivity {
     // ── Téléchargement APK ──────────────────────────────────────────────
     private long              apkDownloadId = -1;
     private BroadcastReceiver apkReceiver   = null;
+    // Suivi de progression du téléchargement APK
+    private final android.os.Handler apkPollHandler =
+        new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable apkPollRunnable = null;
+    private long apkLastBytes      = -1;
+    private long apkLastProgressTs = 0;
 
     @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     @Override
@@ -235,6 +241,12 @@ public class MainActivity extends AppCompatActivity {
     void startApkDownload(String apkUrl) {
         runOnUiThread(() -> {
             try {
+                // Nettoyage d'un éventuel téléchargement précédent (cas "Relancer")
+                unregisterApkReceiver();
+                stopApkProgressPoll();
+                DownloadManager dmPrev = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                if (apkDownloadId > 0) { try { dmPrev.remove(apkDownloadId); } catch (Exception ignored) {} }
+
                 File dir  = getExternalFilesDir(null);
                 if (dir == null) dir = getCacheDir();
                 final File dest = new File(dir, "PIPSILY_update.apk");
@@ -247,22 +259,19 @@ public class MainActivity extends AppCompatActivity {
                 req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);
                 req.setMimeType("application/vnd.android.package-archive");
 
-                DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                final DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
                 apkDownloadId = dm.enqueue(req);
 
                 Toast.makeText(MainActivity.this, "📥 Téléchargement en cours…", Toast.LENGTH_SHORT).show();
-
-                if (webView != null) {
-                    webView.evaluateJavascript(
-                        "var b=document.getElementById('apkDownloadBtn');" +
-                        "if(b){b.textContent='📥 Téléchargement…';b.disabled=true;}", null);
-                }
+                jsApkProgress(0);
+                startApkProgressPoll(dm);
 
                 apkReceiver = new BroadcastReceiver() {
                     @Override public void onReceive(Context ctx, Intent intent) {
                         long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
                         if (id != apkDownloadId) return;
                         unregisterApkReceiver();
+                        stopApkProgressPoll();
                         // Vérifier que le téléchargement a réellement réussi
                         boolean ok = false;
                         try {
@@ -278,8 +287,10 @@ public class MainActivity extends AppCompatActivity {
                             }
                         } catch (Exception ignored) {}
                         if (ok) {
+                            jsApkProgress(100);
                             installDownloadedApk(dest);
                         } else {
+                            jsApkFailed("téléchargement interrompu");
                             Toast.makeText(MainActivity.this,
                                 "❌ Échec du téléchargement — réessayez", Toast.LENGTH_LONG).show();
                         }
@@ -295,10 +306,82 @@ public class MainActivity extends AppCompatActivity {
                 }
             } catch (Throwable e) {  // Throwable attrape aussi Error (ex: NoSuchMethodError)
                 Log.e(TAG, "startApkDownload", e);
+                jsApkFailed(e.getMessage());
                 Toast.makeText(MainActivity.this,
                     "Erreur téléchargement : " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    // ── Suivi de progression : poll DownloadManager → callback JS ──────────
+    private void startApkProgressPoll(final DownloadManager dm) {
+        stopApkProgressPoll();
+        apkLastBytes      = -1;
+        apkLastProgressTs = System.currentTimeMillis();
+        apkPollRunnable = new Runnable() {
+            @Override public void run() {
+                int status = -1, pct = 0; long soFar = 0, total = -1;
+                try {
+                    android.database.Cursor c = dm.query(
+                        new DownloadManager.Query().setFilterById(apkDownloadId));
+                    if (c != null) {
+                        if (c.moveToFirst()) {
+                            status = c.getInt(c.getColumnIndexOrThrow(
+                                DownloadManager.COLUMN_STATUS));
+                            soFar  = c.getLong(c.getColumnIndexOrThrow(
+                                DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                            total  = c.getLong(c.getColumnIndexOrThrow(
+                                DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                        }
+                        c.close();
+                    }
+                } catch (Exception ignored) {}
+
+                if (total > 0) pct = (int) (soFar * 100L / total);
+                if (pct < 0) pct = 0; if (pct > 99) pct = 99;
+
+                if (status == DownloadManager.STATUS_FAILED) {
+                    jsApkFailed("téléchargement interrompu");
+                    return;
+                }
+                if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                    jsApkProgress(100);
+                    return;
+                }
+
+                jsApkProgress(pct);
+
+                long now = System.currentTimeMillis();
+                if (soFar != apkLastBytes) { apkLastBytes = soFar; apkLastProgressTs = now; }
+                else if (now - apkLastProgressTs > 30000) {
+                    jsApkFailed("bloqué — appuyez sur Relancer");
+                    return;
+                }
+                apkPollHandler.postDelayed(this, 800);
+            }
+        };
+        apkPollHandler.postDelayed(apkPollRunnable, 800);
+    }
+
+    private void stopApkProgressPoll() {
+        if (apkPollRunnable != null) apkPollHandler.removeCallbacks(apkPollRunnable);
+        apkPollRunnable = null;
+    }
+
+    private void jsApkProgress(final int pct) {
+        if (webView == null) return;
+        webView.post(() -> webView.evaluateJavascript(
+            "if(window.onApkDownloadProgress)window.onApkDownloadProgress(" + pct + ");" +
+            "if(window._onDownloadProgress)window._onDownloadProgress(" + pct + ");", null));
+    }
+
+    private void jsApkFailed(final String reason) {
+        stopApkProgressPoll();
+        if (webView == null) return;
+        final String r = (reason == null ? "" : reason)
+            .replace("\\", "\\\\").replace("'", "\\'");
+        webView.post(() -> webView.evaluateJavascript(
+            "if(window.onApkDownloadFailed)window.onApkDownloadFailed('" + r + "');", null));
     }
 
     private void installDownloadedApk(File apkFile) {

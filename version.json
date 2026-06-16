@@ -1,7 +1,7 @@
 {
-  "apk_version": 40,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v40/PIPSILY.apk",
-  "changes": "Fin du clap de cinéma au lancement (splash sombre, le nouveau logo apparaît directement)",
+  "apk_version": 41,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v41/PIPSILY.apk",
+  "changes": "Choix du thème (Xstream / Cosmos) disponible partout · mise à jour avec % de téléchargement et bouton Relancer",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"
