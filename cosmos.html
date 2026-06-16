@@ -404,7 +404,9 @@ html,body{
   padding:14px 38px;border-radius:999px;font-size:16px;font-weight:700;border:none;cursor:pointer;
 }
 .panel-act-play{background:#fff;color:#0a0e1e}
-.panel-act-fav{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
+.panel-act-fav,.panel-act-restart{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
+.panel-tab-cnt{opacity:.6;font-size:.85em;margin-left:4px}
+.pep.locked{opacity:.45}
 .panel-act-btn.foc{box-shadow:0 0 0 2.5px var(--accent)}
 .panel-act-btn.is-fav{background:var(--accent);color:#fff;border-color:transparent}
 .panel-tabs{display:flex;gap:6px;margin-bottom:12px;flex-shrink:0;overflow-x:auto;scrollbar-width:none}
@@ -755,6 +757,7 @@ html,body{
         <div class="panel-plot"  id="panel-plot"></div>
         <div class="panel-acts">
           <button class="panel-act-btn panel-act-play" id="panel-btn-play">▶ Lecture</button>
+          <button class="panel-act-btn panel-act-restart" id="panel-btn-restart" hidden>↩ Début</button>
           <button class="panel-act-btn panel-act-fav"  id="panel-btn-fav">♡ Favoris</button>
         </div>
       </div>
@@ -907,23 +910,27 @@ function pushHist(i){
   storeSet(STORE.hist,h.slice(0,200));
 }
 // Progression d'un item — format PIPSILY (clé = String(stream_id), {t,d,ts}).
+// Pourcentage 0-100 à partir d'une entrée de progression, quel que soit le format :
+// {t,d} (PipPlayer Android, partagé Xstream+Cosmos) ou {pct} (0-1 iOS / 0-100 Cosmos).
+function pctOf(e){
+  if(!e)return 0;
+  if(e.t>0&&e.d>0)return Math.min(100,e.t/e.d*100);
+  if(e.pct!=null)return e.pct>1?Math.min(100,e.pct):e.pct*100;
+  return 0;
+}
 function progPct(i){
   if(!i)return 0;
   // Séries : progression du dernier épisode vu (clés `series_id||SxxExx`, comme Xstream)
   if(i.series_id&&!i.stream_id){const sp=seriesPctMap()[String(i.series_id)];return sp?Math.round(sp.pct):0;}
   if(!i.stream_id)return 0;
-  const p=getProg()[String(i.stream_id)];
-  if(!p)return 0;
-  if(p.pct!=null)return p.pct;
-  return (p.d>0)?Math.round(p.t/p.d*100):0;
+  return Math.round(pctOf(getProg()[String(i.stream_id)]));
 }
 // Map series_id → pct du dernier épisode regardé (aligné sur _getSeriesPctMap de Xstream)
 function seriesPctMap(){
   const prog=getProg(),map={},re=/^(.+)\|\|S\d+E\d+$/;
   for(const k in prog){const m=re.exec(k);if(!m)continue;const e=prog[k]||{};
-    const pct=(e.t>0&&e.d>0)?e.t/e.d*100:(e.pct>0?e.pct:0);
-    if(pct<=0)continue;const sid=m[1];
-    if(!map[sid]||(e.ts||0)>map[sid].ts)map[sid]={pct:Math.min(pct,100),ts:e.ts||0};}
+    const pct=pctOf(e);if(pct<=0)continue;const sid=m[1];
+    if(!map[sid]||(e.ts||0)>map[sid].ts)map[sid]={pct,ts:e.ts||0};}
   return map;
 }
 // Re-résout un favori/progression vers l'item du catalogue Cosmos (les blobs
@@ -1535,9 +1542,10 @@ function openPanel(item){
   // Label Lecture/Reprendre (films : selon progression ; séries : recalculé par buildPanel)
   const _pp=S.panelIsVod?progPct(item):0;
   $('panel-btn-play').textContent=(_pp>2&&_pp<95)?'▶ Reprendre':'▶ Lecture';
+  $('panel-btn-restart').hidden=true;            // films : pas de bouton Début
   $('panel-eps').innerHTML='';
   $('panel-tabs').innerHTML='';
-  S.panelResume=null;
+  S.panelWatch=null;
   S.panelActIdx=0;S.panelTabIdx=0;S.panelEpIdx=0;S.panelEps=[];
   $('panel').hidden=false;
   // Enrichissement TMDB : vrai backdrop large + note + synopsis FR
@@ -1578,45 +1586,66 @@ async function loadSeries(sid){
 function buildPanel(data){
   // Format statique (episodes_part*.json) = data.seasons ; format API = data.episodes
   const eps=data.seasons||data.episodes||{};
-  S.panelSmap={};S.panelSmeta=[];S.panelResume=null;
+  S.panelSmap={};S.panelSmeta=[];S.panelWatch=null;
   Object.entries(eps).forEach(([sNum,epList])=>{
     if(!Array.isArray(epList))return;
     S.panelSmap[sNum]=epList;
     S.panelSmeta.push({sNum,count:epList.length});
   });
   S.panelSmeta.sort((a,b)=>Number(a.sNum)-Number(b.sNum));
-  // Reprise : dernier épisode regardé de cette série (clé `series_id||SxxExx`)
-  let resumeTab=0;
+
+  // Liste ordonnée à plat (toutes saisons) pour calculer "épisode suivant"
+  const ordered=[];
+  S.panelSmeta.forEach(sm=>(S.panelSmap[sm.sNum]||[]).forEach((ep,ei)=>ordered.push({sNum:sm.sNum,ei,ep})));
+  const codeOf=o=>'S'+pad2(o.ep.season||o.sNum)+'E'+pad2(o.ep.episode_num||o.ei+1);
+
+  // Dernier épisode regardé (en cours OU terminé) — MÊME logique que Xstream
   try{
     const prog=getProg(),sid=String(S.panelItem.series_id||'');
     const re=new RegExp('^'+sid.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\|\\|S(\\d+)E(\\d+)$');
     let best=null;
     for(const k in prog){const m=re.exec(k);if(!m)continue;const e=prog[k]||{};
-      const pct=e.pct!=null?e.pct:(e.d>0?e.t/e.d*100:0);
-      if(pct<=2||pct>=95)continue;
-      if(!best||(e.ts||0)>best.ts)best={sNum:String(parseInt(m[1],10)),epNum:parseInt(m[2],10),ts:e.ts||0};}
+      const pct=pctOf(e); if(pct<=1)continue;
+      if(!best||(e.ts||0)>best.ts)best={sn:parseInt(m[1],10),en:parseInt(m[2],10),pct,ts:e.ts||0};}
     if(best){
-      const ti=S.panelSmeta.findIndex(s=>String(parseInt(s.sNum,10))===best.sNum);
-      if(ti>=0){resumeTab=ti;
-        const ei=(S.panelSmap[S.panelSmeta[ti].sNum]||[]).findIndex(ep=>Number(ep.episode_num)===best.epNum);
-        S.panelResume={sNum:S.panelSmeta[ti].sNum,ei:ei>=0?ei:0};}
+      const ci=ordered.findIndex(o=>Number(o.sNum)===best.sn&&Number(o.ep.episode_num)===best.en);
+      if(best.pct>=95){
+        if(ci>=0&&ci+1<ordered.length){const nx=ordered[ci+1];S.panelWatch={mode:'next',sNum:nx.sNum,ei:nx.ei,code:codeOf(nx),pct:0};}
+        else if(ci>=0){const o=ordered[ci];S.panelWatch={mode:'resume',sNum:o.sNum,ei:o.ei,code:codeOf(o),pct:best.pct};}
+      }else if(ci>=0){const o=ordered[ci];S.panelWatch={mode:'resume',sNum:o.sNum,ei:o.ei,code:codeOf(o),pct:best.pct};}
     }
   }catch(e){}
+  // Aucune progression → "Regarder" depuis le 1er épisode jouable
+  if(!S.panelWatch){const fe=ordered.find(o=>epUrl(o.ep));if(fe)S.panelWatch={mode:'watch',sNum:fe.sNum,ei:fe.ei,code:codeOf(fe),pct:0};}
+
+  // Saison affichée = celle de l'épisode à jouer (pour le voir en surbrillance)
+  let selTab=0;
+  if(S.panelWatch){const ti=S.panelSmeta.findIndex(s=>s.sNum===S.panelWatch.sNum);if(ti>=0)selTab=ti;}
+
   const tabs=$('panel-tabs');tabs.innerHTML='';
   S.panelSmeta.forEach((s,i)=>{
+    const m=Number.isFinite(+s.sNum)?'Saison '+s.sNum:s.sNum;
     const t=document.createElement('div');
-    t.className='panel-tab'+(i===resumeTab?' active':'');
-    t.textContent='Saison '+s.sNum;
+    t.className='panel-tab'+(i===selTab?' active':'');
+    t.innerHTML=esc(m)+' <span class="panel-tab-cnt">'+s.count+' ép.</span>';
     t.dataset.ti=i;tabs.appendChild(t);
   });
+
+  // Libellé du bouton principal (Reprendre / Épisode suivant / Regarder)
+  const pb=$('panel-btn-play'),rb=$('panel-btn-restart');
+  if(S.panelWatch&&S.panelWatch.mode==='resume')
+    pb.textContent='▶ Reprendre · '+S.panelWatch.code+(S.panelWatch.pct>1?' — '+Math.round(S.panelWatch.pct)+'%':'');
+  else if(S.panelWatch&&S.panelWatch.mode==='next')
+    pb.textContent='▶ Épisode suivant · '+S.panelWatch.code;
+  else pb.textContent='▶ Regarder la série';
+  // Bouton "Depuis le début" visible seulement s'il y a une progression
+  if(rb)rb.hidden=!(S.panelWatch&&(S.panelWatch.mode==='resume'||S.panelWatch.mode==='next'));
+
   if(S.panelSmeta.length){
-    S.panelTabIdx=resumeTab;
-    S.panelSelSeason=S.panelSmeta[resumeTab].sNum;
+    S.panelTabIdx=selTab;
+    S.panelSelSeason=S.panelSmeta[selTab].sNum;
     renderEps(S.panelSelSeason);
-    if(S.panelResume)S.panelEpIdx=S.panelResume.ei;
-    // Bouton principal : "Reprendre" s'il y a une progression
-    const pb=$('panel-btn-play');
-    if(pb)pb.textContent=S.panelResume?'▶ Reprendre':'▶ Lecture';
+    if(S.panelWatch)S.panelEpIdx=S.panelWatch.ei;
   }
 }
 function renderEps(sNum){
@@ -1627,18 +1656,20 @@ function renderEps(sNum){
   epList.forEach((ep,i)=>{
     const code='S'+pad2(ep.season||1)+'E'+pad2(ep.episode_num||i+1);
     const pk=`${S.panelItem.series_id}||${code}`;
-    const pct=prog[pk]?.pct||0;
-    const done=pct>90;
+    const pct=pctOf(prog[pk]);
+    const done=pct>=90;
+    const hasUrl=!!epUrl(ep);
+    const dur=ep.duration||ep.info?.duration||'';
     const div=document.createElement('div');
-    div.className='pep'+(done?' done':'');div.dataset.ei=i;
+    div.className='pep'+(done?' done':'')+(hasUrl?'':' locked');div.dataset.ei=i;
     div.innerHTML=`
       <img class="pep-thumb" src="${esc(ep.thumb||ep.info?.movie_image||S.panelItem.image||BLANK)}" loading="lazy" onerror="this.src='${BLANK}'">
       <div style="flex:1;min-width:0">
-        <div class="pep-code">${esc(code)}</div>
+        <div class="pep-code">${esc(code)}${dur?` · ${esc(dur)}`:''}</div>
         <div class="pep-title">${esc(ep.title||ep.info?.name||('Episode '+(i+1)))}</div>
-        ${pct>2?`<div class="pep-pct">${Math.round(pct)}% vu</div><div class="ep-prog"><div class="ep-prog-fill" style="width:${Math.min(pct,100)}%"></div></div>`:''}
+        ${pct>2&&!done?`<div class="pep-pct">${Math.round(pct)}% vu</div><div class="ep-prog"><div class="ep-prog-fill" style="width:${Math.min(pct,100)}%"></div></div>`:''}
       </div>
-      <div class="pep-play">▶</div>`;
+      <div class="pep-play">${done?'✓':(hasUrl?'▶':'–')}</div>`;
     eps.appendChild(div);
   });
 }
@@ -1648,15 +1679,35 @@ function changePanelSeason(idx){
   qAll('.panel-tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
   renderEps(S.panelSelSeason);S.panelEpIdx=0;
 }
+// Bouton principal série : joue l'épisode calculé (reprise / suivant / 1er), avec
+// modale de reprise si l'épisode a une progression (via playPanelEp).
+function playSeriesMain(){
+  if(!S.panelWatch){if(S.panelEps.length)playPanelEp(0);return;}
+  const ti=S.panelSmeta.findIndex(s=>s.sNum===S.panelWatch.sNum);
+  if(ti>=0&&S.panelSelSeason!==S.panelWatch.sNum)changePanelSeason(ti);
+  playPanelEp(S.panelWatch.ei);
+}
+// "Depuis le début" : 1er épisode jouable, sans modale de reprise.
+function playSeriesFromStart(){
+  let target=null;
+  for(const sm of S.panelSmeta){const arr=S.panelSmap[sm.sNum]||[];
+    for(let i=0;i<arr.length;i++){if(epUrl(arr[i])){target={sNum:sm.sNum,ei:i};break;}}
+    if(target)break;}
+  if(!target)return;
+  const ti=S.panelSmeta.findIndex(s=>s.sNum===target.sNum);
+  if(ti>=0&&S.panelSelSeason!==target.sNum)changePanelSeason(ti);
+  doPlayEp(target.ei,0);
+}
 function playPanelEp(ei){
   const ep=S.panelEps[ei];if(!ep)return;
   S.resumeEpIdx=ei;
   const code='S'+pad2(ep.season||1)+'E'+pad2(ep.episode_num||ei+1);
   const pk=`${S.panelItem.series_id}||${code}`;
   const prog=getProg()[pk];
-  if(prog&&prog.pct>10&&prog.pct<92){
+  const pct=pctOf(prog);
+  if(prog&&pct>10&&pct<92){
     S.resumeStartMs=prog.t||0;S.resumeBtn=0;
-    $('resume-sub').textContent=`${S.panelItem.title} · ${code} · ${Math.round(prog.pct)}% vu`;
+    $('resume-sub').textContent=`${S.panelItem.title} · ${code} · ${Math.round(pct)}% vu`;
     $('resume-modal').hidden=false;S.zone='resume';focus();return;
   }
   doPlayEp(ei,0);
@@ -2159,7 +2210,8 @@ function focus(){
     }
   }
   else if(z==='panel-acts'){
-    const btns=qAll('.panel-act-btn');
+    const btns=qAll('.panel-act-btn:not([hidden])');
+    if(S.panelActIdx>=btns.length)S.panelActIdx=btns.length-1;
     if(btns[S.panelActIdx])btns[S.panelActIdx].classList.add('foc');
   }
   else if(z==='panel-tabs'){
@@ -2384,16 +2436,20 @@ function onKey(type){
   }
 
   if(z==='panel-acts'){
+    const acts=qAll('.panel-act-btn:not([hidden])');
     if(type==='L'){S.panelActIdx=Math.max(0,S.panelActIdx-1);focus();}
-    else if(type==='R'){S.panelActIdx=Math.min(1,S.panelActIdx+1);focus();}
+    else if(type==='R'){S.panelActIdx=Math.min(acts.length-1,S.panelActIdx+1);focus();}
     else if(type==='D'){
       if($('panel-tabs').children.length>0){S.zone='panel-tabs';S.panelTabIdx=0;focus();}
       else if($('panel-eps').children.length>0){S.zone='panel-eps';S.panelEpIdx=0;focus();}
     }
     else if(type==='E'){
-      if(S.panelActIdx===0){
+      const b=acts[S.panelActIdx];if(!b)return;
+      if(b.id==='panel-btn-play'){
         if(S.panelIsVod)playMovie(S.panelItem);
-        else if(S.panelEps.length>0)playPanelEp(S.panelResume?S.panelResume.ei:0);
+        else playSeriesMain();
+      }else if(b.id==='panel-btn-restart'){
+        playSeriesFromStart();
       }else{
         const nowFav=toggleFav(S.panelItem);
         $('panel-btn-fav').textContent=nowFav?'♥ Favoris':'♡ Favoris';
