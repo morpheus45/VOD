@@ -908,11 +908,23 @@ function pushHist(i){
 }
 // Progression d'un item — format PIPSILY (clé = String(stream_id), {t,d,ts}).
 function progPct(i){
-  if(!i||!i.stream_id)return 0;
+  if(!i)return 0;
+  // Séries : progression du dernier épisode vu (clés `series_id||SxxExx`, comme Xstream)
+  if(i.series_id&&!i.stream_id){const sp=seriesPctMap()[String(i.series_id)];return sp?Math.round(sp.pct):0;}
+  if(!i.stream_id)return 0;
   const p=getProg()[String(i.stream_id)];
   if(!p)return 0;
   if(p.pct!=null)return p.pct;
   return (p.d>0)?Math.round(p.t/p.d*100):0;
+}
+// Map series_id → pct du dernier épisode regardé (aligné sur _getSeriesPctMap de Xstream)
+function seriesPctMap(){
+  const prog=getProg(),map={},re=/^(.+)\|\|S\d+E\d+$/;
+  for(const k in prog){const m=re.exec(k);if(!m)continue;const e=prog[k]||{};
+    const pct=(e.t>0&&e.d>0)?e.t/e.d*100:(e.pct>0?e.pct:0);
+    if(pct<=0)continue;const sid=m[1];
+    if(!map[sid]||(e.ts||0)>map[sid].ts)map[sid]={pct:Math.min(pct,100),ts:e.ts||0};}
+  return map;
 }
 // Re-résout un favori/progression vers l'item du catalogue Cosmos (les blobs
 // stockés par l'autre interface ont une forme différente → on relit par id).
@@ -927,13 +939,22 @@ function resolveItem(entry){
 }
 // Items "en cours" depuis la progression PARTAGÉE (comme PIPSILY Poursuivre).
 function inProgressItems(){
-  const prog=getProg(), byId={};
-  [...S.allVod,...S.allSeries].forEach(x=>{if(x.stream_id)byId[String(x.stream_id)]=x;});
-  const out=[];
+  const prog=getProg(), byId={}, bySid={};
+  S.allVod.forEach(x=>{if(x.stream_id)byId[String(x.stream_id)]=x;});
+  S.allSeries.forEach(x=>{if(x.series_id)bySid[String(x.series_id)]=x;});
+  const out=[], seen={};
+  // Films (clé = stream_id)
   Object.keys(prog).forEach(k=>{
+    if(/\|\|S\d+E\d+$/.test(k))return; // clés d'épisodes traitées plus bas
     const p=prog[k]||{}; const pct=p.pct!=null?p.pct:(p.d>0?p.t/p.d*100:0);
     const it=byId[k];
-    if(it&&pct>2&&pct<95&&!it.isLive&&isClean(it))out.push({it,ts:p.ts||0});
+    if(it&&pct>2&&pct<95&&!it.isLive&&isClean(it)){out.push({it,ts:p.ts||0});seen['v'+k]=1;}
+  });
+  // Séries (clés `series_id||SxxExx` regroupées par série, comme Xstream)
+  const sp=seriesPctMap();
+  Object.keys(sp).forEach(sid=>{
+    const m=sp[sid]; if(m.pct<=2||m.pct>=95)return;
+    const it=bySid[sid]; if(it&&!seen['s'+sid]&&isClean(it)){out.push({it,ts:m.ts||0});seen['s'+sid]=1;}
   });
   return out.sort((a,b)=>b.ts-a.ts).map(x=>x.it).slice(0,15);
 }
@@ -1511,8 +1532,12 @@ function openPanel(item){
   $('panel-backdrop').style.backgroundImage=item.image?"url('"+item.image+"')":'none';
   $('panel-btn-fav').textContent=isFav(item)?'♥ Favoris':'♡ Favoris';
   $('panel-btn-fav').classList.toggle('is-fav',isFav(item));
+  // Label Lecture/Reprendre (films : selon progression ; séries : recalculé par buildPanel)
+  const _pp=S.panelIsVod?progPct(item):0;
+  $('panel-btn-play').textContent=(_pp>2&&_pp<95)?'▶ Reprendre':'▶ Lecture';
   $('panel-eps').innerHTML='';
   $('panel-tabs').innerHTML='';
+  S.panelResume=null;
   S.panelActIdx=0;S.panelTabIdx=0;S.panelEpIdx=0;S.panelEps=[];
   $('panel').hidden=false;
   // Enrichissement TMDB : vrai backdrop large + note + synopsis FR
@@ -1551,24 +1576,47 @@ async function loadSeries(sid){
   if(data)buildPanel(data);
 }
 function buildPanel(data){
-  const info=data.info||data;
-  const eps=data.episodes||{};
-  S.panelSmap={};S.panelSmeta=[];
+  // Format statique (episodes_part*.json) = data.seasons ; format API = data.episodes
+  const eps=data.seasons||data.episodes||{};
+  S.panelSmap={};S.panelSmeta=[];S.panelResume=null;
   Object.entries(eps).forEach(([sNum,epList])=>{
+    if(!Array.isArray(epList))return;
     S.panelSmap[sNum]=epList;
     S.panelSmeta.push({sNum,count:epList.length});
   });
   S.panelSmeta.sort((a,b)=>Number(a.sNum)-Number(b.sNum));
+  // Reprise : dernier épisode regardé de cette série (clé `series_id||SxxExx`)
+  let resumeTab=0;
+  try{
+    const prog=getProg(),sid=String(S.panelItem.series_id||'');
+    const re=new RegExp('^'+sid.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\|\\|S(\\d+)E(\\d+)$');
+    let best=null;
+    for(const k in prog){const m=re.exec(k);if(!m)continue;const e=prog[k]||{};
+      const pct=e.pct!=null?e.pct:(e.d>0?e.t/e.d*100:0);
+      if(pct<=2||pct>=95)continue;
+      if(!best||(e.ts||0)>best.ts)best={sNum:String(parseInt(m[1],10)),epNum:parseInt(m[2],10),ts:e.ts||0};}
+    if(best){
+      const ti=S.panelSmeta.findIndex(s=>String(parseInt(s.sNum,10))===best.sNum);
+      if(ti>=0){resumeTab=ti;
+        const ei=(S.panelSmap[S.panelSmeta[ti].sNum]||[]).findIndex(ep=>Number(ep.episode_num)===best.epNum);
+        S.panelResume={sNum:S.panelSmeta[ti].sNum,ei:ei>=0?ei:0};}
+    }
+  }catch(e){}
   const tabs=$('panel-tabs');tabs.innerHTML='';
   S.panelSmeta.forEach((s,i)=>{
     const t=document.createElement('div');
-    t.className='panel-tab'+(i===0?' active':'');
+    t.className='panel-tab'+(i===resumeTab?' active':'');
     t.textContent='Saison '+s.sNum;
     t.dataset.ti=i;tabs.appendChild(t);
   });
   if(S.panelSmeta.length){
-    S.panelSelSeason=S.panelSmeta[0].sNum;
+    S.panelTabIdx=resumeTab;
+    S.panelSelSeason=S.panelSmeta[resumeTab].sNum;
     renderEps(S.panelSelSeason);
+    if(S.panelResume)S.panelEpIdx=S.panelResume.ei;
+    // Bouton principal : "Reprendre" s'il y a une progression
+    const pb=$('panel-btn-play');
+    if(pb)pb.textContent=S.panelResume?'▶ Reprendre':'▶ Lecture';
   }
 }
 function renderEps(sNum){
@@ -1584,7 +1632,7 @@ function renderEps(sNum){
     const div=document.createElement('div');
     div.className='pep'+(done?' done':'');div.dataset.ei=i;
     div.innerHTML=`
-      <img class="pep-thumb" src="${esc(ep.info?.movie_image||S.panelItem.image||BLANK)}" loading="lazy" onerror="this.src='${BLANK}'">
+      <img class="pep-thumb" src="${esc(ep.thumb||ep.info?.movie_image||S.panelItem.image||BLANK)}" loading="lazy" onerror="this.src='${BLANK}'">
       <div style="flex:1;min-width:0">
         <div class="pep-code">${esc(code)}</div>
         <div class="pep-title">${esc(ep.title||ep.info?.name||('Episode '+(i+1)))}</div>
@@ -1613,9 +1661,16 @@ function playPanelEp(ei){
   }
   doPlayEp(ei,0);
 }
+// URL d'un épisode : URL directe (format statique) ou construite (format API : id+ext)
+function epUrl(ep){
+  let u=ep.stream_url||ep.url||'';
+  if(!u){const id=ep.id||ep.stream_id;const ext=ep.ext||ep.container_extension||'mp4';
+    if(id)u='http://goldenlink.live/series/'+U+'/'+P+'/'+id+'.'+ext;}
+  return String(u).replace(/^https?:\/\//i,'http://');
+}
 function doPlayEp(ei,startMs){
   const ep=S.panelEps[ei];if(!ep)return;
-  const url=(ep.stream_url||ep.url||'').replace(/^https?:\/\//i,'http://');
+  const url=epUrl(ep);if(!url)return;
   const code='S'+pad2(ep.season||1)+'E'+pad2(ep.episode_num||ei+1);
   const title=`${S.panelItem.title} · ${code}`;
   S.lastProgKey=`${S.panelItem.series_id}||${code}`;
@@ -2338,7 +2393,7 @@ function onKey(type){
     else if(type==='E'){
       if(S.panelActIdx===0){
         if(S.panelIsVod)playMovie(S.panelItem);
-        else if(S.panelEps.length>0)playPanelEp(0);
+        else if(S.panelEps.length>0)playPanelEp(S.panelResume?S.panelResume.ei:0);
       }else{
         const nowFav=toggleFav(S.panelItem);
         $('panel-btn-fav').textContent=nowFav?'♥ Favoris':'♡ Favoris';
@@ -2378,6 +2433,22 @@ function onKey(type){
     return;
   }
 }
+
+// Retour matériel (télécommande) routé depuis TvActivity.onBackPressed :
+// revient d'un niveau dans Cosmos. Renvoie 'HANDLED' si géré, 'ROOT' si on est
+// à l'accueil (le natif met alors l'app en arrière-plan au lieu de la fermer).
+window.cosmosOnBack=function(){
+  try{
+    if(_toastZone)return 'HANDLED';                              // MAJ obligatoire
+    if(!$('voice-overlay').hidden){onKey('B');return 'HANDLED';}
+    if(!$('qual-picker').hidden){onKey('B');return 'HANDLED';}
+    if(!$('resume-modal').hidden){onKey('B');return 'HANDLED';}
+    if(!$('panel').hidden){onKey('B');return 'HANDLED';}         // fiche film/série
+    if(S.sec!=='home'){onKey('B');return 'HANDLED';}             // grid/recherche/réglages → accueil
+    if(S.zone!=='hero'&&S.zone!=='nav'){onKey('B');return 'HANDLED';} // rangées → haut de l'accueil
+    return 'ROOT';                                               // accueil racine
+  }catch(e){return 'ROOT';}
+};
 
 // ══════ EVENT LISTENERS ══════════════════════════════════════════════════
 window.addEventListener('tv_up',    ()=>onKey('U'));

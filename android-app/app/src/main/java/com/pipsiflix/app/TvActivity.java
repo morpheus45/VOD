@@ -637,8 +637,18 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
+        if (webView == null) { super.onBackPressed(); return; }
+        // Router le Retour vers l'interface web (Cosmos gère sa navigation interne).
+        // 'HANDLED' = géré côté JS ; sinon repli historique WebView ; à la racine on
+        // met l'app en arrière-plan (moveTaskToBack) au lieu de la fermer brutalement.
+        webView.evaluateJavascript(
+            "(function(){try{if(window.cosmosOnBack)return String(window.cosmosOnBack());}catch(e){}return 'NATIVE';})()",
+            result -> {
+                String r = result == null ? "" : result.replace("\"", "");
+                if ("HANDLED".equals(r)) return;
+                if (webView.canGoBack()) { webView.goBack(); return; }
+                moveTaskToBack(true);
+            });
     }
 
     @Override
