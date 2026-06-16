@@ -405,6 +405,7 @@ html,body{
 }
 .panel-act-play{background:#fff;color:#0a0e1e}
 .panel-act-fav,.panel-act-restart{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
+.panel-act-remove{background:rgba(229,75,75,.16);color:#ff9a9a;border:1px solid rgba(229,75,75,.4)}
 .panel-tab-cnt{opacity:.6;font-size:.85em;margin-left:4px}
 .pep.locked{opacity:.45}
 .panel-act-btn.foc{box-shadow:0 0 0 2.5px var(--accent)}
@@ -759,6 +760,7 @@ html,body{
           <button class="panel-act-btn panel-act-play" id="panel-btn-play">▶ Lecture</button>
           <button class="panel-act-btn panel-act-restart" id="panel-btn-restart" hidden>↩ Début</button>
           <button class="panel-act-btn panel-act-fav"  id="panel-btn-fav">♡ Favoris</button>
+          <button class="panel-act-btn panel-act-remove" id="panel-btn-remove" hidden>✕ Ne plus suivre</button>
         </div>
       </div>
     </div>
@@ -964,6 +966,25 @@ function inProgressItems(){
     const it=bySid[sid]; if(it&&!seen['s'+sid]&&isClean(it)){out.push({it,ts:m.ts||0});seen['s'+sid]=1;}
   });
   return out.sort((a,b)=>b.ts-a.ts).map(x=>x.it).slice(0,15);
+}
+// Un item est "suivi" s'il est en cours (Poursuivre) ou en favori
+function isFollowed(i){
+  if(!i)return false;
+  if(isFav(i))return true;
+  if(i.series_id)return ((seriesPctMap()[String(i.series_id)]||{}).pct||0)>2;
+  return progPct(i)>2;
+}
+// "Ne plus suivre" : efface progression (film ou TOUS les épisodes d'une série),
+// retire des favoris et de l'historique → disparaît de "Poursuivre".
+function forgetItem(i){
+  if(!i)return;
+  const prog=getProg();
+  if(i.series_id){const pre=String(i.series_id)+'||';Object.keys(prog).forEach(k=>{if(k.indexOf(pre)===0)delete prog[k];});}
+  if(i.stream_id)delete prog[String(i.stream_id)];
+  delete prog[itemKey(i)];
+  storeSet(STORE.prog,prog);_cacheP=prog;
+  if(isFav(i))toggleFav(i);
+  const h=getHist().filter(x=>(x.key||x.k)!==itemKey(i));storeSet(STORE.hist,h);
 }
 function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
 function isClean(i){return !ADULT_RE.test(i.category||'')&&!ADULT_RE.test(i.title||'');}
@@ -1543,6 +1564,9 @@ function openPanel(item){
   const _pp=S.panelIsVod?progPct(item):0;
   $('panel-btn-play').textContent=(_pp>2&&_pp<95)?'▶ Reprendre':'▶ Lecture';
   $('panel-btn-restart').hidden=true;            // films : pas de bouton Début
+  $('panel-btn-remove').hidden=!isFollowed(item);
+  $('panel-btn-remove').textContent='✕ Ne plus suivre';
+  S._removeArm=false;
   $('panel-eps').innerHTML='';
   $('panel-tabs').innerHTML='';
   S.panelWatch=null;
@@ -2450,10 +2474,26 @@ function onKey(type){
         else playSeriesMain();
       }else if(b.id==='panel-btn-restart'){
         playSeriesFromStart();
+      }else if(b.id==='panel-btn-remove'){
+        // Confirmation en 2 temps (évite un retrait accidentel)
+        if(!S._removeArm){
+          S._removeArm=true;b.textContent='✕ Confirmer le retrait ?';
+          clearTimeout(S._removeTO);
+          S._removeTO=setTimeout(()=>{S._removeArm=false;const r=$('panel-btn-remove');if(r)r.textContent='✕ Ne plus suivre';},4000);
+          return;
+        }
+        clearTimeout(S._removeTO);S._removeArm=false;
+        forgetItem(S.panelItem);
+        const wasHome=(S.sec==='home');
+        $('panel').hidden=true;
+        if(wasHome)renderTabHome(); else closePanel();
       }else{
         const nowFav=toggleFav(S.panelItem);
         $('panel-btn-fav').textContent=nowFav?'♥ Favoris':'♡ Favoris';
         $('panel-btn-fav').classList.toggle('is-fav',nowFav);
+        // un favori rend l'item "suivi" → garder le bouton Retrait cohérent
+        const rm=$('panel-btn-remove');if(rm){rm.hidden=!isFollowed(S.panelItem);rm.textContent='✕ Ne plus suivre';}
+        S._removeArm=false;focus();
       }
     }
     else if(type==='B'){closePanel();}
