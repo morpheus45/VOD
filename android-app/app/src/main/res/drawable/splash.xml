@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Splash de lancement : logo PIPSILY centré sur fond sombre -->
+<!-- Splash de lancement : fond sombre uni (pas d'ancien logo clap).
+     Le nouveau logo PIPSILY apparaît ensuite via l'overlay web #pfSplash. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
             <solid android:color="#060b16" />
         </shape>
-    </item>
-    <item>
-        <bitmap
-            android:src="@drawable/splash_logo"
-            android:gravity="center" />
     </item>
 </layer-list>
