@@ -1747,10 +1747,19 @@ function doPlayEp(ei,startMs){
   const ep=S.panelEps[ei];if(!ep)return;
   const url=epUrl(ep);if(!url)return;
   const code='S'+pad2(ep.season||1)+'E'+pad2(ep.episode_num||ei+1);
+  const sid=S.panelItem.series_id;
   const title=`${S.panelItem.title} · ${code}`;
-  S.lastProgKey=`${S.panelItem.series_id}||${code}`;
+  // Playlist plate de TOUTES les saisons → next + passage auto à l'épisode suivant
+  const all=[];
+  S.panelSmeta.forEach(sm=>(S.panelSmap[sm.sNum]||[]).forEach((e)=>all.push(e)));
+  const eps=all.map(e=>{const c='S'+pad2(e.season||1)+'E'+pad2(e.episode_num);
+    return{url:epUrl(e),episode_label:c,title:e.title||e.info?.name||'',progress_key:`${sid}||${c}`};}).filter(e=>e.url);
+  const curIdx=eps.findIndex(e=>e.url===url);
+  // Map url → clé de progression : sauver le BON épisode même après auto-advance
+  window._epUrlMap=window._epUrlMap||{};eps.forEach(e=>{if(e.url)window._epUrlMap[e.url]=e.progress_key;});
+  S.lastProgKey=`${sid}||${code}`;
   S.lastProgItem=S.panelItem;
-  playItem({url,title,isLive:false},startMs);
+  playItem({url,title,isLive:false,epsJson:JSON.stringify(eps),epIdx:curIdx>=0?curIdx:0},startMs);
 }
 
 // ══════ PLAYBACK ════════════════════════════════════════════════════════
@@ -1758,13 +1767,16 @@ function playItem(item,startMs){
   const url=(item.url||'').replace(/^https?:\/\//i,'http://');
   if(!url)return;
   const title=item.title||'';
+  const sub=item.subtitle||'';
+  const epsJson=item.epsJson||'[]';            // playlist épisodes (next + auto-advance)
+  const epIdx=(item.epIdx!=null)?item.epIdx:-1;
   const B=window.AndroidBridge;
   if(B){
     // Lecteur natif ExoPlayer — MÊME méthode que PIPSILY Xstream (openPlayerAt,
-    // éprouvée + reprise). Replis : openPlayer → openInVlc → openVideo.
+    // éprouvée + reprise + playlist). Replis : openPlayer → openInVlc → openVideo.
     try{
-      if(B.openPlayerAt){ B.openPlayerAt(url,title,'','[]',-1,Math.max(0,startMs||0)); return; }
-      if(B.openPlayer){ B.openPlayer(url,title,'','[]',-1); return; }
+      if(B.openPlayerAt){ B.openPlayerAt(url,title,sub,epsJson,epIdx,Math.max(0,startMs||0)); return; }
+      if(B.openPlayer){ B.openPlayer(url,title,sub,epsJson,epIdx); return; }
       if(B.openInVlc){ B.openInVlc(url,title,!!item.isLive); return; }
       if(B.openVideo){ B.openVideo(url,title); return; }
     }catch(e){}
@@ -1772,7 +1784,9 @@ function playItem(item,startMs){
   window.location.href=url;
 }
 window.onAndroidPlayerClosed=function(url,posMs,durMs){
-  const key=S.lastProgKey;
+  // Après un auto-advance, l'URL renvoyée est l'épisode réellement en cours →
+  // on retrouve sa vraie clé via _epUrlMap (sinon repli sur lastProgKey).
+  const key=(window._epUrlMap&&window._epUrlMap[url])||S.lastProgKey;
   if(key&&durMs>5000){
     const pct=Math.round((posMs/durMs)*100);
     saveProg(key,{pct,t:posMs,d:durMs,ts:Date.now()});
@@ -2533,18 +2547,27 @@ function onKey(type){
 // Retour matériel (télécommande) routé depuis TvActivity.onBackPressed :
 // revient d'un niveau dans Cosmos. Renvoie 'HANDLED' si géré, 'ROOT' si on est
 // à l'accueil (le natif met alors l'app en arrière-plan au lieu de la fermer).
-window.cosmosOnBack=function(){
-  try{
-    if(_toastZone)return 'HANDLED';                              // MAJ obligatoire
-    if(!$('voice-overlay').hidden){onKey('B');return 'HANDLED';}
-    if(!$('qual-picker').hidden){onKey('B');return 'HANDLED';}
-    if(!$('resume-modal').hidden){onKey('B');return 'HANDLED';}
-    if(!$('panel').hidden){onKey('B');return 'HANDLED';}         // fiche film/série
-    if(S.sec!=='home'){onKey('B');return 'HANDLED';}             // grid/recherche/réglages → accueil
-    if(S.zone!=='hero'&&S.zone!=='nav'){onKey('B');return 'HANDLED';} // rangées → haut de l'accueil
-    return 'ROOT';                                               // accueil racine
-  }catch(e){return 'ROOT';}
-};
+// ── Retour matériel : "piège" d'historique ────────────────────────────────
+// On garde toujours un état d'historique en réserve : à chaque Retour (qui
+// déclenche popstate), on ferme la surface ouverte la plus haute et on
+// re-pousse un état → le Retour ne ferme JAMAIS l'app et revient bien en arrière.
+// Marche sur l'APK actuel (Retour natif → webView.goBack() → popstate), sans la v42.
+function cosmosBackStep(){
+  if(_toastZone)return;                                          // MAJ obligatoire : ignorer
+  if(!$('voice-overlay').hidden){closeVoice();return;}
+  if(!$('qual-picker').hidden){closeQualPicker();return;}
+  if(!$('resume-modal').hidden){$('resume-modal').hidden=true;S.zone=S.sec==='home'?'hero':'grid';focus();return;}
+  if(!$('panel').hidden){closePanel();return;}                   // fiche film/série
+  if(S.sec!=='home'){gotoSection('home');return;}                // grid/recherche/réglages → accueil
+  if(S.zone!=='hero'&&S.zone!=='nav'){S.zone='hero';S.hBtn=0;focus();return;} // rangées → haut
+  // accueil racine : ne rien faire (on reste dans l'app)
+}
+window.addEventListener('popstate',function(){
+  try{cosmosBackStep();}catch(e){}
+  try{history.pushState({cos:1},'');}catch(e){}                  // re-piéger
+});
+// v42 : TvActivity appelle cosmosOnBack ; on délègue au même mécanisme.
+window.cosmosOnBack=function(){ try{history.back();}catch(e){} return 'HANDLED'; };
 
 // ══════ EVENT LISTENERS ══════════════════════════════════════════════════
 window.addEventListener('tv_up',    ()=>onKey('U'));
@@ -2678,6 +2701,7 @@ setTimeout(()=>{$('loading').hidden=true;},25000);
   }
   loadContent();
   loadApps();
+  try{history.pushState({cos:1},'');}catch(e){}  // état "piège" pour capter le Retour matériel
   setTimeout(cosmosCheckUpdate, 2500); // propose la MAJ dans Cosmos aussi
 })();
 

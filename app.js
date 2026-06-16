@@ -835,6 +835,24 @@ function getWatchTs(item){
   return 0;
 }
 
+// "Ne plus suivre" : efface la progression (film, ou TOUS les épisodes d'une
+// série), retire des favoris et de l'historique → disparaît de "Poursuivre".
+function forgetItemX(item){
+  const prog = getProg();
+  if(item.type === "series" || item.series_id){
+    const pre = String(item.series_id || item.id || "") + "||";
+    Object.keys(prog).forEach(k => { if(k.startsWith(pre)) delete prog[k]; });
+  }
+  const id = String(item.id || item.stream_id || "");
+  if(id) delete prog[id];
+  delete prog[itemKey(item)];
+  storeSet(STORE.progress, prog);
+  _invalidateCache();
+  if(isFav(item)) toggleFav(item);
+  const h = getHist().filter(x => x.key !== itemKey(item));
+  storeSet(STORE.history, h);
+  if(typeof renderPoursuivreRow === "function") renderPoursuivreRow();
+}
 function toggleFav(item){
   const favs = getFavs();
   const key  = itemKey(item);
@@ -1255,6 +1273,9 @@ function openVodPanel(item){
           <span class="fav-heart">♥</span>
           <span id="vodFavLabel">${isFav(item) ? "Favori" : "Ajouter aux favoris"}</span>
         </button>
+        ${(savedMs > 0 || isFav(item))
+          ? `<button id="vodForgetBtn" class="vod-restart-btn" type="button" style="color:#ff9a9a;border-color:rgba(229,75,75,.45)">✕ Ne plus suivre</button>`
+          : ""}
       </div>
     </div>`;
 
@@ -1286,6 +1307,21 @@ function openVodPanel(item){
     const lbl = $("vodFavLabel");
     if(lbl) lbl.textContent = fav ? "Favori" : "Ajouter aux favoris";
   });
+
+  // ── Ne plus suivre (confirmation en 2 temps) ──
+  const _vodForget = $("vodForgetBtn");
+  if(_vodForget){
+    let armed = false;
+    _vodForget.addEventListener("click", () => {
+      if(!armed){
+        armed = true; _vodForget.textContent = "✕ Confirmer le retrait ?";
+        setTimeout(() => { armed = false; const b = $("vodForgetBtn"); if(b) b.textContent = "✕ Ne plus suivre"; }, 4000);
+        return;
+      }
+      forgetItemX(item);
+      closeVodPanel();
+    });
+  }
 
   // ── Focus initial (TV / D-pad) — Entrée joue directement ──
   setTimeout(() => ($("vodResumeBtn") || $("vodPlayBtn"))?.focus(), 80);
@@ -1652,6 +1688,9 @@ function renderPanel(){
           <span class="fav-heart">♥</span>
           <span id="seriesFavLabel">${isFav(s) ? "Favori" : "Ajouter aux favoris"}</span>
         </button>
+        ${(lastWatched || isFav(s))
+          ? `<button id="seriesForgetBtn" class="vod-restart-btn" type="button" style="color:#ff9a9a;border-color:rgba(229,75,75,.45)">✕ Ne plus suivre</button>`
+          : ""}
       </div>
 
       ${tabsHtml}
@@ -1732,6 +1771,21 @@ function renderPanel(){
     const lbl = $("seriesFavLabel");
     if(lbl) lbl.textContent = fav ? "Favori" : "Ajouter aux favoris";
   });
+
+  // ── Ne plus suivre la série (confirmation en 2 temps) ──
+  const _serForget = $("seriesForgetBtn");
+  if(_serForget){
+    let armed = false;
+    _serForget.addEventListener("click", () => {
+      if(!armed){
+        armed = true; _serForget.textContent = "✕ Confirmer le retrait ?";
+        setTimeout(() => { armed = false; const b = $("seriesForgetBtn"); if(b) b.textContent = "✕ Ne plus suivre"; }, 4000);
+        return;
+      }
+      forgetItemX(s);
+      closePanel();
+    });
+  }
 
   // Onglets
   panel.querySelectorAll(".sp-tab").forEach(btn => {
