@@ -941,10 +941,30 @@ function favId(entry){return String((entry&&(entry.key||entry.k))||'').split('||
 function resolveItem(entry){
   const id=favId(entry);
   if(id){
-    const m=[...S.allVod,...S.allSeries].find(x=>String(x.stream_id)===id||String(x.series_id)===id);
+    // inclut les chaînes live (ex SyFy) → on récupère l'item du catalogue avec sa vraie image
+    const m=[...S.allVod,...S.allSeries,...S.liveItems].find(x=>String(x.stream_id)===id||String(x.series_id)===id);
     if(m)return m;
   }
-  return (entry&&entry.item)||null;
+  const it=(entry&&entry.item)||null;
+  // blob stocké par l'autre interface : champ image parfois nommé stream_icon/cover…
+  if(it&&!it.image)it.image=it.stream_icon||it.cover||it.poster||it.logo||'';
+  return it;
+}
+// Filtre par type d'onglet : 'vod' | 'series' | 'live' | null (tout)
+function matchTabType(i,t){
+  if(!t)return true;
+  if(t==='live')return !!i.isLive;
+  if(t==='series')return !!i.series_id&&!i.isLive;
+  if(t==='vod')return !i.isLive&&!i.series_id;
+  return true;
+}
+// Rangée "Poursuivre" (en cours + favoris) filtrée par type d'onglet
+function poursuivreItems(typeFilter){
+  const inprog=inProgressItems().filter(i=>matchTabType(i,typeFilter));
+  const keys=new Set(inprog.map(itemKey));
+  const favs=getFavs().slice(0,40).map(resolveItem)
+    .filter(i=>i&&isClean(i)&&matchTabType(i,typeFilter)&&!keys.has(itemKey(i)));
+  return [...inprog,...favs].slice(0,25);
 }
 // Items "en cours" depuis la progression PARTAGÉE (comme PIPSILY Poursuivre).
 function inProgressItems(){
@@ -1460,7 +1480,7 @@ function mkCard(item,ri,ci,isLive){
   img.loading='lazy';
   img.onload=()=>img.classList.add('loaded');
   img.onerror=()=>{img.src=BLANK;img.onerror=null;img.classList.add('loaded');};
-  img.src=item.image||BLANK;
+  img.src=item.image||item.stream_icon||item.cover||item.poster||item.logo||BLANK;
   if(img.complete)img.classList.add('loaded');
   iw.appendChild(img);
   // Progress bar
@@ -2002,12 +2022,8 @@ function showOnlyView(id){
 // ── Rendus par tab ───────────────────────────────────────────────────────
 function renderTabHome(){
   const rows=[];
-  // PIPSILY : une seule rangée "Poursuivre" = en cours + favoris (dédupliqués)
-  const inprog=inProgressItems();
-  const inprogKeys=new Set(inprog.map(itemKey));
-  const favsOnly=getFavs().slice(0,30).map(resolveItem)
-    .filter(i=>i&&isClean(i)&&!inprogKeys.has(itemKey(i)));
-  const poursuivre=[...inprog,...favsOnly].slice(0,25);
+  // Accueil : Poursuivre = en cours + favoris, TOUS types confondus
+  const poursuivre=poursuivreItems(null);
   if(poursuivre.length)rows.push({title:'Poursuivre',items:poursuivre});
   if(S.appItems.length)rows.push({title:'Applications',items:S.appItems,isApps:true});
   const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
@@ -2028,6 +2044,8 @@ function renderTabHome(){
 function renderTabMovies(){
   // Films par categories — style Google TV Films tab
   const rows=[];
+  const p=poursuivreItems('vod');                       // Films : que les films
+  if(p.length)rows.push({title:'Poursuivre',items:p});
   const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
   if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms});
   const byCat={};
@@ -2040,6 +2058,8 @@ function renderTabMovies(){
 
 function renderTabShows(){
   const rows=[];
+  const p=poursuivreItems('series');                    // Séries : que les séries
+  if(p.length)rows.push({title:'Poursuivre',items:p});
   const newSeries=[...S.allSeries].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
   if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries});
   const byCat={};
@@ -2052,6 +2072,8 @@ function renderTabShows(){
 
 function renderTabLive(){
   const rows=[];
+  const p=poursuivreItems('live');                      // TV : que les chaînes (favoris live)
+  if(p.length)rows.push({title:'Favoris',items:p,isLive:true});
   const byLiveCat={};
   S.liveItems.forEach(i=>{const c=i.category||'Général';(byLiveCat[c]=byLiveCat[c]||[]).push(i);});
   // Regrouper les toutes petites catégories dans "Autres"
