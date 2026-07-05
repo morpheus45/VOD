@@ -1,6 +1,6 @@
 // sw.js — PIPSILY v5.0 — mise à jour automatique + notification
-const CACHE = "pipsily-v77";
-const SHELL = ["./","./index.html","./login.html","./account.html","./player.html","./styles.css?v=74","./player.css","./app.js?v=79","./auth.js","./player.js?v=51","./manifest.webmanifest","./logo.svg","./icons/icon-192.png","./icons/icon-512.png","./version.json"];
+const CACHE = "pipsily-v78";
+const SHELL = ["./","./index.html","./login.html","./account.html","./player.html","./styles.css?v=74","./player.css","./app.js?v=80","./auth.js","./player.js?v=51","./manifest.webmanifest","./logo.svg","./icons/icon-192.png","./icons/icon-512.png","./version.json"];
 
 // ── Installation : mettre en cache le shell dans le NOUVEAU cache ──
 //  On NE purge PAS les anciens caches ici (ça se fait à l'activation, une fois

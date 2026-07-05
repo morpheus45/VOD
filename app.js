@@ -969,7 +969,23 @@ function filtered(){
     items.sort((a,b) => a.title.localeCompare(b.title));
 
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
-  if(S.type === "live") items = groupLiveItems(items);
+  if(S.type === "live"){
+    items = groupLiveItems(items);
+    // Vue Google TV UNIQUEMENT : retirer la PREMIÈRE tuile de chaque catégorie
+    // quand c'est une tuile au logo "drapeau tricolore" générique (frlog.png) —
+    // c'est l'entrée "multiplex" qui ouvre chaque ligne et gêne visuellement.
+    // Les autres chaînes (y compris nommées, ex. FRANCE CANAL+/RMC) restent.
+    // La vue web normale n'est PAS affectée (données S.live intactes).
+    if(document.documentElement.classList.contains("is-tv")){
+      const seenCat = new Set();
+      items = items.filter(g => {
+        const first = !seenCat.has(g.category_name);
+        seenCat.add(g.category_name);
+        if(first && /frlog\.png(\?|$)/i.test(g.stream_icon || "")) return false;
+        return true;
+      });
+    }
+  }
 
   return items;
 }
