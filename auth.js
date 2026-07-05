@@ -90,9 +90,15 @@ async function getSession(){
 }
 
 async function signIn(email, password){
-  // Mode dev : accès admin sans Supabase
-  if(!_configured || !_supa){
-    if(email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && password === "!Morpheus45!"){
+  // Supabase configuré mais client indisponible (CDN bloqué/hors-ligne) :
+  // on ÉCHOUE FERMÉ. Jamais d'accès accordé sans backend d'auth réel.
+  if(_configured && !_supa){
+    return { error: { message: "⚠️ Connexion au serveur impossible (réseau ou blocage). Réessayez." } };
+  }
+  // Mode dev LOCAL uniquement (Supabase pas encore configuré, ex. tests locaux
+  // sans backend). Aucune donnée réelle n'est protégée dans ce cas.
+  if(!_configured){
+    if(email.toLowerCase() === ADMIN_EMAIL.toLowerCase()){
       const session = _mkDevSession(email);
       localStorage.setItem(_DEV_SESSION_KEY, JSON.stringify(session));
       return { data: { session }, error: null };
@@ -100,6 +106,22 @@ async function signIn(email, password){
     return { error: { message: "⚙️ Supabase non configuré. Lancez SETUP.bat pour activer les comptes." } };
   }
   return _supa.auth.signInWithPassword({ email, password });
+}
+
+// Création d'un compte par l'ADMIN sans écraser sa propre session : on utilise
+// un client Supabase jetable (persistSession:false + storageKey dédié) pour que
+// le signUp n'auto-connecte pas le nouvel utilisateur dans l'onglet admin.
+async function adminCreateUser(email, password){
+  if(_configured && !_supa) return { error: { message: "Client Supabase indisponible." } };
+  if(!_configured)          return { error: { message: "⚙️ Supabase non configuré." } };
+  let tmp;
+  try {
+    tmp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: { persistSession: false, autoRefreshToken: false, storageKey: "pipsily_admin_tmp" }
+    });
+  } catch(e){ return { error: { message: "Impossible d'initialiser le client : " + e.message } }; }
+  const redirectTo = "https://morpheus45.github.io/VOD/login.html";
+  return tmp.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
 }
 
 async function signUp(email, password){
@@ -113,7 +135,7 @@ async function signUp(email, password){
 async function signOut(){
   localStorage.removeItem(_DEV_SESSION_KEY);
   localStorage.removeItem("pipsily_session_token");
-  if(!_supa || !_configured){ window.location.href = "./login.html"; return; }
+  if(!_supa || !_configured){ window.location.replace("./login.html"); return; }
   const session = await getSession();
   if(session){
     try { await _supa.from("sessions").delete().eq("user_id", session.user.id); } catch {}
@@ -380,21 +402,50 @@ function promptParentalPin(storedPin){
     const errEl = overlay.querySelector("#pinError");
     inp.focus();
 
+    const cleanup = () => document.removeEventListener("keydown", onKey, true);
+
     const validate = () => {
       if(inp.value === storedPin){
-        overlay.remove(); resolve(true);
+        cleanup(); overlay.remove(); resolve(true);
       } else {
         attempts++;
         errEl.style.display = "block";
         errEl.textContent = `Code incorrect (${attempts}/3)`;
         inp.value = "";
-        if(attempts >= 3){ overlay.remove(); resolve(false); }
+        if(attempts >= 3){ cleanup(); overlay.remove(); resolve(false); }
       }
     };
 
-    overlay.querySelector("#pinOkBtn").onclick = validate;
-    overlay.querySelector("#pinCancelBtn").onclick = () => { overlay.remove(); resolve(false); };
-    inp.addEventListener("keydown", e => { if(e.key === "Enter") validate(); });
+    const okBtn     = overlay.querySelector("#pinOkBtn");
+    const cancelBtn = overlay.querySelector("#pinCancelBtn");
+    const focusables = [inp, okBtn, cancelBtn];
+
+    const cancel  = () => { cleanup(); overlay.remove(); resolve(false); };
+
+    okBtn.onclick     = validate;
+    cancelBtn.onclick = cancel;
+
+    // Piège à focus D-pad : capture-phase pour couper le handler global de
+    // l'app (sinon les flèches naviguent la grille DERRIÈRE l'overlay).
+    function onKey(e){
+      const kc = e.keyCode;
+      const isBack = ["Escape","GoBack","Back","BrowserBack"].includes(e.key)
+                   || kc === 10009 || kc === 461 || kc === 4;
+      if(isBack){ e.preventDefault(); e.stopPropagation(); cancel(); return; }
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)){
+        e.preventDefault(); e.stopPropagation();
+        const i = Math.max(0, focusables.indexOf(document.activeElement));
+        const dir = (e.key === "ArrowDown" || e.key === "ArrowRight") ? 1 : -1;
+        const n = Math.min(focusables.length - 1, Math.max(0, i + dir));
+        focusables[n].focus();
+        return;
+      }
+      if(e.key === "Enter"){
+        e.preventDefault(); e.stopPropagation();
+        if(document.activeElement === cancelBtn) cancel(); else ok();
+      }
+    }
+    document.addEventListener("keydown", onKey, true);
   });
 }
 
@@ -412,9 +463,17 @@ function _devAuth(){
 }
 
 async function authGate(){
-  // ── Supabase non configuré → mode dev (tout passe) ──
-  if(!_configured || !_supa){
-    console.warn("[PIPSILY] Supabase non configuré — auth désactivée (mode dev)");
+  // ── Supabase configuré mais client indisponible (CDN bloqué/offline) ──
+  // ÉCHEC FERMÉ : on ne donne AUCUN accès (surtout pas admin). On renvoie
+  // vers le login, qui affichera l'erreur réseau.
+  if(_configured && !_supa){
+    console.error("[PIPSILY] Client Supabase indisponible — accès refusé (fail-closed)");
+    window.location.replace("./login.html?err=network");
+    return null;
+  }
+  // ── Supabase VRAIMENT non configuré (tests locaux sans backend) → mode dev ──
+  if(!_configured){
+    console.warn("[PIPSILY] Supabase non configuré — auth désactivée (mode dev local)");
     return _devAuth();
   }
 
@@ -424,7 +483,7 @@ async function authGate(){
   catch(e){ console.warn("[PIPSILY] getSession:", e.message); }
 
   if(!session){
-    window.location.href = "./login.html";
+    window.location.replace("./login.html");
     return null;
   }
 
@@ -591,6 +650,7 @@ window.PIPSILY_AUTH = {
   getSession,
   signIn,
   signUp,
+  adminCreateUser,
   signOut,
   getProfile,
   checkSubscription,

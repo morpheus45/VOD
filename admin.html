@@ -437,8 +437,9 @@
       btn.disabled = true; btn.textContent = "Création…";
 
       try {
-        // Utilise signUp (pas auth.admin qui nécessite service_role non sûr côté client)
-        const { data, error } = await A.supabase.auth.signUp({ email, password: pw });
+        // Client jetable : ne PAS écraser la session admin (sinon l'admin est
+        // déconnecté et l'upsert du profil ci-dessous s'exécuterait sans droits).
+        const { data, error } = await A.adminCreateUser(email, pw);
         if(error) throw error;
         if(!data.user) throw new Error("Utilisateur non créé — vérifiez si l'email est déjà utilisé.");
 

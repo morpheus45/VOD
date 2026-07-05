@@ -1,14 +1,16 @@
 // sw.js — PIPSILY v5.0 — mise à jour automatique + notification
-const CACHE = "pipsily-v76";
-const SHELL = ["./","./index.html","./login.html","./account.html","./player.html","./styles.css?v=74","./player.css","./app.js?v=78","./auth.js","./player.js?v=51","./manifest.webmanifest","./logo.svg","./icons/icon-192.png","./icons/icon-512.png","./version.json"];
+const CACHE = "pipsily-v77";
+const SHELL = ["./","./index.html","./login.html","./account.html","./player.html","./styles.css?v=74","./player.css","./app.js?v=79","./auth.js","./player.js?v=51","./manifest.webmanifest","./logo.svg","./icons/icon-192.png","./icons/icon-512.png","./version.json"];
 
-// ── Installation : vider anciens caches + mettre en cache le shell ──
+// ── Installation : mettre en cache le shell dans le NOUVEAU cache ──
+//  On NE purge PAS les anciens caches ici (ça se fait à l'activation, une fois
+//  le nouveau SW réellement pris en main). Sinon, entre install et activation,
+//  l'ancien SW servirait un cache vidé → écran blanc hors-ligne, et un échec
+//  d'addAll détruirait le cache actif pour rien.
 self.addEventListener("install", e => {
   e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      .then(() => caches.open(CACHE).then(c => c.addAll(SHELL)))
-      // NE PAS appeler skipWaiting() ici — on attend que l'utilisateur accepte
+    caches.open(CACHE).then(c => c.addAll(SHELL))
+    // NE PAS appeler skipWaiting() ici — on attend que l'utilisateur accepte
   );
 });
 
@@ -40,7 +42,18 @@ self.addEventListener("fetch", e => {
   const url = new URL(request.url);
   const isData = url.pathname.endsWith(".json") || url.pathname.endsWith(".m3u");
   if(isData){
-    e.respondWith(fetch(request).catch(() => caches.match(request)));
+    // network-first AVEC mise en cache : frais quand en ligne, disponible hors
+    // ligne. (Avant : le fallback caches.match ne trouvait jamais rien car on
+    // n'écrivait jamais dans le cache.)
+    e.respondWith(
+      fetch(request).then(r => {
+        if(url.origin === self.location.origin && r.ok){
+          const clone = r.clone();
+          caches.open(CACHE).then(c => c.put(request, clone)).catch(()=>{});
+        }
+        return r;
+      }).catch(() => caches.match(request))
+    );
     return;
   }
   e.respondWith(

@@ -23,8 +23,20 @@ const SENTINEL_M = "300px";
 //  ÉTAT GLOBAL
 // ─────────────────────────────────────────────────────────────────
 
+// ── Persistance de la section active (Films/Séries/TV) ──
+const _SECTION_KEY = "pf_section";
+function _loadSection(){
+  try {
+    const v = localStorage.getItem(_SECTION_KEY);
+    return ["vod","series","live"].includes(v) ? v : "vod";
+  } catch { return "vod"; }
+}
+function _saveSection(t){
+  try { localStorage.setItem(_SECTION_KEY, t); } catch {}
+}
+
 const S = {
-  type      : "vod",
+  type      : _loadSection(),
   vod       : [],
   series    : [],
   live      : [],
@@ -137,6 +149,12 @@ function inferQuality(src){
   if(/\b(fhd|full[\s-]?hd|1080p?|hd|720p?)\b/.test(t)) return "HD";
   if(/\b(sd|480p?|360p?)\b/.test(t)) return "SD";
   return "";
+}
+
+// Normalisation insensible aux accents/casse pour la recherche
+// ("amelie" trouve "Amélie", "cafe" trouve "Café").
+function _norm(s){
+  return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -444,6 +462,10 @@ function openVodPanel(item){
   S.panel.series   = item;
   S.panel.isVod    = true;
 
+  // Empile une entrée d'historique pour que le bouton Retour ferme le panneau
+  _tvCaptureFocus();
+  try { history.pushState({pf:"vodPanel"}, ""); } catch {}
+
   document.body.style.overflow = "hidden";
   const panel = $("seriesPanel");
   panel.hidden = false;
@@ -485,12 +507,13 @@ function openVodPanel(item){
       </div>
     </div>`;
 
-  // ── Bind events ──
-  $("vodCloseBtn").addEventListener("click", closeVodPanel);
-  panel.addEventListener("click", e => { if(e.target === panel) closeVodPanel(); }, { once: true });
+  // ── Bind events ── (fermeture via history.back → popstate ferme proprement)
+  // Backdrop géré par le listener global unique sur #seriesPanel (pas de
+  // listener par-ouverture : évitait la fuite + le bug {once:true}).
+  $("vodCloseBtn").addEventListener("click", () => history.back());
 
   $("vodPlayBtn").addEventListener("click", () => {
-    closeVodPanel();
+    history.back();
     playItem(item);
   });
 
@@ -561,12 +584,26 @@ async function fetchVodPlot(item){
   } catch { return null; }
 }
 
+// ── Focus TV : mémoriser la carte d'origine avant d'ouvrir un panneau/overlay,
+//    la re-focaliser à la fermeture (sinon retour en tête de page). ──
+function _tvCaptureFocus(){
+  S._tvReturnFocus = document.activeElement;
+}
+function _tvRestoreFocus(){
+  const el = S._tvReturnFocus;
+  S._tvReturnFocus = null;
+  if(el && el !== document.body && document.contains(el)){
+    try { el.focus(); el.scrollIntoView({ block:"nearest", inline:"center" }); } catch {}
+  }
+}
+
 function closeVodPanel(){
   S.panel.open  = false;
   S.panel.isVod = false;
   const panel = $("seriesPanel");
   panel.hidden = true;
   document.body.style.overflow = "";
+  _tvRestoreFocus();
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -580,6 +617,10 @@ function openPanel(series){
   S.panel.seasonsMeta= [];
   S.panel.selSeason  = null;
 
+  // Empile une entrée d'historique pour que le bouton Retour ferme le panneau
+  _tvCaptureFocus();
+  try { history.pushState({pf:"seriesPanel"}, ""); } catch {}
+
   document.body.style.overflow = "hidden";
 
   const panel = $("seriesPanel");
@@ -588,6 +629,8 @@ function openPanel(series){
   bindClose();
 
   loadEpisodes(series).then(({ seasonsMap, seasonsMeta, directOnly }) => {
+    // Anti-race : si l'utilisateur a fermé/changé de série entre-temps, ignorer.
+    if(S.panel.series !== series) return;
     S.panel.seasonsMap  = seasonsMap;
     S.panel.seasonsMeta = seasonsMeta;
     S.panel.directOnly  = directOnly || false;
@@ -599,12 +642,16 @@ function openPanel(series){
 
 function closePanel(){
   S.panel.open = false;
+  S.panel.series = null;
+  S.panel.seasonsMap = {};
   $("seriesPanel").hidden = true;
   document.body.style.overflow = "";
+  _tvRestoreFocus();
 }
 
 function bindClose(){
-  $("seriesCloseBtn")?.addEventListener("click", closePanel);
+  // Passe par history.back() → le handler popstate ferme (une entrée, un retour).
+  $("seriesCloseBtn")?.addEventListener("click", () => history.back());
 }
 
 function buildPanelLoading(s){
@@ -872,23 +919,8 @@ async function playItem(item){
     url        : item.url || item.stream_url
   }));
 
-  // ── Transition fluide : overlay noir plein écran AVANT la navigation
-  //    pour masquer le flash blanc du navigateur entre 2 pages ──
-  const blackout = document.createElement("div");
-  blackout.style.cssText =
-    "position:fixed;inset:0;z-index:99999;background:#000;" +
-    "display:flex;align-items:center;justify-content:center;" +
-    "color:#7B5FE8;font-size:14px;font-family:system-ui,sans-serif";
-  blackout.innerHTML = "<div style='display:flex;flex-direction:column;align-items:center;gap:14px'>" +
-    "<div style='width:42px;height:42px;border:3px solid rgba(123,95,232,.2);border-top-color:#7B5FE8;border-radius:50%;animation:pf-spin 1s linear infinite'></div>" +
-    "<div style='letter-spacing:.04em'>Chargement…</div></div>";
-  // Spinner via animation inline
-  const sty = document.createElement("style");
-  sty.textContent = "@keyframes pf-spin{to{transform:rotate(360deg)}}";
-  document.head.appendChild(sty);
-  document.body.appendChild(blackout);
-  document.documentElement.style.background = "#000";
-  document.body.style.background = "#000";
+  // (Pas de blackout overlay — player.html a déjà un fond noir inline.
+  //  Ajouter un div peut, dans certains contextes, bloquer la navigation.)
 
   // APK Android v4+ : tente le lecteur VLC/MX externe
   // Sur Android TV : player.html (souvent pas de VLC installé)
@@ -917,16 +949,23 @@ function filtered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
   if(S.cat)    items = items.filter(x => x.category_name === S.cat);
   if(S.search){
-    const q = S.search.toLowerCase();
+    const q = _norm(S.search);
     items = items.filter(x =>
-      x.title.toLowerCase().includes(q) || (x.plot||"").toLowerCase().includes(q)
+      _norm(x.title).includes(q) || _norm(x.plot).includes(q)
     );
   }
-  // Qualité non applicable au live
-  if(S.quality && S.type !== "live") items = items.filter(x => x.quality === S.quality);
+  // Qualité non applicable au live. "Autres" = ni 4K, ni HD, ni SD.
+  if(S.quality && S.type !== "live"){
+    if(S.quality === "Autres")
+      items = items.filter(x => !["4K","HD","SD"].includes(x.quality));
+    else
+      items = items.filter(x => x.quality === S.quality);
+  }
   if(S.sort === "category")
     items.sort((a,b) => a.category_name.localeCompare(b.category_name)||a.title.localeCompare(b.title));
-  else if(S.sort !== "recent")
+  else if(S.sort === "recent")
+    items.sort((a,b) => (b.added||0) - (a.added||0));
+  else if(S.type !== "live")
     items.sort((a,b) => a.title.localeCompare(b.title));
 
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
@@ -988,6 +1027,8 @@ function groupLiveItems(items){
 // ── Sélecteur de qualité Live (overlay) ──
 function openLivePicker(group){
   if(document.getElementById("livePicker")) return;
+  _tvCaptureFocus();
+  try { history.pushState({pf:"livePicker"}, ""); } catch {}
   const ov = document.createElement("div");
   ov.id = "livePicker";
   ov.className = "live-picker";
@@ -1008,19 +1049,18 @@ function openLivePicker(group){
   // Focus auto sur la 1ère qualité (TV/D-pad)
   setTimeout(() => ov.querySelector(".live-picker__btn")?.focus(), 50);
 
-  const close = () => ov.remove();
+  // Fermeture : toujours via history.back() → popstate retire l'overlay et
+  // restaure le focus (Escape/Back géré par le handler document, pas ici,
+  // pour éviter un double history.back()).
   ov.querySelectorAll(".live-picker__btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const idx = Number(btn.dataset.idx);
-      close();
+      history.back();
       playItem(group._variants[idx].item);
     });
   });
-  document.getElementById("livePickerClose").addEventListener("click", close);
-  ov.addEventListener("click", e => { if(e.target === ov) close(); });
-  ov.addEventListener("keydown", e => {
-    if(e.key === "Escape" || e.key === "GoBack" || e.key === "Back"){ e.preventDefault(); close(); }
-  });
+  document.getElementById("livePickerClose").addEventListener("click", () => history.back());
+  ov.addEventListener("click", e => { if(e.target === ov) history.back(); });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1159,13 +1199,23 @@ function renderNetflixRows(){
 
   const all = S.type === "vod" ? S.vod : S.series;
 
-  // Grouper par catégorie (ordre d'apparition original)
+  // Grouper par catégorie — adult à la fin
+  const _adultCat = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
   const catMap = new Map();
   for(const item of all){
     const cat = item.category_name || "Autre";
     if(!catMap.has(cat)) catMap.set(cat, []);
     catMap.get(cat).push(item);
   }
+  // Réordonner : non-adult d'abord, adult à la fin
+  const catKeys = [...catMap.keys()].sort((a, b) => {
+    const aa = _adultCat(a), bb = _adultCat(b);
+    if(aa !== bb) return aa ? 1 : -1;
+    return a.localeCompare(b);
+  });
+  const catMapSorted = new Map(catKeys.map(k => [k, catMap.get(k)]));
+  catMap.clear();
+  catMapSorted.forEach((v, k) => catMap.set(k, v));
 
   if(!catMap.size){ grid.innerHTML = ""; empty.hidden = false; return; }
   empty.hidden = true;
@@ -1253,13 +1303,20 @@ function render(){
   } else {
     if(heroEl)  heroEl.hidden  = true;
     if(novSect) novSect.hidden = true;
+    renderEnCours();
   }
 
   // Masquer le filtre qualité pour le live (non pertinent)
   if($("qualitySelect")) $("qualitySelect").style.display = S.type === "live" ? "none" : "";
 
   const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
+  const _isAdult = c => /adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
+  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))]
+    .sort((a, b) => {
+      const aa = _isAdult(a), bb = _isAdult(b);
+      if(aa !== bb) return aa ? 1 : -1;   // adult toujours après
+      return a.localeCompare(b);
+    });
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
     cats.map(c => `<option value="${esc(c)}"${c===S.cat?" selected":""}>${esc(c)}</option>`).join("");
 
@@ -1320,6 +1377,8 @@ function renderCatPills(cats){
 // ── Overlay de recherche plein écran (TV-friendly) ──
 function openSearchOverlay(){
   if($("searchOverlay")) return;
+  _tvCaptureFocus();
+  try { history.pushState({pf:"searchOverlay"}, ""); } catch {}
   const ov = document.createElement("div");
   ov.id = "searchOverlay";
   ov.className = "search-overlay";
@@ -1334,10 +1393,11 @@ function openSearchOverlay(){
   const inp = $("searchOverlayInput");
   inp.value = S.search || "";
   setTimeout(() => inp.focus(), 50);
-  const close = () => { ov.remove(); document.querySelector(".cat-pill--search")?.focus(); };
+  // Fermeture via history.back() → popstate retire l'overlay et restaure le
+  // focus (la pill recherche a été capturée à l'ouverture). Escape/Back géré
+  // par le handler document ; ici on ne gère QUE Enter (valider la recherche).
   inp.addEventListener("keydown", e => {
-    if(e.key === "Escape"){ e.preventDefault(); close(); }
-    else if(e.key === "Enter"){
+    if(e.key === "Enter"){
       e.preventDefault();
       S.search = inp.value.trim();
       $("searchInput").value = S.search;
@@ -1346,10 +1406,10 @@ function openSearchOverlay(){
       const g = $("grid");
       if(g) g.className = useNetflix ? "netflix-rows" : "grid";
       if(useNetflix) renderNetflixRows(); else renderGrid(true);
-      close();
+      history.back();
     }
   });
-  ov.addEventListener("click", e => { if(e.target === ov) close(); });
+  ov.addEventListener("click", e => { if(e.target === ov) history.back(); });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1358,20 +1418,47 @@ function openSearchOverlay(){
 
 function initTV(){
   // ── Navigation D-pad TV unifiée — un seul handler, 3 modes clairs ──
-  document.addEventListener("keydown", e => {
-    const k = e.key;
+  function onDpadKey(e){
+    // Normalise les touches Retour numériques des TV (Tizen 10009, webOS 461,
+    // Android 4) qui n'exposent pas toujours un e.key exploitable.
+    let k = e.key;
+    if(e.keyCode === 10009 || e.keyCode === 461 || e.keyCode === 4) k = "GoBack";
 
-    // Retour / Fermeture panneau
+    // Retour / Fermeture : délègue à history.back() → le handler popstate
+    // ferme l'élément le plus récent (un seul chemin de fermeture = pas
+    // d'entrée d'historique fantôme). Si rien n'est ouvert, on laisse passer
+    // (le navigateur/wrapper gère la sortie).
     if(["Escape","GoBack","Back","BrowserBack"].includes(k)){
-      if(!$("seriesPanel")?.hidden){
-        e.preventDefault();
-        if(S.panel.isVod) closeVodPanel(); else closePanel();
-      }
+      const overlayOpen = document.getElementById("livePicker")
+                        || document.getElementById("searchOverlay")
+                        || !$("seriesPanel")?.hidden;
+      if(overlayOpen){ e.preventDefault(); history.back(); }
       return;
     }
 
     if(!["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(k)) return;
+
+    // Overlay PIN parental : géré par son propre piège à focus (auth.js). On ne
+    // touche pas à la grille derrière. (Défensif : normalement stopPropagation
+    // en capture empêche déjà d'arriver ici.)
+    if(document.getElementById("parentalOverlay")) return;
+
+    // Picker qualité Live : nav entre boutons
+    if(document.getElementById("livePicker")){
+      e.preventDefault();
+      _navLivePicker(k);
+      return;
+    }
+    // Overlay recherche : input gère seul (entrée/echap)
+    if(document.getElementById("searchOverlay")) return;
+
     e.preventDefault();
+
+    // Boutons Compte / Admin de la topbar (au-dessus des nav-btns)
+    if(document.activeElement?.classList.contains("user-btn")){
+      _navUserBtns(k);
+      return;
+    }
 
     const panelOpen  = !$("seriesPanel")?.hidden;
     const useNetflix = $("grid")?.className === "netflix-rows";
@@ -1379,7 +1466,31 @@ function initTV(){
     if(panelOpen)  { _navPanel(k);   return; }
     if(useNetflix) { _navNetflix(k); return; }
     _navGrid(k);
+  }
+  document.addEventListener("keydown", onDpadKey);
+
+  // ── Relais des télécommandes Android TV (google-tv-perso & autres wrappers)
+  //    qui envoient des CustomEvent tv_* au lieu de keydown natifs. Sans ça,
+  //    D-pad et Back sont totalement morts dans ces launchers. ──
+  const _TV_KEYMAP = { tv_up:"ArrowUp", tv_down:"ArrowDown", tv_left:"ArrowLeft",
+                       tv_right:"ArrowRight", tv_back:"GoBack" };
+  Object.keys(_TV_KEYMAP).forEach(evt =>
+    window.addEventListener(evt, () => onDpadKey({ key:_TV_KEYMAP[evt], preventDefault(){} }))
+  );
+  window.addEventListener("tv_enter", () => {
+    const el = document.activeElement;
+    if(el && el !== document.body && typeof el.click === "function") el.click();
   });
+
+  function _navLivePicker(k){
+    const buttons = [...document.querySelectorAll("#livePicker .live-picker__btn, #livePicker .live-picker__close")];
+    const idx = buttons.indexOf(document.activeElement);
+    if(idx < 0){ buttons[0]?.focus(); return; }
+    let next = idx;
+    if(k === "ArrowRight" || k === "ArrowDown") next = Math.min(idx + 1, buttons.length - 1);
+    else if(k === "ArrowLeft" || k === "ArrowUp") next = Math.max(idx - 1, 0);
+    buttons[next]?.focus();
+  }
 
   // ── Mode panneau séries / VOD ──
   function _navPanel(k){
@@ -1395,6 +1506,34 @@ function initTV(){
     } else if(k === "ArrowUp" || k === "ArrowLeft"){
       items[Math.max(idx - 1, 0)]?.focus();
     }
+  }
+
+  // ── Helper : nombre RÉEL de colonnes de la grille (mesuré, pas supposé) ──
+  //    Compte les cartes qui partagent le offsetTop de la première ligne.
+  function _gridCols(cards){
+    if(!cards.length) return 1;
+    const top0 = cards[0].offsetTop;
+    let c = 0;
+    for(const el of cards){ if(el.offsetTop === top0) c++; else break; }
+    return Math.max(1, c);
+  }
+
+  // ── Boutons Compte / Admin de la topbar ──
+  function _visibleUserBtns(){
+    return [...document.querySelectorAll(".topbar-user-btns .user-btn")]
+      .filter(b => b.offsetParent !== null);
+  }
+  function _focusUserBtns(){
+    const btn = _visibleUserBtns()[0];
+    if(btn){ btn.focus(); return true; }
+    return false;
+  }
+  function _navUserBtns(k){
+    const btns = _visibleUserBtns();
+    const i = btns.indexOf(document.activeElement);
+    if(k === "ArrowRight" && i < btns.length - 1) btns[i + 1].focus();
+    else if(k === "ArrowLeft" && i > 0) btns[i - 1].focus();
+    else if(k === "ArrowDown") document.querySelector(".nav-btn.active, .nav-btn")?.focus();
   }
 
   // ── Helper : focus sur le 1er pill catégorie (ou pill actif) ──
@@ -1421,6 +1560,7 @@ function initTV(){
       const ni = navBtns.indexOf(active);
       if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
+      if(k === "ArrowUp"){ _focusUserBtns(); return; }
       if(k === "ArrowDown"){
         if(_focusFirstPill()) return;
         allRows[0]?.querySelector(".nrow-card")?.focus();
@@ -1506,6 +1646,7 @@ function initTV(){
       const ni = navBtns.indexOf(active);
       if(k === "ArrowRight" && ni < navBtns.length - 1){ navBtns[ni + 1].focus(); return; }
       if(k === "ArrowLeft"  && ni > 0){ navBtns[ni - 1].focus(); return; }
+      if(k === "ArrowUp"){ _focusUserBtns(); return; }
       if(k === "ArrowDown"){
         if(_focusFirstPill()) return;
         document.querySelector(".card")?.focus();
@@ -1538,33 +1679,78 @@ function initTV(){
       return;
     }
 
-    // ── Sur une carte de la grille : navigation cols ──
+    // ── Sur une carte de la grille : navigation cols (colonnes mesurées) ──
     const cards = [...document.querySelectorAll(".card")];
     let idx = cards.indexOf(active);
     if(idx < 0){ cards[0]?.focus(); return; }
 
-    const g    = $("grid");
-    const cols = g ? Math.max(1, Math.round(g.offsetWidth / 200)) : 1;
-
+    const cols = _gridCols(cards);
+    const col  = idx % cols;
     let next = idx;
-    if(k === "ArrowRight")     next = Math.min(idx + 1, cards.length - 1);
-    else if(k === "ArrowLeft") next = Math.max(0, idx - 1);
-    else if(k === "ArrowDown") next = Math.min(idx + cols, cards.length - 1);
-    else if(k === "ArrowUp")   next = idx - cols;
 
-    if(next < 0){
-      // Au-dessus de la 1ère ligne → cat-pills, sinon nav-btns
-      if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
-      return;
+    if(k === "ArrowRight"){
+      // Pas de wrap en fin de ligne
+      if(col < cols - 1 && idx + 1 < cards.length) next = idx + 1;
+    } else if(k === "ArrowLeft"){
+      if(col > 0){ next = idx - 1; }
+      else { // bord gauche → remonter vers pills / nav-btns
+        if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        return;
+      }
+    } else if(k === "ArrowDown"){
+      if(idx + cols < cards.length){
+        next = idx + cols;
+      } else {
+        // Dernière ligne incomplète : garder la colonne si une carte existe
+        const lastRowStart = cols * Math.floor((cards.length - 1) / cols);
+        const t = lastRowStart + col;
+        next = t < cards.length ? t : cards.length - 1;
+      }
+    } else if(k === "ArrowUp"){
+      next = idx - cols;
+      if(next < 0){
+        // Au-dessus de la 1ère ligne → cat-pills, sinon nav-btns
+        if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+        return;
+      }
     }
-    cards[next]?.focus();
-    cards[next]?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+
+    if(next !== idx){
+      cards[next]?.focus();
+      cards[next]?.scrollIntoView({ behavior:"smooth", block:"nearest" });
+    }
   }
 }
 
 // ─────────────────────────────────────────────────────────────────
 //  SECTION NOUVEAUTÉS
 // ─────────────────────────────────────────────────────────────────
+
+// Navigation D-pad d'un rail horizontal (Nouveautés / En cours). stopPropagation
+// est essentiel : sans lui, le handler global re-navigue et éjecte le focus vers
+// la grille (les .nou-card ne sont pas des .card).
+function _bindRailNav(row, cardSel){
+  row.addEventListener("keydown", e => {
+    if(!["ArrowRight","ArrowLeft","ArrowUp","ArrowDown"].includes(e.key)) return;
+    const cards = [...row.querySelectorAll(cardSel)];
+    const idx   = cards.indexOf(document.activeElement);
+    if(idx < 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(e.key === "ArrowRight"){
+      const n = cards[idx + 1];
+      if(n){ n.focus(); n.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+    } else if(e.key === "ArrowLeft"){
+      const p = cards[idx - 1];
+      if(p){ p.focus(); p.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
+    } else if(e.key === "ArrowUp"){
+      document.querySelector(".nav-btn.active, .nav-btn")?.focus();
+    } else if(e.key === "ArrowDown"){
+      const pill = document.querySelector(".cat-pills:not([hidden]) .cat-pill--active, .cat-pills:not([hidden]) .cat-pill");
+      (pill || document.querySelector(".nrow-card, .card"))?.focus();
+    }
+  });
+}
 
 function renderNouveautes(){
   const sect = $("nouveautesSection");
@@ -1617,32 +1803,75 @@ function renderNouveautes(){
   });
   row.appendChild(frag);
 
-  // ── Navigation D-pad TV : flèches gauche/droite dans la rangée ──
-  row.addEventListener("keydown", e => {
-    const cards = [...row.querySelectorAll(".nou-card")];
-    const idx   = cards.indexOf(document.activeElement);
-    if(idx < 0) return;
-    if(e.key === "ArrowRight"){
-      e.preventDefault();
-      const next = cards[idx + 1];
-      if(next){ next.focus(); next.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
-    } else if(e.key === "ArrowLeft"){
-      e.preventDefault();
-      const prev = cards[idx - 1];
-      if(prev){ prev.focus(); prev.scrollIntoView({ behavior:"smooth", block:"nearest", inline:"center" }); }
-    }
-    // ArrowUp / ArrowDown : navigation spatiale naturelle du navigateur
-  });
+  // ── Navigation D-pad TV : rangée auto-suffisante ──
+  _bindRailNav(row, ".nou-card");
 
   // Hero : mettre en avant le 1er item avec une belle image
   renderHero(recent[0]);
+}
+
+function renderEnCours(){
+  const sect = $("enCoursSection");
+  const row  = $("enCoursRow");
+  if(!sect || !row) return;
+
+  if(S.type !== "vod"){ sect.hidden = true; return; }
+
+  const isAdult = cat => /adult|adulte|\+18|xxx|erot|for adult/i.test(cat || "");
+  const prog = getProg();
+  const inProgress = S.vod
+    .filter(item => {
+      if(isAdult(item.category_name)) return false;
+      const pct = prog[itemKey(item)]?.pct || 0;
+      return pct > 2 && pct < 90;
+    })
+    .sort((a, b) => (prog[itemKey(b)]?.ts || 0) - (prog[itemKey(a)]?.ts || 0))
+    .slice(0, 20);
+
+  if(!inProgress.length){ sect.hidden = true; return; }
+  sect.hidden = false;
+
+  row.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  inProgress.forEach(item => {
+    const pct  = prog[itemKey(item)]?.pct || 0;
+    const card = document.createElement("div");
+    card.className = "nou-card enc-card";
+    card.tabIndex  = 0;
+    card.innerHTML = `
+      <div class="nou-media">
+        ${item.stream_icon
+          ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.parentElement.parentElement.style.display='none'">`
+          : `<div class="nrow-placeholder">🎬</div>`}
+        ${item.quality ? `<span class="nou-qual">${esc(item.quality)}</span>` : ""}
+        <div class="nou-overlay"><span class="nou-play">▶ Poursuivre</span></div>
+        <div class="enc-prog"><div class="enc-prog-fill" style="width:${Math.min(pct,100)}%"></div></div>
+      </div>
+      <div class="nou-info">
+        <div class="nou-title">${esc(item.title)}</div>
+        <div class="nou-date">${Math.round(pct)}% visionné</div>
+      </div>`;
+    card.addEventListener("click", () => openVodPanel(item));
+    card.addEventListener("keydown", e => {
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openVodPanel(item); }
+    });
+    card.addEventListener("focus", () => card.classList.add("is-tv-focused"));
+    card.addEventListener("blur",  () => card.classList.remove("is-tv-focused"));
+    frag.appendChild(card);
+  });
+  row.appendChild(frag);
+
+  // Navigation D-pad du rail "Continuer à regarder"
+  _bindRailNav(row, ".enc-card");
 }
 
 function renderHero(item){
   const hero = $("hero");
   if(!hero || !item) return;
   if(item.stream_icon){
-    hero.style.backgroundImage = `url('${item.stream_icon}')`;
+    // Neutralise quotes/parenthèses/backslash pour éviter toute injection CSS.
+    const safeUrl = String(item.stream_icon).replace(/["'()\\]/g, "");
+    hero.style.backgroundImage = `url("${safeUrl}")`;
     hero.classList.add("hero--img");
   }
   $("heroTitle").textContent    = item.title || "PIPSILY";
@@ -1704,15 +1933,46 @@ async function boot(){
 
   // Navigation type
   document.querySelectorAll(".nav-btn[data-type]").forEach(btn => {
+    // Marquer le bouton actif d'après la section persistée
+    btn.classList.toggle("active", btn.dataset.type === S.type);
     btn.addEventListener("click", () => {
       document.querySelectorAll(".nav-btn[data-type]").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       S.type = btn.dataset.type;
+      _saveSection(S.type);   // ← persistance
       S.cat = ""; S.search = "";
       $("searchInput").value = "";
       render();
     });
   });
+
+  // ── Bouton Retour : ferme les panneaux/overlays AVANT de quitter ──
+  // history.pushState fait croire au navigateur qu'on est sur une nouvelle
+  // page → le bouton retour TV/Android déclenche popstate plutôt que
+  // de revenir à la page précédente (account.html / login.html).
+  // Seul point de FERMETURE des overlays/panneaux. On NE re-pushe PAS d'état
+  // (sinon entrées "main" dupliquées → Back "avalé"). Une ouverture = un push,
+  // un Back = une fermeture. Quand plus rien n'est ouvert, le Back suivant
+  // laisse le navigateur/wrapper revenir en arrière (sortie).
+  window.addEventListener("popstate", e => {
+    // 1) Picker qualité Live
+    const lp = document.getElementById("livePicker");
+    if(lp){ lp.remove(); _tvRestoreFocus(); return; }
+    // 2) Overlay recherche
+    const so = document.getElementById("searchOverlay");
+    if(so){ so.remove(); _tvRestoreFocus(); return; }
+    // 3) Panneau séries / VOD
+    const sp = document.getElementById("seriesPanel");
+    if(sp && !sp.hidden){
+      if(S.panel.isVod) closeVodPanel(); else closePanel();
+      return;
+    }
+    // Sinon : laisser le retour navigateur (sortie d'app)
+  });
+  // Entrée initiale dans l'historique
+  if(!history.state || !history.state.pf){
+    history.replaceState({pf:"main"}, "");
+  }
 
   // Barre fixe "Mettre à jour"
   $("refreshCacheBtn")?.addEventListener("click", async () => {
@@ -1761,9 +2021,9 @@ async function boot(){
   $("qualitySelect").addEventListener("change",e => { S.quality = e.target.value; render(); });
   $("sortSelect").addEventListener("change",  e => { S.sort = e.target.value; render(); });
 
-  // Clic backdrop
+  // Clic backdrop (série ET VOD, même élément) → history.back() → popstate ferme
   $("seriesPanel")?.addEventListener("click", e => {
-    if(e.target === $("seriesPanel")) closePanel();
+    if(e.target === $("seriesPanel")) history.back();
   });
 
   // Infinite scroll
@@ -1796,6 +2056,12 @@ async function boot(){
     const seriesM3u = await fetchText("series.m3u");
     if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); S.srcSeries = "series.m3u"; }
   }
+
+  // Filtrer VOSTFR et catégories adult/porno
+  const noVostfr = t => !/\[vostfr\]/i.test(t || "");
+  const noAdult  = c => !/adult|adulte|\+18|xxx|erot|for adult/i.test(c || "");
+  S.vod    = S.vod.filter(x => noVostfr(x.title) && noAdult(x.category_name));
+  S.series = S.series.filter(x => noVostfr(x.title) && noAdult(x.category_name));
 
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
@@ -1832,6 +2098,7 @@ async function boot(){
   }
 
   renderNouveautes();
+  renderEnCours();
   render();
 
   // ── TV : focus initial sur le bouton actif (Films) après 1er render ──

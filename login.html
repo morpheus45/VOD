@@ -195,10 +195,17 @@
     const _A = window.PIPSILY_AUTH || null;
     let mode = "login";
 
-    // Rediriger si déjà connecté
+    // Afficher une erreur réseau si l'auth-gate nous a renvoyés ici (fail-closed)
+    if(new URLSearchParams(location.search).get("err") === "network"){
+      window.addEventListener("DOMContentLoaded", () => {
+        showMsg("error","⚠ Connexion au serveur impossible (réseau ou blocage). Vérifiez votre connexion et réessayez.");
+      });
+    }
+
+    // Rediriger si déjà connecté (replace : ne pas empiler l'historique → pas de boucle Back)
     if(_A && _A.getSession){
       _A.getSession().then(session => {
-        if(session) window.location.href = "./index.html";
+        if(session) window.location.replace("./index.html");
       }).catch(() => {});
     }
 
@@ -276,7 +283,7 @@
           const { error, data } = await _A.signIn(email, pw);
           if(error){ showMsg("error","E-mail ou mot de passe incorrect."); return; }
           await _A.registerSession(data.session.user.id).catch(() => {});
-          window.location.href = "./index.html";
+          window.location.replace("./index.html");
         }
       } catch(err){
         showMsg("error","Erreur inattendue : " + (err.message || err));

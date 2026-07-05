@@ -39,8 +39,10 @@ function saveProgress(key, pct){
   try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch {}
 }
 function currentEpKey(){
-  if(!item || item.type !== "series") return null;
-  return item.progress_key || null;
+  if(!item) return null;
+  if(item.type === "series") return item.progress_key || null;
+  if(item.type === "vod")    return itemKey(item);
+  return null;
 }
 
 // ─── Favoris ──────────────────────────────────────────────────────────────────
@@ -270,8 +272,17 @@ function playHls(video, url, storedPct){
     hlsInst.attachMedia(video);
     hlsInst.on(Hls.Events.MANIFEST_PARSED, () => {
       setStatus("");
-      if(storedPct > 2 && video.duration)
-        video.currentTime = video.duration * storedPct / 100;
+      // La durée est souvent NaN à ce stade en HLS → on seek quand les
+      // métadonnées (donc la durée) sont réellement disponibles.
+      if(storedPct > 2){
+        const seek = () => {
+          if(video.duration && isFinite(video.duration)){
+            video.currentTime = video.duration * storedPct / 100;
+          }
+        };
+        if(video.duration && isFinite(video.duration)) seek();
+        else video.addEventListener("loadedmetadata", seek, { once: true });
+      }
       video.play().catch(() => setStatus("Appuyez sur ▶ pour démarrer"));
     });
     hlsInst.on(Hls.Events.ERROR, (_, d) => {
@@ -363,6 +374,16 @@ function initPlayer(){
     return;
   }
 
+  // ── Desktop / iOS en page HTTPS avec flux HTTP : le navigateur bloque le
+  //    mixed content SANS toujours déclencher onerror → spinner infini. On
+  //    informe l'utilisateur au lieu de charger dans le vide (boutons Lecture
+  //    native / VLC / lien disponibles). ──
+  if(location.protocol === "https:" && isHttpUrl(rawUrl)){
+    setStatus("Ce flux est en HTTP : le navigateur sécurisé bloque sa lecture. Utilisez ▶ Lecture native, VLC, ou copiez le lien.", "error");
+    showOverlay();
+    return;
+  }
+
   // ── Desktop / iOS / HTTPS : lecture dans le player intégré ──
   const url = rawUrl; // On garde l'URL telle quelle (déjà HTTPS ou contexte HTTP ok)
 
@@ -402,6 +423,19 @@ function initPlayer(){
       clearInterval(tracker);
       saveProgress(epK, 100);
       setTimeout(() => goNext(), 3000);
+    }, { once: true });
+
+    // Sortie de la page (bouton Retour) : sauver la position immédiatement et
+    // détruire les lecteurs (évite le zombie audio via bfcache, coupe le timer).
+    window.addEventListener("pagehide", () => {
+      clearInterval(tracker);
+      try {
+        if(video && video.duration && !video.ended){
+          const pct = (video.currentTime / video.duration) * 100;
+          if(pct > 1 && pct < 99) saveProgress(epK, pct);
+        }
+      } catch {}
+      destroyPlayers();
     }, { once: true });
   }
 }
@@ -504,18 +538,57 @@ if($("playOverlayBtn")) $("playOverlayBtn").onclick = () => {
 
 // ─── Clavier / télécommande TV ─────────────────────────────────────────────────
 
-document.addEventListener("keydown", e => {
-  const k = e.key; const video = $("video");
-  if(["Escape","GoBack","BrowserBack","Back"].includes(k)){ e.preventDefault(); history.back(); }
-  else if(["Enter"," ","MediaPlayPause"].includes(k)){ e.preventDefault(); if(video) video.paused?video.play():video.pause(); }
-  else if(k==="ArrowRight"||k==="FastForward"){ if(video){ e.preventDefault(); video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10); } }
-  else if(k==="ArrowLeft"||k==="Rewind"){ if(video){ e.preventDefault(); video.currentTime=Math.max(0,video.currentTime-10); } }
-  else if(k==="ArrowUp"){ if(video){ e.preventDefault(); video.volume=Math.min(1,video.volume+0.1); } }
-  else if(k==="ArrowDown"){ if(video){ e.preventDefault(); video.volume=Math.max(0,video.volume-0.1); } }
+// Boutons de contrôle navigables au D-pad
+function _playerButtons(){
+  return ["backBtn","prevEpBtn","nextEpBtn","fullscreenBtn","nativeBtn","vlcBtn",
+          "externalBtn","copyBtn","favBtn"]
+    .map(id => document.getElementById(id))
+    .filter(b => b && b.offsetParent !== null);
+}
+
+function handlePlayerKey(k, e){
+  const video = $("video");
+  const onBtn = document.activeElement && document.activeElement.classList?.contains("pbtn")
+             || _playerButtons().includes(document.activeElement);
+  const prevent = () => { if(e) e.preventDefault(); };
+
+  if(["Escape","GoBack","BrowserBack","Back"].includes(k)){ prevent(); history.back(); return; }
+
+  // Si un bouton de contrôle est focusé : Entrée l'active, gauche/droite navigue.
+  if(onBtn){
+    const btns = _playerButtons();
+    const i = btns.indexOf(document.activeElement);
+    if(k === "Enter" || k === " "){ prevent(); document.activeElement.click(); return; }
+    if(k === "ArrowRight"){ prevent(); (btns[i+1]||btns[0])?.focus(); return; }
+    if(k === "ArrowLeft"){  prevent(); (btns[i-1]||btns[btns.length-1])?.focus(); return; }
+    if(k === "ArrowUp"){    prevent(); document.activeElement.blur(); return; } // revient à la vidéo
+    // ArrowDown sur un bouton : rester
+  }
+
+  if(["Enter"," ","MediaPlayPause"].includes(k)){ prevent(); if(video) video.paused?video.play():video.pause(); }
+  else if(k==="ArrowRight"||k==="FastForward"){ if(video){ prevent(); video.currentTime=Math.min(video.duration||Infinity,video.currentTime+10); } }
+  else if(k==="ArrowLeft"||k==="Rewind"){ if(video){ prevent(); video.currentTime=Math.max(0,video.currentTime-10); } }
+  else if(k==="ArrowUp"){ if(video){ prevent(); video.volume=Math.min(1,video.volume+0.1); } }
+  else if(k==="ArrowDown"){ // descendre vers la barre de contrôles (accès aux boutons)
+    const first=_playerButtons()[0];
+    if(first){ prevent(); first.focus(); }
+    else if(video){ prevent(); video.volume=Math.max(0,video.volume-0.1); }
+  }
   else if(k==="f"||k==="F"){ document.getElementById("fullscreenBtn")?.click(); }
   else if(k==="n"||k==="N"||k==="ChannelUp"){ goNext(); }
   else if(k==="p"||k==="P"||k==="ChannelDown"){ goPrev(); }
+}
+
+document.addEventListener("keydown", e => {
+  let k = e.key;
+  if(e.keyCode === 10009 || e.keyCode === 461 || e.keyCode === 4) k = "GoBack";
+  handlePlayerKey(k, e);
 });
+
+// Relais des télécommandes des wrappers Android TV (CustomEvent tv_*)
+[["tv_back","GoBack"],["tv_enter","Enter"],["tv_left","ArrowLeft"],
+ ["tv_right","ArrowRight"],["tv_up","ArrowUp"],["tv_down","ArrowDown"]]
+  .forEach(([evt,key]) => window.addEventListener(evt, () => handlePlayerKey(key, null)));
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
 

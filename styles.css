@@ -307,6 +307,29 @@ button,select,input{ font:inherit }
 }
 .nou-date{ font-size:10px; color:var(--muted); margin-top:2px }
 
+/* ── En cours : barre de progression rouge ── */
+.enc-prog{
+  position:absolute; bottom:0; left:0; right:0; height:3px;
+  background:rgba(255,255,255,.15); z-index:3;
+}
+.enc-prog-fill{
+  height:100%; background:#e53e3e; border-radius:0 2px 2px 0;
+}
+/* ── En cours : label "▶ Poursuivre" toujours visible ── */
+.enc-card .nou-overlay{ background:rgba(0,0,0,.25) }
+.enc-card .nou-play{
+  opacity:1; transform:scale(1);
+  font-size:15px; font-weight:700;
+  background:rgba(229,62,62,.85);
+  padding:5px 12px; border-radius:20px;
+  text-shadow:none; letter-spacing:.3px;
+}
+.enc-card:hover .nou-overlay,.enc-card:focus .nou-overlay{ background:rgba(0,0,0,.5) }
+.enc-card:hover .nou-play,.enc-card:focus .nou-play{
+  background:rgba(229,62,62,1);
+  transform:scale(1.05);
+}
+
 /* ── Grille principale ── */
 .grid{
   display:grid;
