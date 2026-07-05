@@ -12,7 +12,7 @@ import subprocess, json, time, os, sys, re
 VOD_DIR     = os.path.dirname(os.path.abspath(__file__))
 AUTH_JS     = os.path.join(VOD_DIR, "auth.js")
 SUPA_DIR    = os.path.join(VOD_DIR, "supabase")
-DB_PASS     = "PipsilyDB2026!"
+DB_PASS     = os.environ.get("SUPABASE_DB_PASSWORD", "")  # jamais en dur : export SUPABASE_DB_PASSWORD
 REGION      = "eu-west-2"
 GH_TOKEN    = os.environ.get("GH_TOKEN", "")  # set via env if needed
 
@@ -25,6 +25,12 @@ RESET = "\033[0m"
 def header(msg): print(f"\n{BOLD}{BLUE}▶ {msg}{RESET}")
 def ok(msg):     print(f"  {GREEN}✓ {msg}{RESET}")
 def err(msg):    print(f"  {RED}✗ {msg}{RESET}")
+
+if not DB_PASS:
+    err("Mot de passe DB manquant. Définissez-le avant de lancer :")
+    print("  Windows : set SUPABASE_DB_PASSWORD=VotreMotDePasse")
+    print("  bash    : export SUPABASE_DB_PASSWORD=VotreMotDePasse")
+    sys.exit(1)
 
 def run_capture(cmd):
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=VOD_DIR)
