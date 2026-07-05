@@ -41,19 +41,19 @@ create trigger trg_protect_profile
   before update on profiles
   for each row execute function protect_profile_columns();
 
--- Purge des anciennes policies (toutes variantes possibles)
-drop policy if exists "own profile"          on profiles;
-drop policy if exists "admin all profiles"   on profiles;
-drop policy if exists "profile select"       on profiles;
-drop policy if exists "profile insert"       on profiles;
-drop policy if exists "profile update"       on profiles;
-drop policy if exists "own devices"          on devices;
-drop policy if exists "own sessions"         on sessions;
-drop policy if exists "own payments"         on payments;
-drop policy if exists "payments select"      on payments;
-drop policy if exists "admin all devices"    on devices;
-drop policy if exists "admin all payments"   on payments;
-drop policy if exists "admin all sessions"   on sessions;
+-- Purge DÉTERMINISTE : supprime toutes les policies existantes sur ces tables,
+-- quels que soient leurs noms (les bases déployées avaient des noms non standard
+-- comme "own"/"admin_profiles" que des DROP nommés ne matchaient pas).
+do $$
+declare r record;
+begin
+  for r in select policyname, tablename from pg_policies
+           where schemaname = 'public'
+             and tablename in ('profiles','payments','devices','sessions')
+  loop
+    execute format('drop policy if exists %I on %I', r.policyname, r.tablename);
+  end loop;
+end $$;
 
 -- profiles : lecture de sa propre ligne (ou toutes pour l'admin) ; création/MAJ
 -- de SA propre ligne uniquement (WITH CHECK), colonnes sensibles verrouillées
