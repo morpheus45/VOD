@@ -2472,10 +2472,16 @@ function onKey(type){
 
   if(z==='grid'||z==='search'){
     const items=z==='search'?qAll('#search-results .card'):qAll('#grid-wrap .card');
-    const cont=z==='search'?$('search-results'):$('grid-wrap');
-    const availW=cont&&cont.clientWidth?cont.clientWidth:(1920-96);
-    const cwReal=(items[0]?.offsetWidth||172)+12;
-    const cols=Math.max(1,Math.floor(availW/cwReal));
+    // Nombre RÉEL de colonnes : mesuré sur le DOM (cartes de la 1re ligne = même
+    // offsetTop). L'ancienne formule floor(availW/cwReal) se trompait d'une
+    // colonne (gap/padding/arrondi) → Bas "décalait d'une vignette" et le bord
+    // gauche (gridIdx % cols) était mal détecté → flèche Gauche inopérante.
+    let cols=1;
+    if(items.length>1){
+      const top0=items[0].offsetTop;
+      while(cols<items.length && Math.abs(items[cols].offsetTop-top0)<4) cols++;
+    }
+    cols=Math.max(1,cols);
     if(type==='U'){
       if(S.gridIdx<cols){S.zone=z==='grid'?'filter':'nav';focus();}
       else{S.gridIdx=Math.max(0,S.gridIdx-cols);focus();}
