@@ -2772,6 +2772,16 @@ function renderGrid(reset = false){
 
   grid.appendChild(frag);
   $("catalogCount").textContent = `${col.length} éléments · ${grid.children.length} affichés`;
+
+  // TV : après un reset (ex. clic "Voir tout" ou changement de catégorie), la
+  // tuile focusée est supprimée → le focus retombe sur <body>. Sans ancrage, la
+  // 1re flèche "décale" (saut en haut-à-gauche) et Gauche reste bloquée. On
+  // re-focalise la 1re carte UNIQUEMENT si le focus a réellement été perdu
+  // (activeElement === body) → n'interfère pas avec la navigation dans les pills.
+  if(reset && document.documentElement.classList.contains("is-tv")
+     && document.activeElement === document.body){
+    grid.querySelector(".card")?.focus();
+  }
 }
 
 function loadMore(){
