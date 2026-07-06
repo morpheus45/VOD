@@ -2074,14 +2074,14 @@ function renderTabLive(){
   const rows=[];
   const p=poursuivreItems('live');                      // TV : que les chaînes (favoris live)
   if(p.length)rows.push({title:'Favoris',items:p,isLive:true});
+  // Masquer TOUTES les chaînes au logo "drapeau tricolore" générique (frlog.png)
+  // — elles ne diffusent rien. ROLLBACK : passer HIDE_FLAG_LIVE à false pour
+  // toutes les réafficher (ou revert le commit).
+  const HIDE_FLAG_LIVE = true;
+  const _isFlagLive = i => /frlog\.png(\?|$)/i.test(i.image || '');
+  const liveItems = HIDE_FLAG_LIVE ? S.liveItems.filter(i => !_isFlagLive(i)) : S.liveItems;
   const byLiveCat={};
-  S.liveItems.forEach(i=>{const c=i.category||'Général';(byLiveCat[c]=byLiveCat[c]||[]).push(i);});
-  // Retirer la 1re tuile "drapeau tricolore" générique (frlog.png) qui ouvre
-  // chaque catégorie et ne diffuse rien. Les chaînes nommées sont conservées.
-  Object.keys(byLiveCat).forEach(c=>{
-    const arr=byLiveCat[c];
-    if(arr.length && /frlog\.png(\?|$)/i.test(arr[0].image||'')) arr.shift();
-  });
+  liveItems.forEach(i=>{const c=i.category||'Général';(byLiveCat[c]=byLiveCat[c]||[]).push(i);});
   // Regrouper les toutes petites catégories dans "Autres"
   Object.keys(byLiveCat).forEach(c=>{
     if(byLiveCat[c].length<3 && c!=='Autres'){
@@ -2098,7 +2098,7 @@ function renderTabLive(){
   else cats.forEach(([cat,items])=>rows.push({title:cat,items:items.slice(0,40),isLive:true}));
   S.rows=rows;
   // Hero = premiere chaine dispo
-  if(S.liveItems.length)setHero({...S.liveItems[0],plot:'Regardez vos chaines en direct'});
+  if(liveItems.length)setHero({...liveItems[0],plot:'Regardez vos chaines en direct'});
   renderRows(rows);S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();
 }
 
