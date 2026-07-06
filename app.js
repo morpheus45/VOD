@@ -1701,15 +1701,17 @@ function initTV(){
     if(idx < 0){ cards[0]?.focus(); return; }
 
     const cols = _gridCols(cards);
-    const col  = idx % cols;
+    const col  = idx % cols;   // utilisé par Haut/Bas pour garder la colonne
     let next = idx;
 
     if(k === "ArrowRight"){
-      // Pas de wrap en fin de ligne
-      if(col < cols - 1 && idx + 1 < cards.length) next = idx + 1;
+      // Flux de lecture : en fin de ligne, on passe à la 1re carte de la ligne
+      // suivante (sinon on reste bloqué tous les N cartes). Bloque au tout dernier.
+      if(idx + 1 < cards.length) next = idx + 1;
     } else if(k === "ArrowLeft"){
-      if(col > 0){ next = idx - 1; }
-      else { // bord gauche → remonter vers pills / nav-btns
+      // Flux de lecture inverse. Seule la toute 1re carte remonte vers les pills.
+      if(idx > 0){ next = idx - 1; }
+      else {
         if(!_focusFirstPill()) document.querySelector(".nav-btn.active, .nav-btn")?.focus();
         return;
       }
