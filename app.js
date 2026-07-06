@@ -2157,7 +2157,24 @@ function filtered(){
     }
   }
   // ── Live : grouper les variantes de qualité (BOOMERANG SD/FHD/HEVC → 1 seule fiche) ──
-  if(S.type === "live") items = groupLiveItems(items);
+  if(S.type === "live"){
+    items = groupLiveItems(items);
+    // Vue Google TV UNIQUEMENT : retirer la PREMIÈRE tuile de chaque catégorie
+    // quand c'est une tuile au logo "drapeau tricolore" générique (frlog.png) —
+    // entrée "multiplex" qui ne diffuse rien et ouvre chaque catégorie. Les
+    // chaînes nommées (FRANCE CANAL+/RMC…) sont conservées. Appliqué ici, avant
+    // le tri TNT, tant que les items sont encore groupés par catégorie. La vue
+    // web normale n'est pas affectée.
+    if(document.documentElement.classList.contains("is-tv")){
+      const _seenCat = new Set();
+      items = items.filter(g => {
+        const firstOfCat = !_seenCat.has(g.category_name);
+        _seenCat.add(g.category_name);
+        if(firstOfCat && /frlog\.png(\?|$)/i.test(g.stream_icon || "")) return false;
+        return true;
+      });
+    }
+  }
 
   // ── Live : ordre TNT française (numéros LCN comme chez Free), puis catégories ──
   // Correspondance EXACTE sur le nom normalisé — l'ancien startsWith faisait
