@@ -2076,6 +2076,12 @@ function renderTabLive(){
   if(p.length)rows.push({title:'Favoris',items:p,isLive:true});
   const byLiveCat={};
   S.liveItems.forEach(i=>{const c=i.category||'Général';(byLiveCat[c]=byLiveCat[c]||[]).push(i);});
+  // Retirer la 1re tuile "drapeau tricolore" générique (frlog.png) qui ouvre
+  // chaque catégorie et ne diffuse rien. Les chaînes nommées sont conservées.
+  Object.keys(byLiveCat).forEach(c=>{
+    const arr=byLiveCat[c];
+    if(arr.length && /frlog\.png(\?|$)/i.test(arr[0].image||'')) arr.shift();
+  });
   // Regrouper les toutes petites catégories dans "Autres"
   Object.keys(byLiveCat).forEach(c=>{
     if(byLiveCat[c].length<3 && c!=='Autres'){
