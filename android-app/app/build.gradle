@@ -12,10 +12,14 @@ android {
 
     defaultConfig {
         applicationId "com.pipsiflix.app"
+        // [VPN test] App distincte → s'installe À CÔTÉ de la v44, sans l'écraser.
+        applicationIdSuffix ".vpntest"
         minSdk 21                // Android 5.0+ (TV inclus)
         targetSdk 34
-        versionCode 44
-        versionName "44.0"
+        // versionCode élevé : getApkVersion() renverra 9001 > 44 → l'app test ne
+        // proposera jamais de "mise à jour" vers la prod PIPSILY.
+        versionCode 9001
+        versionName "vpntest-1"
         // ARM uniquement : TV et téléphones réels — x86 = émulateurs seulement.
         // Allège l'APK (~1,5 Mo de libs FFmpeg en moins) → install plus fiable
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
@@ -97,4 +101,9 @@ dependencies {
     // l'appareil n'a pas la licence Dolby (sinon : repli sur l'audiodescription AAC)
     implementation 'org.jellyfin.media3:media3-ffmpeg-decoder:1.3.1+2'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+
+    // [VPN test] Moteur Tor embarqué — 0.4.8.19 = dernière version minCompileSdk=1
+    // (compatible compileSdk 34) ; 0.4.9.x exige compileSdk 37.
+    implementation 'info.guardianproject:tor-android:0.4.8.19'
+    implementation 'info.guardianproject:jtorctl:0.4.5.7'
 }

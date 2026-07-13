@@ -10,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // [VPN test] Repli si tor-android n'est pas résolu sur Maven Central
+        maven { url 'https://raw.githubusercontent.com/guardianproject/gpmaven/master' }
     }
 }
 

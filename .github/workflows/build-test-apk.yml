@@ -1,0 +1,96 @@
+name: 🧪 Build APK TEST (VPN/Tor)
+
+# Version de TEST isolée : branche tor-test uniquement, applicationId .vpntest
+# → s'installe À CÔTÉ de la prod v44. Ne touche NI version.json NI PIPSILY.apk :
+# les utilisateurs de la prod ne reçoivent rien.
+
+on:
+  push:
+    branches: [tor-test]
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/build-test-apk.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compiler PIPSILY-VPNTEST.apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout (branche tor-test)
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: ☕ Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: 🔧 Chmod gradlew
+        run: chmod +x android-app/gradlew
+
+      - name: 📖 Lire la version
+        id: ver
+        run: |
+          CODE=$(grep 'versionCode' android-app/app/build.gradle | grep -oP '\d+' | head -1)
+          NAME=$(grep 'versionName' android-app/app/build.gradle | grep -oP '"[^"]+"' | tr -d '"')
+          echo "code=$CODE" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+
+      - name: 🔑 Décoder le keystore
+        id: ks
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.jks
+            echo "ks_path=/tmp/release.jks" >> $GITHUB_OUTPUT
+            echo "signed=true" >> $GITHUB_OUTPUT
+          else
+            echo "signed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🔨 Build APK TEST
+        working-directory: android-app
+        run: |
+          if [ "${{ steps.ks.outputs.signed }}" = "true" ]; then
+            ./gradlew assembleRelease \
+              -Pandroid.injected.signing.store.file="${{ steps.ks.outputs.ks_path }}" \
+              -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+              -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+              -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+            cp app/build/outputs/apk/release/app-release.apk PIPSILY-VPNTEST.apk
+          else
+            ./gradlew assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk PIPSILY-VPNTEST.apk
+          fi
+
+      - name: 🚀 Publier la prerelease TEST
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vpntest-latest
+          name: "🧪 PIPSILY VPN test (${{ steps.ver.outputs.name }})"
+          draft: false
+          prerelease: true
+          make_latest: false
+          body: |
+            ## 🧪 Version de TEST — VPN/Tor sur les chaînes sport
+
+            **App séparée** (`com.pipsiflix.app.vpntest`, nom « PIPSILY VPN test ») :
+            elle s'installe **à côté** de ta v44, sans la remplacer.
+
+            - Les chaînes **sport** (Ligue 1, DAZN, beIN, RMC Sport…) passent par **Tor**
+              (bref « Connexion à Tor… » puis lecture, plus lente = normal).
+            - Le reste (films, séries, chaînes non-sport) reste en **direct**.
+            - N'affecte **pas** la prod : ni auto-update, ni `PIPSILY.apk`.
+
+            ### Installer
+            1. Télécharge `PIPSILY-VPNTEST.apk`
+            2. Ouvre-le → installe (autorise les sources inconnues si demandé)
+
+            > Build ${{ github.sha }}
+          files: android-app/PIPSILY-VPNTEST.apk

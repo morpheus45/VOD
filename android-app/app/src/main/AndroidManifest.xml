@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- [VPN test] Tor (org.torproject.jni) déclare minSdk 24. On garde minSdk 21
+         (vieilles box) : Tor n'est démarré qu'à partir d'API 24 (MainActivity),
+         sinon lecture directe → on force la fusion du manifeste. -->
+    <uses-sdk tools:overrideLibrary="org.torproject.jni" />
 
     <!-- Permissions réseau -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -112,7 +118,7 @@
         <!-- FileProvider : partage l'APK téléchargé avec l'installeur système -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.pipsiflix.app.provider"
+            android:authorities="${applicationId}.provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

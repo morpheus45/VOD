@@ -406,7 +406,7 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
                 }
-                Uri uri = FileProvider.getUriForFile(this, "com.pipsiflix.app.provider", apkFile);
+                Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", apkFile);
                 Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);
                 install.setDataAndType(uri, "application/vnd.android.package-archive");
                 install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -493,6 +493,57 @@ public class MainActivity extends AppCompatActivity {
     // ══════════════════════════════════════════════════════════════════════
     //  Bridge JavaScript ↔ Java  (window.AndroidBridge)
     // ══════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════
+    // [VPN test] Routage Tor NATIF des chaînes sport bloquées par le FAI.
+    // La décision se prend ici (regex sur titre/catégorie/URL) → AUCUNE modif du
+    // site web nécessaire, et signatures du bridge inchangées (pas de surcharge).
+    // ══════════════════════════════════════════════════════════════════════
+    private static final String PREFS_NAME = "pipsily_vpntest";
+    private static final String KEY_TOR_ON = "tor_enabled";
+    private static final java.util.regex.Pattern SPORT_RE = java.util.regex.Pattern.compile(
+        "sport|ligue\\s*1|dazn|be\\s*in|bein|rmc\\s*sport|canal\\+?\\s*sport|eurosport|" +
+        "champions|foot|multisport|ufc|boxe|nba|nfl|formule\\s*1|\\bf1\\b|top\\s*14",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    boolean isTorEnabled(){
+        return getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_TOR_ON, true);
+    }
+    void setTorEnabled(boolean enabled){
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_TOR_ON, enabled).apply();
+        if(!enabled) TorManager.get().stop();
+    }
+
+    /** true si le flux ressemble à une chaîne sport (→ à router via Tor). */
+    private boolean looksLikeSport(String... fields){
+        for(String f : fields){
+            if(f != null && SPORT_RE.matcher(f).find()) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Lance PlayerActivity. Si sport + toggle ON + API24+, démarre Tor d'abord et
+     * passe le port du proxy en extra ("torHttpPort") ; sinon lecture directe.
+     */
+    void startPlayerWithTor(final Intent i, boolean sport){
+        final boolean useTor = sport && isTorEnabled()
+                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
+        if(!useTor){ startActivity(i); return; }
+        Toast.makeText(this, "Connexion à Tor…", Toast.LENGTH_SHORT).show();
+        TorManager.get().ensureStarted(this, new TorManager.Listener(){
+            @Override public void onTorReady(int httpProxyPort){
+                runOnUiThread(() -> { i.putExtra("torHttpPort", httpProxyPort); startActivity(i); });
+            }
+            @Override public void onTorError(String message){
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this,
+                        "Tor indisponible — lecture directe", Toast.LENGTH_LONG).show();
+                    startActivity(i);
+                });
+            }
+        });
+    }
+
     class PipsilyBridge {
 
         /** Lecteur natif ExoPlayer — appelé par app.js PipPlayer */
@@ -514,7 +565,7 @@ public class MainActivity extends AppCompatActivity {
                 i.putExtra("episodes",        episodesJson);
                 i.putExtra("epIndex",         epIndex);
                 i.putExtra("startPositionMs", startPositionMs);
-                startActivity(i);
+                startPlayerWithTor(i, looksLikeSport(title, subtitle, url));
             });
         }
 
@@ -525,7 +576,7 @@ public class MainActivity extends AppCompatActivity {
                 Intent i = new Intent(MainActivity.this, PlayerActivity.class);
                 i.putExtra("url",   url);
                 i.putExtra("title", title);
-                startActivity(i);
+                startPlayerWithTor(i, looksLikeSport(title, url));
             });
         }
 
@@ -536,7 +587,7 @@ public class MainActivity extends AppCompatActivity {
                 Intent i = new Intent(MainActivity.this, PlayerActivity.class);
                 i.putExtra("url",   url);
                 i.putExtra("title", title);
-                startActivity(i);
+                startPlayerWithTor(i, looksLikeSport(title, url));
             });
         }
 
