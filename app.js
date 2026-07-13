@@ -4441,7 +4441,7 @@ async function checkApkInstallBanner(){
   const isNativeApk = typeof window.AndroidBridge !== "undefined";
   if(!isAndroid || isNativeApk) return;
 
-  const vinfo     = await fetchJson("version.json").catch(() => null);
+  const vinfo     = await fetchJson("version.json?cb=" + Date.now()).catch(() => null);
   const remoteVer = Number(vinfo?.apk_version || 0);
   const _rawUrl   = vinfo?.apk_url || "";
   const url       = /^https:\/\/github\.com\//.test(_rawUrl) ? _rawUrl : "https://github.com/morpheus45/VOD/releases/latest";
@@ -4531,7 +4531,7 @@ async function checkApkUpdate(){
   if(typeof window.AndroidBridge === "undefined") return;
 
   try {
-    const vinfo = await fetchJson("version.json");
+    const vinfo = await fetchJson("version.json?cb=" + Date.now());
     if(!vinfo || !vinfo.apk_version || !vinfo.apk_url) return;
     const remoteVer = parseInt(vinfo.apk_version, 10);
     if(!remoteVer) return;
