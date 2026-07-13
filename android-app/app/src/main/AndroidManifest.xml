@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-
-    <!-- Tor (org.torproject.jni) déclare minSdk 24. On garde minSdk 21 pour l'app
-         (vieilles box TV) : Tor n'est démarré qu'à partir d'API 24 (voir MainActivity),
-         sinon lecture directe. On force donc la fusion du manifeste ici. -->
-    <uses-sdk tools:overrideLibrary="org.torproject.jni" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Permissions réseau -->
     <uses-permission android:name="android.permission.INTERNET" />

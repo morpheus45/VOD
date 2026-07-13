@@ -1,7 +1,7 @@
 {
-  "apk_version": 43,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v43/PIPSILY.apk",
-  "changes": "Cosmos : lecture des séries réparée (Fringe…), reprise des séries dans Poursuivre, et le bouton Retour revient en arrière au lieu de fermer l'app",
+  "apk_version": 44,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v44/PIPSILY.apk",
+  "changes": "Correctif : retour à la version stable — l'app se lance et lit à nouveau normalement (le module qui bloquait le démarrage a été retiré). Navigation, retour arrière et reprise des séries conservés.",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"

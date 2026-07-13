@@ -14,8 +14,8 @@ android {
         applicationId "com.pipsiflix.app"
         minSdk 21                // Android 5.0+ (TV inclus)
         targetSdk 34
-        versionCode 43
-        versionName "43.0"
+        versionCode 44
+        versionName "44.0"
         // ARM uniquement : TV et téléphones réels — x86 = émulateurs seulement.
         // Allège l'APK (~1,5 Mo de libs FFmpeg en moins) → install plus fiable
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
@@ -97,13 +97,4 @@ dependencies {
     // l'appareil n'a pas la licence Dolby (sinon : repli sur l'audiodescription AAC)
     implementation 'org.jellyfin.media3:media3-ffmpeg-decoder:1.3.1+2'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
-
-    // ── Moteur Tor embarqué (routage des chaînes sport bloquées par le FAI) ──
-    // Maven Central ; sinon ajouter le dépôt gpmaven (voir TOR_INTEGRATION.md).
-    // Binaires Tor par ABI → APK +~10-15 Mo.
-    // 0.4.8.19 = dernière version à minCompileSdk=1 (compatible compileSdk 34) ;
-    // 0.4.9.x exige compileSdk 37. API utilisée (getSocksPort, LocalBinder,
-    // STATUS_ON) vérifiée présente dans 0.4.8.19.
-    implementation 'info.guardianproject:tor-android:0.4.8.19'
-    implementation 'info.guardianproject:jtorctl:0.4.5.7'
 }

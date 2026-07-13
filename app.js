@@ -7,24 +7,6 @@
 "use strict";
 
 // ─────────────────────────────────────────────────────────────────
-//  ROUTAGE TOR — chaînes sport bloquées par le FAI (APK uniquement)
-//  Le moteur Tor est embarqué dans l'APK PIPSIFLIX. Ici on décide
-//  seulement QUELLES chaînes doivent y passer (les catégories sport
-//  live). Modifiable sans recompiler l'APK.
-// ─────────────────────────────────────────────────────────────────
-const PIPSIFLIX_BLOCKED_CAT =
-  /sport|ligue\s*1|dazn|be\s*in|bein|rmc\s*sport|canal\+?\s*sport|eurosport|champions|foot|multisport|ufc|boxe|nba|nfl|formule\s*1|\bf1\b|top\s*14/i;
-
-function PIPSIFLIX_isBlockedCat(cat){
-  return !!cat && PIPSIFLIX_BLOCKED_CAT.test(String(cat));
-}
-
-/** true si CE flux doit être routé via Tor (chaîne live d'une catégorie sport bloquée). */
-function PIPSIFLIX_viaTor(item){
-  return !!item && item.type === "live" && PIPSIFLIX_isBlockedCat(item.category_name);
-}
-
-// ─────────────────────────────────────────────────────────────────
 //  CONSTANTES
 // ─────────────────────────────────────────────────────────────────
 
@@ -151,11 +133,10 @@ const PipPlayer = {
         : "[]";
       // Reprise au bon endroit si une progression est sauvegardée
       const savedMs = _getSavedProgressMs(item);
-      const _viaTor = PIPSIFLIX_viaTor(item); // chaîne sport bloquée par le FAI → Tor
       if(savedMs > 0 && typeof window.AndroidBridge.openPlayerAt === "function"){
-        window.AndroidBridge.openPlayerAt(url, item.title || label, sub, epsJson, this._epIdx, savedMs, _viaTor);
+        window.AndroidBridge.openPlayerAt(url, item.title || label, sub, epsJson, this._epIdx, savedMs);
       } else {
-        window.AndroidBridge.openPlayer(url, item.title || label, sub, epsJson, this._epIdx, _viaTor);
+        window.AndroidBridge.openPlayer(url, item.title || label, sub, epsJson, this._epIdx);
       }
       return;
     }
@@ -259,7 +240,7 @@ const PipPlayer = {
       if(typeof window.AndroidBridge?.openInVlc === "function"){
         this._showStatus("⚠️ Ouverture du lecteur natif…", false);
         setTimeout(() => {
-          try { window.AndroidBridge.openInVlc(rawUrl, this._item?.title || "", false, PIPSIFLIX_viaTor(this._item)); }
+          try { window.AndroidBridge.openInVlc(rawUrl, this._item?.title || "", false); }
           catch(e){ window.open(rawUrl, "_blank", "noopener"); }
         }, 600);
       } else {
@@ -506,7 +487,7 @@ const PipPlayer = {
     }
     if(typeof window.AndroidBridge !== "undefined"){
       // Android APK : URL brute — le WebView accepte HTTP nativement, ne pas toucher
-      try { window.AndroidBridge.openInVlc(rawUrl, this._item.title || "", false, PIPSIFLIX_viaTor(this._item)); return; } catch {}
+      try { window.AndroidBridge.openInVlc(rawUrl, this._item.title || "", false); return; } catch {}
     }
     // Navigateur / iOS : upgrade HTTP→HTTPS si la page est en HTTPS
     window.open(secureUrl(rawUrl), "_blank", "noopener");
@@ -4188,27 +4169,6 @@ async function boot(){
     // Reload forcé avec timestamp pour bypasser le SW
     window.location.href = window.location.href.split("?")[0] + "?nocache=" + Date.now();
   });
-
-  // ── Toggle Tor (chaînes sport bloquées par le FAI) — visible seulement dans l'APK ──
-  (function initTorToggle(){
-    const btn = $("torToggleBtn");
-    if(!btn) return;
-    const B = window.AndroidBridge;
-    if(!B || typeof B.isTorEnabled !== "function"){ btn.style.display = "none"; return; }
-    const sync = () => {
-      let on = true;
-      try { on = B.isTorEnabled() !== false; } catch(e){}
-      btn.textContent = on ? "🧅 Tor sport : ON" : "🧅 Tor sport : OFF";
-      btn.style.display = "";
-    };
-    btn.addEventListener("click", () => {
-      let on = true;
-      try { on = B.isTorEnabled() !== false; } catch(e){}
-      try { B.setTorEnabled(!on); } catch(e){}
-      sync();
-    });
-    sync();
-  })();
 
   $("categorySelect").addEventListener("change", e => { S.cat = e.target.value; render(); });
   let _searchTimer = null;
