@@ -982,7 +982,10 @@ function inProgressItems(){
   // Séries (clés `series_id||SxxExx` regroupées par série, comme Xstream)
   const sp=seriesPctMap();
   Object.keys(sp).forEach(sid=>{
-    const m=sp[sid]; if(m.pct<=2||m.pct>=95)return;
+    // Seuil bas à 0 (pas 2) : après un auto-next, l'épisode courant peut être à
+    // 1-2 % → la série doit RESTER dans "Poursuivre" (sinon elle disparaît juste
+    // après l'avoir regardée). seriesPctMap exclut déjà pct<=0.
+    const m=sp[sid]; if(m.pct<=0||m.pct>=95)return;
     const it=bySid[sid]; if(it&&!seen['s'+sid]&&isClean(it)){out.push({it,ts:m.ts||0});seen['s'+sid]=1;}
   });
   return out.sort((a,b)=>b.ts-a.ts).map(x=>x.it).slice(0,15);
@@ -1483,9 +1486,9 @@ function mkCard(item,ri,ci,isLive){
   img.src=item.image||item.stream_icon||item.cover||item.poster||item.logo||BLANK;
   if(img.complete)img.classList.add('loaded');
   iw.appendChild(img);
-  // Progress bar
-  if(!live&&item.stream_id){
-    const pk=String(item.stream_id);el.dataset.progKey=pk;
+  // Progress bar — films (stream_id) ET séries (series_id : progPct lit seriesPctMap)
+  if(!live&&(item.stream_id||item.series_id)){
+    const pk=item.stream_id?String(item.stream_id):('sid:'+item.series_id);el.dataset.progKey=pk;
     const pct=progPct(item);
     if(pct>2){
       const pb=document.createElement('div');pb.className='cprog';
@@ -1510,6 +1513,9 @@ function mkCard(item,ri,ci,isLive){
 
 // ══════ GRID ════════════════════════════════════════════════════════════
 function openGrid(type,cat){
+  // Mémorise d'où on vient (section + rangée) pour y revenir au Back (sinon le
+  // Back de la grille repartait toujours à l'accueil).
+  S.gridRet={sec:S.sec,rowIdx:S.rowIdx,cardIdx:S.cardIdx};
   showOnlyView('grid-view');
   $('grid-title').textContent=cat||(type==='movies'?'Films':'Séries');
   S.gridAll=(type==='movies'?S.allVod:S.allSeries).filter(isClean);
@@ -1571,6 +1577,10 @@ function activateFilterPill(idx){
 
 // ══════ PANEL ════════════════════════════════════════════════════════════
 function openPanel(item){
+  // Mémorise la zone d'origine (hero/grid/row/search) pour restaurer le focus au
+  // Back (avant : closePanel renvoyait toujours 'row' → focus mort si on venait
+  // de la grille ou du hero).
+  if(S.zone!=='panel-acts'&&S.zone!=='panel-tabs'&&S.zone!=='panel-eps')S.panelRet=S.zone;
   S.panelItem=item;S.panelIsVod=!item.series_id;
   $('panel-kicker').textContent=item.isLive?'TV Direct':item.series_id?'Série':'Film';
   $('panel-title').textContent=item.title||'';
@@ -1607,8 +1617,11 @@ function openPanel(item){
 }
 function closePanel(){
   $('panel').hidden=true;
-  // Tous les onglets (Accueil/Films/Séries/TV) utilisent des rangées → revenir sur 'row'
-  S.zone = S.sec==='search' ? 'search' : 'row';
+  // Restaure la zone d'origine (hero/grid/row/search). Repli : 'grid' si on est
+  // sur la vue grille, sinon 'row'.
+  const ret=S.panelRet;
+  S.zone = ret || (S.sec==='search'?'search':S.sec==='grid'?'grid':'row');
+  S.panelRet=null;
   if(S.rowIdx>=S.rows.length)S.rowIdx=0;
   const row=S.rows[S.rowIdx];
   if(row&&S.cardIdx>=row.items.length)S.cardIdx=0;
@@ -1649,7 +1662,9 @@ function buildPanel(data){
     const re=new RegExp('^'+sid.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\|\\|S(\\d+)E(\\d+)$');
     let best=null;
     for(const k in prog){const m=re.exec(k);if(!m)continue;const e=prog[k]||{};
-      const pct=pctOf(e); if(pct<=1)continue;
+      // Seuil à 0 (pas 1) : l'épisode le plus RÉCEMMENT ouvert (ts max) gagne, même
+      // à 1-2 % → on repropose le bon épisode courant, pas le précédent déjà vu.
+      const pct=pctOf(e); if(pct<=0)continue;
       if(!best||(e.ts||0)>best.ts)best={sn:parseInt(m[1],10),en:parseInt(m[2],10),pct,ts:e.ts||0};}
     if(best){
       const ci=ordered.findIndex(o=>Number(o.sNum)===best.sn&&Number(o.ep.episode_num)===best.en);
@@ -1752,7 +1767,7 @@ function playPanelEp(ei){
   if(prog&&pct>10&&pct<92){
     S.resumeStartMs=prog.t||0;S.resumeBtn=0;
     $('resume-sub').textContent=`${S.panelItem.title} · ${code} · ${Math.round(pct)}% vu`;
-    $('resume-modal').hidden=false;S.zone='resume';focus();return;
+    if(S.zone!=='resume')S.resumeRet=S.zone;$('resume-modal').hidden=false;S.zone='resume';focus();return;
   }
   doPlayEp(ei,0);
 }
@@ -1840,7 +1855,7 @@ function openVoice(){
   $('voice-overlay').hidden=false;
   $('voice-result').textContent='';
   $('voice-text').textContent='Je vous ecoute...';
-  const prevZone=S.zone;
+  if(S.zone!=='voice')S.voiceRet=S.zone;   // zone d'origine pour restaurer au Back
   S.zone='voice';focus();
   // Android bridge
   if(window.AndroidBridge?.startVoiceSearch){
@@ -1867,7 +1882,7 @@ function openVoice(){
 }
 function closeVoice(){
   $('voice-overlay').hidden=true;
-  S.zone=S.sec==='home'?'hero':'grid';focus();
+  S.zone=S.voiceRet||(S.sec==='home'?'hero':S.sec==='grid'?'grid':'row');S.voiceRet=null;focus();
 }
 window.onVoiceResult=function(text){
   if(!text){closeVoice();return;}
@@ -1889,11 +1904,12 @@ function openQualPicker(item){
     c.appendChild(el);
   });
   $('qual-picker').hidden=false;
+  if(S.zone!=='qual-picker')S.qualRet=S.zone;
   S.zone='qual-picker';focus();
 }
 function closeQualPicker(){
   $('qual-picker').hidden=true;
-  S.zone=S.sec==='home'?'row':'grid';focus();
+  S.zone=S.qualRet||(S.sec==='home'?'row':S.sec==='grid'?'grid':'row');S.qualRet=null;focus();
 }
 
 // ══════ SEARCH + CLAVIER À L'ÉCRAN ═══════════════════════════════════════
@@ -1974,7 +1990,7 @@ function playMovie(item){
     if(_pct>10&&_pct<92){
       S.resumeStartMs=(prog&&prog.t)||0;S.resumeBtn=0;S.resumeEpIdx=null;
       $('resume-sub').textContent=`${item.title} · ${Math.round(_pct)}% vu`;
-      $('resume-modal').hidden=false;S.zone='resume';focus();return;
+      if(S.zone!=='resume')S.resumeRet=S.zone;$('resume-modal').hidden=false;S.zone='resume';focus();return;
     }
   }
   playItem(item,0);
@@ -2350,6 +2366,10 @@ function onKey(type){
     return;
   }
 
+  // Anti-rebond du Retour : si le natif déclenche à la fois cosmosOnBack et
+  // tv_back (ou popstate multiple), un seul appui ne doit reculer que d'UN niveau.
+  if(type==='B'){ const now=Date.now(); if(now-(S._lastBack||0)<250)return; S._lastBack=now; }
+
   const z=S.zone;
 
   if(z==='qual-picker'){
@@ -2384,9 +2404,9 @@ function onKey(type){
         playItem(S.lastProgItem,S.resumeBtn===0?S.resumeStartMs:0);
         pushHist(S.lastProgItem);
       }
-      S.zone=S.sec==='home'?'hero':'grid';focus();
+      S.zone=S.resumeRet||(S.sec==='home'?'hero':'grid');S.resumeRet=null;focus();
     }
-    else if(type==='B'){$('resume-modal').hidden=true;S.zone=S.sec==='home'?'hero':'grid';focus();}
+    else if(type==='B'){$('resume-modal').hidden=true;S.zone=S.resumeRet||(S.sec==='home'?'hero':'grid');S.resumeRet=null;focus();}
     return;
   }
 
@@ -2457,7 +2477,15 @@ function onKey(type){
     else if(type==='L'){S.filterIdx=nextNonSepPill(S.filterIdx,-1);focus();}
     else if(type==='R'){S.filterIdx=nextNonSepPill(S.filterIdx,1);focus();}
     else if(type==='E'){activateFilterPill(S.filterIdx);focus();}
-    else if(type==='B'){gotoSection('home');}
+    else if(type==='B'){
+      // Revenir à la section d'origine (Films/Séries…) + la rangée d'où venait le
+      // "Voir tout", au lieu de retomber systématiquement sur l'accueil.
+      const r=S.gridRet;S.gridRet=null;
+      if(r&&r.sec&&r.sec!=='grid'&&r.sec!=='home'){
+        gotoSection(r.sec);
+        if(r.rowIdx!=null&&S.rows.length){S.rowIdx=Math.min(r.rowIdx,S.rows.length-1);const row=S.rows[S.rowIdx];S.cardIdx=Math.min(r.cardIdx||0,(row?row.items.length-1:0));focus();}
+      } else gotoSection('home');
+    }
     return;
   }
 
@@ -2587,14 +2615,12 @@ function onKey(type){
 // re-pousse un état → le Retour ne ferme JAMAIS l'app et revient bien en arrière.
 // Marche sur l'APK actuel (Retour natif → webView.goBack() → popstate), sans la v42.
 function cosmosBackStep(){
-  if(_toastZone)return;                                          // MAJ obligatoire : ignorer
-  if(!$('voice-overlay').hidden){closeVoice();return;}
-  if(!$('qual-picker').hidden){closeQualPicker();return;}
-  if(!$('resume-modal').hidden){$('resume-modal').hidden=true;S.zone=S.sec==='home'?'hero':'grid';focus();return;}
-  if(!$('panel').hidden){closePanel();return;}                   // fiche film/série
-  if(S.sec!=='home'){gotoSection('home');return;}                // grid/recherche/réglages → accueil
-  if(S.zone!=='hero'&&S.zone!=='nav'){S.zone='hero';S.hBtn=0;focus();return;} // rangées → haut
-  // accueil racine : ne rien faire (on reste dans l'app)
+  // UNIFIÉ : le Retour matériel utilise EXACTEMENT la même logique niveau-par-niveau
+  // que le clavier / tv_back (onKey('B')). Avant, ce chemin fermait la surface du
+  // haut d'un coup (ferme toute la fiche, saute des niveaux) et divergeait du
+  // clavier selon le canal de la touche. onKey('B') gère déjà toutes les surfaces
+  // (voice/qual/resume/panel-eps→tabs→acts/grid/sections) et l'anti-rebond.
+  onKey('B');
 }
 window.addEventListener('popstate',function(){
   try{cosmosBackStep();}catch(e){}
