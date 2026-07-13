@@ -61,6 +61,9 @@ public class PlayerActivity extends FragmentActivity {
 
     // Client OkHttp partagé (connexion pooling, meilleure gestion des redirects CDN)
     private static OkHttpClient okClient;
+    // Client OkHttp routé via Tor (proxy HTTP local) — chaînes sport bloquées par le FAI
+    private OkHttpClient torClient;
+    private int          torHttpPort = -1;
 
     private ExoPlayer    player;
     private PlayerView   playerView;
@@ -128,6 +131,7 @@ public class PlayerActivity extends FragmentActivity {
         String epsJson  = getIntent().getStringExtra("episodes"); // JSON épisodes (optionnel)
         int    epIdx    = getIntent().getIntExtra("epIndex", -1);
         startPositionMs = getIntent().getLongExtra("startPositionMs", 0L);
+        torHttpPort     = getIntent().getIntExtra("torHttpPort", -1); // >0 → flux routé via Tor
 
         seriesTitle = title != null ? title : "";
         titleView.setText(seriesTitle);
@@ -334,15 +338,33 @@ public class PlayerActivity extends FragmentActivity {
      *  - Gestion SSL plus robuste
      */
     private OkHttpDataSource.Factory buildDsFactory() {
-        if (okClient == null) {
-            okClient = new OkHttpClient.Builder()
-                    .connectTimeout(20, TimeUnit.SECONDS)
-                    .readTimeout(30, TimeUnit.SECONDS)
-                    .followRedirects(true)
-                    .followSslRedirects(true)
-                    .build();
+        OkHttpClient client;
+        if (torHttpPort > 0) {
+            // Chaîne sport bloquée par le FAI → router CE flux via Tor (proxy HTTP local).
+            // Timeouts plus larges : Tor est plus lent.
+            if (torClient == null) {
+                torClient = new OkHttpClient.Builder()
+                        .proxy(new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                                new java.net.InetSocketAddress("127.0.0.1", torHttpPort)))
+                        .connectTimeout(30, TimeUnit.SECONDS)
+                        .readTimeout(45, TimeUnit.SECONDS)
+                        .followRedirects(true)
+                        .followSslRedirects(true)
+                        .build();
+            }
+            client = torClient;
+        } else {
+            if (okClient == null) {
+                okClient = new OkHttpClient.Builder()
+                        .connectTimeout(20, TimeUnit.SECONDS)
+                        .readTimeout(30, TimeUnit.SECONDS)
+                        .followRedirects(true)
+                        .followSslRedirects(true)
+                        .build();
+            }
+            client = okClient;
         }
-        return new OkHttpDataSource.Factory(okClient)
+        return new OkHttpDataSource.Factory(client)
                 .setUserAgent(IPTV_UA)
                 // Accept: */* évite les 406 sur les CDN qui vérifient le content-type
                 .setDefaultRequestProperties(

@@ -851,6 +851,9 @@ html,body{
 const GH  = './';
 const API = 'http://goldenlink.live/player_api.php';
 const U   = 'E5G5E39', P = 'RE88M4E';
+// ── Routage Tor : chaînes sport bloquées par le FAI (APK uniquement) ──
+const PIPSIFLIX_BLOCKED_CAT=/sport|ligue\s*1|dazn|be\s*in|bein|rmc\s*sport|canal\+?\s*sport|eurosport|champions|foot|multisport|ufc|boxe|nba|nfl|formule\s*1|\bf1\b|top\s*14/i;
+function COSMOS_viaTor(item){return !!item&&!!item.isLive&&!!item.category&&PIPSIFLIX_BLOCKED_CAT.test(String(item.category));}
 // TMDB — s inscrire gratuitement sur themoviedb.org pour une cle personnelle
 const TMDB_KEY = storeGet('tmdb_key','') || '2dca580c2a14b55200e784d157207b4d';
 const TMDB_IMG = 'https://image.tmdb.org/t/p/';
@@ -1810,9 +1813,10 @@ function playItem(item,startMs){
     // Lecteur natif ExoPlayer — MÊME méthode que PIPSILY Xstream (openPlayerAt,
     // éprouvée + reprise + playlist). Replis : openPlayer → openInVlc → openVideo.
     try{
-      if(B.openPlayerAt){ B.openPlayerAt(url,title,sub,epsJson,epIdx,Math.max(0,startMs||0)); return; }
-      if(B.openPlayer){ B.openPlayer(url,title,sub,epsJson,epIdx); return; }
-      if(B.openInVlc){ B.openInVlc(url,title,!!item.isLive); return; }
+      const _viaTor=COSMOS_viaTor(item); // chaîne sport bloquée par le FAI → Tor
+      if(B.openPlayerAt){ B.openPlayerAt(url,title,sub,epsJson,epIdx,Math.max(0,startMs||0),_viaTor); return; }
+      if(B.openPlayer){ B.openPlayer(url,title,sub,epsJson,epIdx,_viaTor); return; }
+      if(B.openInVlc){ B.openInVlc(url,title,!!item.isLive,_viaTor); return; }
       if(B.openVideo){ B.openVideo(url,title); return; }
     }catch(e){}
   }
@@ -2160,8 +2164,10 @@ function renderSettings(){
   const cache=getCached();
   const cacheAge=cache?Math.round((Date.now()-cache.ts)/60000)+'min':'pas de cache';
   const tmdbKey=storeGet('tmdb_key','')||'(cle demo)';
+  const torOn=(window.AndroidBridge?.isTorEnabled?.()!==false);
   const items=[
     {label:'Interface : Cosmos TV',desc:'Basculer vers l interface PIPSILY Xstream',action:'iface'},
+    {label:'Tor pour le sport : '+(torOn?'ACTIVE':'DESACTIVE'),desc:'Route les chaines sport bloquees par le FAI via Tor (APK). Plus lent mais debloque les matchs.',action:'tor'},
     {label:'Version APK',desc:'v'+v+' — Google TV Perso',action:'version'},
     {label:'Verifier mise a jour',desc:'Telecharger et installer la derniere version',action:'update'},
     {label:'Rafraichir le contenu',desc:'Cache actuel: '+cacheAge+' (force un nouveau telechargement)',action:'refresh'},
@@ -2180,6 +2186,11 @@ function activateSetting(idx){
   const items=qAll('.set-item');
   const action=items[idx]?.dataset.action;
   if(action==='iface'){try{localStorage.setItem('pf_theme','xstream');}catch(e){} location.replace('./index.html');return;}
+  else if(action==='tor'){
+    const cur=(window.AndroidBridge?.isTorEnabled?.()!==false);
+    try{window.AndroidBridge?.setTorEnabled?.(!cur);}catch(e){}
+    renderSettings();focus();return;
+  }
   else if(action==='reload'){window.AndroidBridge?.reloadApp?.();}
   else if(action==='update'){window.AndroidBridge?.checkUpdateAsync?.();}
   else if(action==='refresh'){

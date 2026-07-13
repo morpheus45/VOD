@@ -48,6 +48,42 @@ public class MainActivity extends AppCompatActivity {
     WebView     webView;
     ProgressBar progressBar;
 
+    // ── Toggle Tor (chaînes sport bloquées par le FAI) ──────────────────
+    private static final String PREFS_NAME = "pipsily";
+    private static final String KEY_TOR_ON = "tor_enabled";
+
+    /** Toggle global Tor — ON par défaut (les chaînes sport passent par Tor). */
+    boolean isTorEnabled(){
+        return getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_TOR_ON, true);
+    }
+    void setTorEnabled(boolean enabled){
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_TOR_ON, enabled).apply();
+        if(!enabled) TorManager.get().stop(); // couper Tor immédiatement si désactivé
+    }
+
+    /**
+     * Lance PlayerActivity. Si viaTor est demandé ET le toggle est actif, démarre Tor
+     * d'abord et passe le port du proxy HTTP local en extra ("torHttpPort") ; sinon
+     * lecture directe (comportement inchangé).
+     */
+    void startPlayerWithTor(final Intent i, boolean requestViaTor){
+        final boolean useTor = requestViaTor && isTorEnabled();
+        if(!useTor){ startActivity(i); return; }
+        Toast.makeText(this, "Connexion à Tor…", Toast.LENGTH_SHORT).show();
+        TorManager.get().ensureStarted(this, new TorManager.Listener(){
+            @Override public void onTorReady(int httpProxyPort){
+                runOnUiThread(() -> { i.putExtra("torHttpPort", httpProxyPort); startActivity(i); });
+            }
+            @Override public void onTorError(String message){
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this,
+                        "Tor indisponible — lecture directe", Toast.LENGTH_LONG).show();
+                    startActivity(i); // repli : tenter en direct
+                });
+            }
+        });
+    }
+
     // ── Téléchargement APK ──────────────────────────────────────────────
     private long              apkDownloadId = -1;
     private BroadcastReceiver apkReceiver   = null;
@@ -495,17 +531,32 @@ public class MainActivity extends AppCompatActivity {
     // ══════════════════════════════════════════════════════════════════════
     class PipsilyBridge {
 
-        /** Lecteur natif ExoPlayer — appelé par app.js PipPlayer */
+        /** Lecteur natif ExoPlayer — appelé par app.js PipPlayer (lecture directe) */
         @JavascriptInterface
         public void openPlayer(String url, String title, String subtitle,
                                String episodesJson, int epIndex) {
-            openPlayerAt(url, title, subtitle, episodesJson, epIndex, 0L);
+            openPlayerAt(url, title, subtitle, episodesJson, epIndex, 0L, false);
         }
 
-        /** Lecteur natif ExoPlayer avec reprise à la position sauvegardée */
+        /** openPlayer + routage Tor optionnel (chaînes sport bloquées par le FAI) */
+        @JavascriptInterface
+        public void openPlayer(String url, String title, String subtitle,
+                               String episodesJson, int epIndex, boolean viaTor) {
+            openPlayerAt(url, title, subtitle, episodesJson, epIndex, 0L, viaTor);
+        }
+
+        /** Lecteur natif ExoPlayer avec reprise (lecture directe) */
         @JavascriptInterface
         public void openPlayerAt(String url, String title, String subtitle,
                                  String episodesJson, int epIndex, long startPositionMs) {
+            openPlayerAt(url, title, subtitle, episodesJson, epIndex, startPositionMs, false);
+        }
+
+        /** openPlayerAt + routage Tor optionnel */
+        @JavascriptInterface
+        public void openPlayerAt(String url, String title, String subtitle,
+                                 String episodesJson, int epIndex, long startPositionMs,
+                                 boolean viaTor) {
             runOnUiThread(() -> {
                 Intent i = new Intent(MainActivity.this, PlayerActivity.class);
                 i.putExtra("url",             url);
@@ -514,20 +565,34 @@ public class MainActivity extends AppCompatActivity {
                 i.putExtra("episodes",        episodesJson);
                 i.putExtra("epIndex",         epIndex);
                 i.putExtra("startPositionMs", startPositionMs);
-                startActivity(i);
+                startPlayerWithTor(i, viaTor);
             });
         }
 
         /** Lecture directe (redirigé vers ExoPlayer) */
         @JavascriptInterface
         public void openInVlc(String url, String title, boolean isLive) {
+            openInVlc(url, title, isLive, false);
+        }
+
+        /** openInVlc + routage Tor optionnel */
+        @JavascriptInterface
+        public void openInVlc(String url, String title, boolean isLive, boolean viaTor) {
             runOnUiThread(() -> {
                 Intent i = new Intent(MainActivity.this, PlayerActivity.class);
-                i.putExtra("url",   url);
-                i.putExtra("title", title);
-                startActivity(i);
+                i.putExtra("url",    url);
+                i.putExtra("title",  title);
+                startPlayerWithTor(i, viaTor);
             });
         }
+
+        /** Active/désactive globalement le routage Tor (persistant) */
+        @JavascriptInterface
+        public void setTorEnabled(boolean enabled){ MainActivity.this.setTorEnabled(enabled); }
+
+        /** État du toggle Tor global (ON par défaut) */
+        @JavascriptInterface
+        public boolean isTorEnabled(){ return MainActivity.this.isTorEnabled(); }
 
         /** Lecture (appelé par player.js) */
         @JavascriptInterface
