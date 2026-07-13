@@ -101,6 +101,9 @@ dependencies {
     // ── Moteur Tor embarqué (routage des chaînes sport bloquées par le FAI) ──
     // Maven Central ; sinon ajouter le dépôt gpmaven (voir TOR_INTEGRATION.md).
     // Binaires Tor par ABI → APK +~10-15 Mo.
-    implementation 'info.guardianproject:tor-android:0.4.9.11'
+    // 0.4.8.19 = dernière version à minCompileSdk=1 (compatible compileSdk 34) ;
+    // 0.4.9.x exige compileSdk 37. API utilisée (getSocksPort, LocalBinder,
+    // STATUS_ON) vérifiée présente dans 0.4.8.19.
+    implementation 'info.guardianproject:tor-android:0.4.8.19'
     implementation 'info.guardianproject:jtorctl:0.4.5.7'
 }
