@@ -1,6 +1,6 @@
 {
-  "apk_version": 42,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v42/PIPSILY.apk",
+  "apk_version": 43,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v43/PIPSILY.apk",
   "changes": "Cosmos : lecture des séries réparée (Fringe…), reprise des séries dans Poursuivre, et le bouton Retour revient en arrière au lieu de fermer l'app",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
