@@ -67,7 +67,9 @@ public class MainActivity extends AppCompatActivity {
      * lecture directe (comportement inchangé).
      */
     void startPlayerWithTor(final Intent i, boolean requestViaTor){
-        final boolean useTor = requestViaTor && isTorEnabled();
+        // Tor (lib) requiert API 24+ : sur API 21-23 → lecture directe (pas de crash).
+        final boolean useTor = requestViaTor && isTorEnabled()
+                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N;
         if(!useTor){ startActivity(i); return; }
         Toast.makeText(this, "Connexion à Tor…", Toast.LENGTH_SHORT).show();
         TorManager.get().ensureStarted(this, new TorManager.Listener(){
