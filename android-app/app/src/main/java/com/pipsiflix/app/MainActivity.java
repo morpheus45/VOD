@@ -103,7 +103,10 @@ public class MainActivity extends AppCompatActivity {
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
         ws.setDatabaseEnabled(true);
-        ws.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // LOAD_NO_CACHE : le WebView n'utilise pas le service worker → sans ça les
+        // MAJ web restaient bloquées en cache HTTP jusqu'au changement de version
+        // APK. En no-cache, chaque lancement charge la dernière version en ligne.
+        ws.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
         // ── CRITIQUE : autoriser les flux HTTP depuis une page HTTPS ──
         //    Sans cette ligne, les vidéos HTTP sont bloquées (mixed content)

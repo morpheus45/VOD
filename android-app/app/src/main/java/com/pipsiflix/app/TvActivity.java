@@ -133,7 +133,12 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
         ws.setDatabaseEnabled(true);
-        ws.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // LOAD_NO_CACHE : le WebView n'utilise PAS le service worker → sans ça il
+        // gardait l'ancien HTML/JS en cache HTTP et les MAJ web n'arrivaient JAMAIS
+        // sur la TV (sauf changement de version APK). En no-cache, chaque lancement
+        // charge la dernière version en ligne. (Les catalogues JSON sont de toute
+        // façon re-téléchargés ; le HTML/JS est léger.)
+        ws.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
         // ── CRITIQUE : autoriser les flux HTTP depuis une page HTTPS ──
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
