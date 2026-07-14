@@ -2217,46 +2217,63 @@ function activateSetting(idx){
 }
 
 // ══════ APERÇU LIVE IN-TILE ══════════════════════════════════════════════
-let _pvTimer=null,_pvKey=null;
+let _pvTimer=null,_pvKey=null,_pvUrls=[],_pvIdx=0,_pvRectEl=null;
 function stopPreview(){
   clearTimeout(_pvTimer);
   if(_pvKey){ try{window.AndroidBridge?.stopLivePreview?.();}catch(e){} _pvKey=null; }
+  _pvUrls=[];_pvIdx=0;_pvRectEl=null;
 }
+// Envoie l'URL courante (_pvUrls[_pvIdx]) au lecteur d'aperçu natif.
+function _pvSend(){
+  if(!_pvRectEl||_pvIdx>=_pvUrls.length)return;
+  const r=_pvRectEl.getBoundingClientRect();
+  if(r.width<10)return;
+  const dpr=window.devicePixelRatio||1; // pixels physiques (comme Xstream)
+  try{
+    window.AndroidBridge.startLivePreview(_pvUrls[_pvIdx],
+      Math.round(r.left*dpr), Math.round(r.top*dpr),
+      Math.round(r.width*dpr), Math.round(r.height*dpr));
+  }catch(e){}
+}
+// Le natif appelle ceci quand un flux d'aperçu est MORT → on tente la variante
+// suivante du groupe (les flux SD IPTV sont souvent morts). ABSENT avant en
+// Cosmos → l'aperçu restait vide (faille de parité avec Xstream).
+window.onLivePreviewError=function(){
+  if(!_pvKey)return;
+  _pvIdx++;
+  if(_pvIdx>=_pvUrls.length){ try{window.AndroidBridge?.stopLivePreview?.();}catch(e){} return; }
+  _pvSend();
+};
 function managePreview(){
   if(!window.AndroidBridge?.startLivePreview){return;} // pas sur Android TV
   // Carte live actuellement focalisee ?
-  let url=null,rectEl=null,key=null;
+  let item=null,rectEl=null,key=null;
   if(S.zone==='row'){
     const row=S.rows[S.rowIdx];
     if(row&&row.isLive){
-      const item=row.items[S.cardIdx];
-      if(item){
-        url=item.isGroup?(item.variants&&item.variants[0]&&item.variants[0].url):item.url;
-        const cards=$('ri'+S.rowIdx)?.querySelectorAll('.card');
-        if(cards&&cards[S.cardIdx])rectEl=cards[S.cardIdx].querySelector('.card-iw');
-        key=S.rowIdx+'_'+S.cardIdx;
-      }
+      item=row.items[S.cardIdx];
+      const cards=$('ri'+S.rowIdx)?.querySelectorAll('.card');
+      if(cards&&cards[S.cardIdx])rectEl=cards[S.cardIdx].querySelector('.card-iw');
+      key=S.rowIdx+'_'+S.cardIdx;
     }
   }
-  if(!url||!rectEl){stopPreview();return;}
+  if(!item||!rectEl){stopPreview();return;}
   if(key===_pvKey)return;            // deja en apercu sur cette tuile
   clearTimeout(_pvTimer);
   try{window.AndroidBridge?.stopLivePreview?.();}catch(e){}
   _pvKey=null;
-  _pvTimer=setTimeout(()=>{
-    const r=rectEl.getBoundingClientRect();
-    if(r.width<10)return;
-    // PIXELS PHYSIQUES (= CSS px × devicePixelRatio) : c'est ce qu'attend
-    // l'APK VOD (TvActivity.startLivePreview place la surface en px). Même
-    // convention que l'interface Xstream → aperçu correctement positionné.
-    const dpr=window.devicePixelRatio||1;
-    try{
-      window.AndroidBridge.startLivePreview(url,
-        Math.round(r.left*dpr), Math.round(r.top*dpr),
-        Math.round(r.width*dpr), Math.round(r.height*dpr));
-      _pvKey=key;
-    }catch(e){}
-  },850);
+  // Candidats : toutes les qualités du groupe (basse d'abord = légère + bascule
+  // auto si un flux est mort), sinon l'URL unique.
+  if(item.isGroup&&item.variants&&item.variants.length){
+    _pvUrls=[...item.variants].reverse()
+      .map(v=>(v&&(v.url||v.stream_url||(v.item&&(v.item.url||v.item.stream_url))))||'')
+      .filter(Boolean);
+  }else{
+    _pvUrls=[item.url||item.stream_url||''].filter(Boolean);
+  }
+  _pvIdx=0;
+  if(!_pvUrls.length){stopPreview();return;}
+  _pvTimer=setTimeout(()=>{ _pvRectEl=rectEl; _pvKey=key; _pvSend(); },850);
 }
 
 // ══════ FOCUS ════════════════════════════════════════════════════════════

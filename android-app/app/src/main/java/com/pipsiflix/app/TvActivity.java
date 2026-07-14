@@ -459,10 +459,12 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
 
     private void ensurePreviewPlayer() {
         if (previewPlayer != null) return;
-        // Plafonner la qualité à SD : la vignette est petite, un flux léger
-        // suffit et évite les saccades (décodage FHD inutile sur TV modeste)
+        // Plafonner à 720p : léger pour une vignette, mais SANS forcer le SD —
+        // beaucoup de rendus SD IPTV sont morts, ce qui laissait l'aperçu vide.
+        // (exceedVideoConstraintsIfNecessary reste true → si aucune piste ≤720p,
+        //  ExoPlayer prend la plus proche au lieu de ne rien afficher.)
         DefaultTrackSelector ts = new DefaultTrackSelector(this);
-        ts.setParameters(ts.buildUponParameters().setMaxVideoSizeSd());
+        ts.setParameters(ts.buildUponParameters().setMaxVideoSize(1280, 720));
         // Buffer élargi : absorbe le jitter réseau des flux IPTV live
         DefaultLoadControl lc = new DefaultLoadControl.Builder()
                 .setBufferDurationsMs(20000, 60000, 1500, 5000)
