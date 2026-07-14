@@ -1316,10 +1316,21 @@ async function refreshContentSilently(){
 
 // Rafraichir au retour de veille / refocus (contenu a jour)
 document.addEventListener('visibilitychange',()=>{
-  if(!document.hidden){
-    const c=getCached();
-    if(!c) loadContent(); else setTimeout(refreshContentSilently,800);
+  if(document.hidden)return;
+  // Si le contenu est DÉJÀ chargé (retour du lecteur, sortie de veille), NE PAS
+  // relancer loadContent() : ça affichait le spinner et REPARTAIT À L'ACCUEIL
+  // (renderTabHome), d'où le "ça recharge et retourne à l'accueil" au retour
+  // d'une chaîne. On garde ta position ; refresh silencieux au plus 1×/10 min
+  // (évite de re-télécharger ~10 Mo à chaque retour de chaîne).
+  if(S.allVod && S.allVod.length){
+    if(Date.now()-(S._lastVisRefresh||0) > 600000){
+      S._lastVisRefresh=Date.now();
+      setTimeout(refreshContentSilently,800);
+    }
+    return;
   }
+  const c=getCached();
+  if(!c) loadContent(); else setTimeout(refreshContentSilently,800);
 });
 
 // Restaure l'onglet + la carte où l'utilisateur était, si le WebView a été
