@@ -1030,7 +1030,11 @@ function prettyCat(i){
 }
 
 // ══════ NETTOYAGE / DEDUP CHAÎNES LIVE ═══════════════════════════════════
-const LIVE_REGION=/^\s*(?:\|?\s*(?:FR|BE|CH|CA|QC|EU|UK|US|REU|CAR|CARIB|METRO|METROPOLE|DOM|TOM|VIP|TNT)\b\s*[:\-|]\s*)+/i;
+// N'effacer QUE les étiquettes désignant la MÊME chaîne métropole (FR/EU/TNT…).
+// Les préfixes de flux DISTINCTS (REU=Réunion, CAR=Caraïbes, BE/CH/CA/US…)
+// restent dans l'identité : avant, "REU - W9" fusionnait avec "W9" comme fausse
+// variante de qualité → choisir "HD" lançait le flux Réunion (autre programme).
+const LIVE_REGION=/^\s*(?:\|?\s*(?:FR|EU|METRO|METROPOLE|VIP|TNT)\b\s*[:\-|]\s*)+/i;
 const LIVE_QUAL=/[\s_\-]+(4k|uhd|fhd|hevc|h\.?265|h265|hd|sd|vip|raw|backup|fps\d+|\d+fps|\d+p)\b/gi;
 function liveBase(title){
   let s=String(title||'');
@@ -1316,7 +1320,8 @@ async function refreshContentSilently(){
 
 // Rafraichir au retour de veille / refocus (contenu a jour)
 document.addEventListener('visibilitychange',()=>{
-  if(document.hidden)return;
+  if(document.hidden){window._nativePlayerOpen=true;try{stopPreview();}catch(e){}return;}
+  window._nativePlayerOpen=false; // retour du lecteur natif → l'aperçu redevient autorisé
   // Si le contenu est DÉJÀ chargé (retour du lecteur, sortie de veille), NE PAS
   // relancer loadContent() : ça affichait le spinner et REPARTAIT À L'ACCUEIL
   // (renderTabHome), d'où le "ça recharge et retourne à l'accueil" au retour
@@ -1831,6 +1836,10 @@ function doPlayEp(ei,startMs){
 
 // ══════ PLAYBACK ════════════════════════════════════════════════════════
 function playItem(item,startMs){
+  // Verrou IMMÉDIAT : le lecteur natif va s'ouvrir — plus aucun aperçu ne doit
+  // démarrer (même via un minuteur déjà armé), sinon audio superposé.
+  window._nativePlayerOpen=true;
+  stopPreview();
   const url=(item.url||'').replace(/^https?:\/\//i,'http://');
   if(!url)return;
   const title=item.title||'';
@@ -2229,6 +2238,11 @@ function activateSetting(idx){
 
 // ══════ APERÇU LIVE IN-TILE ══════════════════════════════════════════════
 let _pvTimer=null,_pvKey=null,_pvUrls=[],_pvIdx=0,_pvRectEl=null;
+// Vrai pendant que le lecteur natif (PlayerActivity) est ouvert. Les minuteurs
+// du WebView continuent de tourner derrière le lecteur : sans ce verrou, un
+// _pvTimer armé avant le lancement tirait 850ms APRÈS, redémarrait l'aperçu
+// en arrière-plan → 2 audios superposés sur toutes les chaînes.
+window._nativePlayerOpen=false;
 function stopPreview(){
   clearTimeout(_pvTimer);
   if(_pvKey){ try{window.AndroidBridge?.stopLivePreview?.();}catch(e){} _pvKey=null; }
@@ -2236,6 +2250,7 @@ function stopPreview(){
 }
 // Envoie l'URL courante (_pvUrls[_pvIdx]) au lecteur d'aperçu natif.
 function _pvSend(){
+  if(window._nativePlayerOpen||document.hidden){stopPreview();return;}
   if(!_pvRectEl||_pvIdx>=_pvUrls.length)return;
   const r=_pvRectEl.getBoundingClientRect();
   if(r.width<10)return;
@@ -2257,6 +2272,7 @@ window.onLivePreviewError=function(){
 };
 function managePreview(){
   if(!window.AndroidBridge?.startLivePreview){return;} // pas sur Android TV
+  if(window._nativePlayerOpen||document.hidden){stopPreview();return;} // lecteur natif ouvert → jamais d'aperçu
   // Carte live actuellement focalisee ?
   let item=null,rectEl=null,key=null;
   if(S.zone==='row'){

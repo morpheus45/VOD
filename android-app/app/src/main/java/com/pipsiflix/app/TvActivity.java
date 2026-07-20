@@ -425,9 +425,22 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         }
     }
 
+    // Vrai uniquement entre onResume et onPause. Le WebView continue d'exécuter
+    // ses minuteurs JS derrière PlayerActivity : sans ce verrou, un timer JS armé
+    // avant le lancement pouvait rappeler startLivePreview() APRÈS onPause →
+    // l'aperçu tournait en audio derrière la chaîne (2 sons superposés).
+    private volatile boolean previewForeground = false;
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        previewForeground = true;
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
+        previewForeground = false;
         stopLivePreview();
     }
 
@@ -528,6 +541,9 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     /** Appelé depuis app.js — démarre l'aperçu live dans la vignette focalisée. x,y,w,h en pixels physiques. */
     public void startLivePreview(String url, int x, int y, int w, int h) {
         if (url == null || url.isEmpty() || w <= 0 || h <= 0) return;
+        // Activité en pause (PlayerActivity devant) → refuser : sinon l'aperçu
+        // démarre en arrière-plan et son audio se superpose à la chaîne.
+        if (!previewForeground) return;
         ensurePreviewPlayer();
         ensurePreviewTexture();
 

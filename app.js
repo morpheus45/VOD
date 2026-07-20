@@ -105,6 +105,7 @@ const PipPlayer = {
 
     // ── APK : lecteur natif ExoPlayer (HTTP sans mixed content) ────
     if(typeof window.AndroidBridge?.openPlayer === "function"){
+      _markNativePlayback(); // le lecteur natif s'ouvre → aucun aperçu ne doit démarrer
       this._lastFocus = document.activeElement; // restauré dans onAndroidPlayerClosed
       pushHist(item);
       // Alimenter _epUrlMap pour tous les épisodes (TV + non-TV)
@@ -238,6 +239,7 @@ const PipPlayer = {
     // ── Fallback : ouvre dans onglet (rawUrl HTTP) ou lecteur natif Android ──
     const _openNativeFallback = () => {
       if(typeof window.AndroidBridge?.openInVlc === "function"){
+        _markNativePlayback();
         this._showStatus("⚠️ Ouverture du lecteur natif…", false);
         setTimeout(() => {
           try { window.AndroidBridge.openInVlc(rawUrl, this._item?.title || "", false); }
@@ -487,6 +489,7 @@ const PipPlayer = {
     }
     if(typeof window.AndroidBridge !== "undefined"){
       // Android APK : URL brute — le WebView accepte HTTP nativement, ne pas toucher
+      _markNativePlayback();
       try { window.AndroidBridge.openInVlc(rawUrl, this._item.title || "", false); return; } catch {}
     }
     // Navigateur / iOS : upgrade HTTP→HTTPS si la page est en HTTPS
@@ -1944,6 +1947,7 @@ function playEpisode(series, ep, season){
   const _isTV = /TV|GoogleTV|SmartTV|AndroidTV/i.test(navigator.userAgent) ||
                 (/Android/i.test(navigator.userAgent) && !navigator.userAgent.includes("Mobile"));
   if(!_isTV && typeof window.AndroidBridge !== "undefined"){
+    _markNativePlayback();
     const epTitle  = `${series.title} — ${code}${ep.title ? " " + ep.title : ""}`;
     const epsJson  = JSON.stringify(playerItem.all_episodes);
     const savedMs  = _getSavedProgressMs({ progress_key: progKey });
@@ -3261,8 +3265,23 @@ let _previewUrls  = [];   // file de candidats : qualité la plus basse → la p
 let _previewIdx   = 0;
 let _previewCard  = null;
 
+// ── Verrou lecteur natif ────────────────────────────────────────────
+// Les minuteurs du WebView continuent de tourner derrière PlayerActivity :
+// sans ce verrou, un _previewTimer armé avant le lancement tirait 850ms
+// APRÈS → l'aperçu redémarrait en fond → 2 audios superposés.
+window._nativePlayerOpen = false;
+function _markNativePlayback(){
+  window._nativePlayerOpen = true;
+  try{ stopPreview(); }catch{}
+}
+document.addEventListener("visibilitychange", () => {
+  if(document.hidden){ window._nativePlayerOpen = true; try{ stopPreview(); }catch{} }
+  else window._nativePlayerOpen = false;   // retour du lecteur → aperçu de nouveau autorisé
+});
+
 function _previewSendRect(){
   if(typeof window.AndroidBridge?.startLivePreview !== "function") return;
+  if(window._nativePlayerOpen || document.hidden){ stopPreview(); return; }
   const card = _previewCard;
   const url  = _previewUrls[_previewIdx];
   if(!card || !card.isConnected || !url) return;
@@ -3289,6 +3308,7 @@ window.onLivePreviewError = function(){
 };
 
 function managePreview(){
+  if(window._nativePlayerOpen || document.hidden){ stopPreview(); return; }
   const card = document.activeElement?.closest?.(".card, .nrow-card");
   const item = card?._pfItem;
 

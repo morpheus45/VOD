@@ -1,7 +1,7 @@
 {
-  "apk_version": 46,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v46/PIPSILY.apk",
-  "changes": "Mises à jour enfin fiables : l'app charge toujours la dernière version en ligne (plus de cache bloquant). Cette version livre aussi l'aperçu des chaînes réparé et le retour de chaîne qui reste à sa place.",
+  "apk_version": 47,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v47/PIPSILY.apk",
+  "changes": "Fini l'audio superposé : l'aperçu des chaînes ne peut plus tourner derrière la chaîne en cours. Et chaque tuile TV lance bien SA chaîne (les flux Réunion/Caraïbes ne se mélangent plus aux chaînes métropole).",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"
