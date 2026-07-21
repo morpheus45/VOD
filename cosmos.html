@@ -44,6 +44,18 @@
   --hc:66,133,244;
 }
 
+/* ─── FOCUS GLOBAL ───────────────────────────────────────────────────────
+   Anneau visible sur TOUT élément focalisé, où qu'il soit — on repère le
+   curseur au premier coup d'œil partout dans l'interface. L'outline (anneau
+   blanc net) s'ajoute par-dessus les effets propres de chaque élément ; le
+   halo bleu ne s'applique que là où l'élément n'a pas déjà son propre
+   box-shadow (les règles spécifiques, plus prioritaires, gardent le leur). */
+.foc{
+  outline:3px solid #fff !important;
+  outline-offset:2px !important;
+  box-shadow:0 0 18px 2px rgba(79,142,247,.75);
+}
+
 html,body{
   width:1920px;height:1080px;background:#0f0f0f;color:var(--text);
   font-family:'Google Sans','Roboto',system-ui,sans-serif;
@@ -102,7 +114,7 @@ html,body{
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;color:rgba(255,255,255,.7);font-size:20px;
 }
-#nav-search-outer.foc{background:rgba(255,255,255,.15);color:#fff}
+#nav-search-outer.foc{background:rgba(79,142,247,.9);color:#fff}
 
 /* Centre: pill de tabs — identique Google TV */
 #nav-items{
@@ -131,10 +143,10 @@ html,body{
   display:flex;align-items:center;justify-content:center;
   color:rgba(255,255,255,.68);cursor:pointer;font-size:18px;
 }
-.nav-icon.foc{background:rgba(255,255,255,.18);color:#fff}
+.nav-icon.foc{background:rgba(79,142,247,.9);color:#fff}
 #nav-voice{color:var(--accent2)}
-#nav-voice.foc{background:rgba(79,142,247,.3);color:#fff}
-#nav-settings.foc{background:rgba(255,255,255,.15);color:#fff}
+#nav-voice.foc{background:rgba(79,142,247,.9);color:#fff}
+#nav-settings.foc{background:rgba(79,142,247,.9);color:#fff}
 
 /* ─── VIEWS ──────────────────────────────────────────────────────────── */
 #main{position:absolute;inset:0;overflow:hidden}
