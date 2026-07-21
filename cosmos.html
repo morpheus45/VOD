@@ -122,7 +122,7 @@ html,body{
   transition:background .12s,color .12s;
 }
 .ni.active{background:rgba(255,255,255,.20);color:#fff;font-weight:700}
-.ni.foc{background:rgba(255,255,255,.32)!important;color:#fff!important;font-weight:700;box-shadow:0 0 0 2px rgba(255,255,255,.5)}
+.ni.foc{background:rgba(79,142,247,.9)!important;color:#fff!important;font-weight:700;box-shadow:0 0 0 3px #fff,0 0 16px rgba(79,142,247,.7)}
 
 /* Droite: icones seules (Google TV: camera + bell) */
 #nav-right{display:flex;align-items:center;gap:8px;pointer-events:auto;flex-shrink:0}
@@ -255,9 +255,12 @@ html,body{
   will-change:transform;
 }
 .card.foc{
-  transform:translateY(-6px) scale(1.07);
-  box-shadow:0 0 0 3px #fff,0 16px 42px rgba(0,0,0,.85);
-  z-index:5;border-color:#fff;
+  transform:translateY(-8px) scale(1.10);
+  /* Double anneau très lisible : blanc épais + halo bleu lumineux, on repère
+     le sélecteur au premier coup d'œil même de loin sur une TV. */
+  box-shadow:0 0 0 4px #fff, 0 0 0 8px var(--accent),
+             0 0 26px 5px rgba(79,142,247,.75), 0 18px 46px rgba(0,0,0,.9);
+  z-index:6;border-color:#fff;
 }
 .card-iw{position:relative}
 .card img{
@@ -354,7 +357,18 @@ html,body{
   border-radius:14px;background:rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.08);font-size:14px;cursor:pointer;
 }
-.set-item.foc{background:rgba(79,142,247,.2);border-color:var(--accent)}
+.set-item{position:relative;transition:transform .12s ease}
+.set-item.foc{
+  background:rgba(79,142,247,.30);border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent),0 0 20px rgba(79,142,247,.55);
+  transform:scale(1.02);
+}
+/* Chevron sur l'item focalisé : indique clairement OÙ est le sélecteur */
+.set-item.foc::before{
+  content:'▸';position:absolute;left:8px;top:50%;transform:translateY(-50%);
+  color:var(--accent2);font-size:16px;font-weight:900;
+}
+.set-item.foc{padding-left:32px}
 .set-desc{font-size:11px;color:var(--dim);margin-top:4px}
 
 /* ─── PANEL ──────────────────────────────────────────────────────────── */
@@ -534,6 +548,44 @@ html,body{
 .resume-btn-main{background:var(--accent);color:#fff}
 .resume-btn-sec{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
 .resume-btn.foc{box-shadow:0 0 0 3px rgba(255,255,255,.8)}
+
+/* ─── PANNEAUX RÉGLAGES (picker liste / info / PIN) ──────────────────── */
+#cos-picker,#cos-info,#cos-pin{
+  position:absolute;inset:0;z-index:90;background:rgba(0,0,0,.85);
+  display:flex;align-items:center;justify-content:center;
+}
+.cp-box{
+  background:rgba(14,18,42,.98);border:1px solid rgba(255,255,255,.12);
+  border-radius:20px;padding:26px 30px;width:560px;max-height:82%;
+  display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.8);
+}
+.cp-title{font-size:22px;font-weight:800;margin-bottom:4px}
+.cp-sub{font-size:13px;color:var(--dim);margin-bottom:18px;line-height:1.5}
+.cp-list{overflow-y:auto;flex:1}
+.cp-item{
+  padding:14px 20px;border-radius:12px;margin-bottom:8px;font-size:16px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.cp-item.active{color:var(--accent2)}
+.cp-item.active::after{content:'✓';color:var(--accent2);font-weight:900}
+.cp-item.foc{background:rgba(79,142,247,.32);border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.cp-item.danger.foc{background:rgba(232,51,74,.28);border-color:#ff8899;box-shadow:0 0 0 2px #ff8899}
+/* Info Compte */
+.ci-row{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.08);font-size:15px}
+.ci-row .k{color:var(--dim)}
+.ci-row .v{font-weight:700}
+.ci-hint{margin-top:18px;font-size:13px;color:var(--dim);text-align:center}
+/* PIN pad — cadenas à chiffres */
+.pin-digits{display:flex;gap:14px;justify-content:center;margin:22px 0 8px}
+.pin-cell{
+  width:64px;height:84px;border-radius:14px;background:rgba(255,255,255,.06);
+  border:2px solid rgba(255,255,255,.12);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;font-size:34px;font-weight:800;
+}
+.pin-cell.foc{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent),0 0 18px rgba(79,142,247,.6)}
+.pin-cell .arrow{font-size:13px;color:var(--dim);line-height:1}
+.pin-hint{font-size:13px;color:var(--dim);text-align:center;margin-top:8px}
 
 /* ─── LOADING — skeleton shimmer style Google TV ─────────────────────── */
 #loading{
@@ -801,6 +853,34 @@ html,body{
         <button class="resume-btn resume-btn-main" id="btn-resume">▶ Reprendre</button>
         <button class="resume-btn resume-btn-sec"  id="btn-restart">↺ Recommencer</button>
       </div>
+    </div>
+  </div>
+
+  <!-- PICKER GÉNÉRIQUE (région / menu parental) -->
+  <div id="cos-picker" hidden>
+    <div class="cp-box">
+      <div class="cp-title" id="cp-title"></div>
+      <div class="cp-sub" id="cp-sub"></div>
+      <div class="cp-list" id="cp-list"></div>
+    </div>
+  </div>
+
+  <!-- INFO (compte & abonnement) -->
+  <div id="cos-info" hidden>
+    <div class="cp-box">
+      <div class="cp-title" id="ci-title">Compte</div>
+      <div id="ci-body"></div>
+      <div class="ci-hint">Appuyez sur Retour pour fermer</div>
+    </div>
+  </div>
+
+  <!-- PIN PAD (contrôle parental) -->
+  <div id="cos-pin" hidden>
+    <div class="cp-box" style="width:auto;align-items:center">
+      <div class="cp-title" id="pin-title">Code parental</div>
+      <div class="cp-sub" id="pin-sub" style="text-align:center">Haut/Bas : chiffre · Gauche/Droite : case · OK : valider</div>
+      <div class="pin-digits" id="pin-digits"></div>
+      <div class="pin-hint" id="pin-hint"></div>
     </div>
   </div>
 
@@ -1311,7 +1391,7 @@ async function refreshContentSilently(){
     }else{
       // MAJ silencieuse des donnees, visible au prochain changement d'onglet
       S.allVod=d.allVod;S.allSeries=d.allSeries;S.allItems=[...d.allVod,...d.allSeries];
-      S.liveItems=groupLiveItems(d.liveRaw.filter(isClean));
+      S.liveItems=_cosRegionFilter(groupLiveItems(d.liveRaw.filter(isClean)));
       const cleanItems=S.allItems.filter(i=>isClean(i)&&i.image);
       S.heroPool=shuffle(cleanItems).slice(0,80);
     }
@@ -1360,7 +1440,7 @@ function restoreNavPos(){
 
 function buildContent(allVod,allSeries,liveRaw){
   S.allVod=allVod;S.allSeries=allSeries;S.allItems=[...allVod,...allSeries];
-  S.liveItems=groupLiveItems(liveRaw.filter(isClean));
+  S.liveItems=_cosRegionFilter(groupLiveItems(liveRaw.filter(isClean)));
   const cleanItems=S.allItems.filter(i=>isClean(i)&&i.image);
   S.heroPool=shuffle(cleanItems).slice(0,80);
 
@@ -2196,19 +2276,69 @@ function renderMyList(){
 }
 
 // ══════ SETTINGS ════════════════════════════════════════════════════════
+// Régions françaises (identique à la page Compte Xstream — parité)
+const _STATIC_REGIONS=[
+  "Alsace","Aquitaine","Auvergne","Bourgogne","Bretagne",
+  "Centre","Champagne-Ardenne","Corse","Franche-Comté",
+  "Languedoc-Roussillon","Limousin","Lorraine","Midi-Pyrénées",
+  "Nord-Pas-de-Calais","Normandie","Pays de la Loire","Picardie",
+  "Poitou-Charentes","Provence-Alpes-Côte d'Azur","Rhône-Alpes",
+  "Grand Est","Hauts-de-France","Île-de-France","Nouvelle-Aquitaine",
+  "Occitanie","Auvergne-Rhône-Alpes","Bourgogne-Franche-Comté",
+  "Centre-Val de Loire",
+  "Paris","Lyon","Marseille","Bordeaux","Toulouse","Lille",
+  "Rennes","Nantes","Strasbourg","Montpellier","Nice",
+  "Guadeloupe","Martinique","Guyane","La Réunion","Mayotte"
+];
+function _rnorm(s){return (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+// Filtre région : garde les chaînes nationales + celles de la région choisie,
+// masque les autres variantes régionales (France 3 Alsace si on a choisi Bretagne…).
+function _cosRegionFilter(items){
+  const regRaw=_lsGet('pipsily_region')||''; if(!regRaw) return items;
+  const reg=_rnorm(regRaw);
+  const REG=_STATIC_REGIONS.map(_rnorm);
+  return items.filter(it=>{
+    const t=' '+_rnorm(it.title).replace(/[^a-z0-9]+/g,' ')+' ';
+    const matched=REG.filter(r=>t.includes(' '+r+' '));
+    if(!matched.length) return true;      // chaîne nationale → toujours visible
+    return matched.some(r=>r===reg);      // régionale → visible seulement si c'est MA région
+  });
+}
+function _cosIsAdmin(){
+  try{
+    const u=window._cosUser,A=window.PIPSILY_AUTH;
+    return !!(u&&((u.sub&&u.sub.plan==='admin')||(A&&u.session&&u.session.user&&u.session.user.email===A.ADMIN_EMAIL)));
+  }catch(e){return false;}
+}
+function _lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function cosToast(title,sub){
+  $('toast-title').textContent=title;$('toast-sub').textContent=sub||'';
+  $('update-toast').hidden=false;setTimeout(()=>{$('update-toast').hidden=true;},4000);
+}
 function renderSettings(){
   const v=window.AndroidBridge?.getApkVersion?.()||'?';
   const cache=getCached();
   const cacheAge=cache?Math.round((Date.now()-cache.ts)/60000)+'min':'pas de cache';
   const tmdbKey=storeGet('tmdb_key','')||'(cle demo)';
+  const region=_lsGet('pipsily_region')||'';
+  const pinOn=!!_lsGet('pipsily_adult_pin');
+  const plan=(window._cosUser&&window._cosUser.sub&&window._cosUser.sub.plan)||'';
+  const planLabel=plan==='admin'?'Administrateur':plan==='unlimited'?'Illimité':(plan==='active'||plan==='standard')?'Standard':'—';
   const items=[
-    {label:'Interface : Cosmos TV',desc:'Basculer vers l interface PIPSILY Xstream',action:'iface'},
-    {label:'Version APK',desc:'v'+v+' — Google TV Perso',action:'version'},
-    {label:'Verifier mise a jour',desc:'Telecharger et installer la derniere version',action:'update'},
-    {label:'Rafraichir le contenu',desc:'Cache actuel: '+cacheAge+' (force un nouveau telechargement)',action:'refresh'},
-    {label:'TMDB API Key',desc:'Cle actuelle: '+tmdbKey+' — pour backdrops HD et ratings',action:'tmdb'},
-    {label:'Recharger application',desc:'Rafraichir l interface',action:'reload'},
+    {label:'👤 Compte & abonnement',desc:'Plan : '+planLabel+' — voir les détails',action:'account'},
+    {label:'Interface : Cosmos TV',desc:'Basculer vers l\'interface PIPSILY Xstream',action:'iface'},
+    {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
+    {label:'🔞 Contrôle parental',desc:pinOn?'Code PIN actif — modifier ou supprimer':'Aucun code — en créer un',action:'parental'},
   ];
+  if(_cosIsAdmin())items.push({label:'⚙ Admin',desc:'Ouvrir le panneau d\'administration',action:'admin'});
+  items.push(
+    {label:'Vérifier mise à jour',desc:'Télécharger et installer la dernière version',action:'update'},
+    {label:'Rafraîchir le contenu',desc:'Cache actuel : '+cacheAge,action:'refresh'},
+    {label:'TMDB API Key',desc:'Clé actuelle : '+tmdbKey,action:'tmdb'},
+    {label:'Version APK',desc:'v'+v+' — Google TV Perso',action:'version'},
+    {label:'Recharger l\'application',desc:'Rafraîchir l\'interface',action:'reload'},
+    {label:'🚪 Se déconnecter',desc:'Changer de compte',action:'logout'}
+  );
   const list=$('set-list');list.innerHTML='';
   items.forEach((it,i)=>{
     const el=document.createElement('div');
@@ -2228,12 +2358,111 @@ function activateSetting(idx){
     loadContent();gotoSection('home');
   }
   else if(action==='tmdb'){
-    // Toast info: la cle TMDB se configure via localStorage
-    $('toast-title').textContent='TMDB: themoviedb.org/settings/api';
-    $('toast-sub').textContent='Inscris-toi gratuitement pour obtenir ta cle API';
-    $('update-toast').hidden=false;
-    setTimeout(()=>{$('update-toast').hidden=true;},5000);
+    cosToast('TMDB : themoviedb.org/settings/api','Inscris-toi gratuitement pour obtenir ta clé API');
   }
+  else if(action==='account'){openAccountInfo();}
+  else if(action==='region'){openRegionPicker();}
+  else if(action==='parental'){openParental();}
+  else if(action==='admin'){location.href='./admin.html';}
+  else if(action==='logout'){openLogoutConfirm();}
+}
+
+// ══════ PICKER GÉNÉRIQUE (région / menus) ════════════════════════════════
+function openPicker(title,sub,items,idx,onPick){
+  S.pickerItems=items;S.pickerIdx=Math.max(0,idx||0);S.pickerOnPick=onPick;
+  $('cp-title').textContent=title;$('cp-sub').textContent=sub||'';
+  const list=$('cp-list');list.innerHTML='';
+  items.forEach((it,i)=>{
+    const el=document.createElement('div');
+    el.className='cp-item'+(it.active?' active':'')+(it.danger?' danger':'');
+    el.dataset.pi=i;el.textContent=it.label;
+    list.appendChild(el);
+  });
+  $('cos-picker').hidden=false;
+  if(S.zone!=='cos-picker')S.pickerRet=S.zone;
+  S.zone='cos-picker';focus();
+}
+function closePicker(){$('cos-picker').hidden=true;S.zone='settings';renderSettings();focus();}
+
+// ── Région ──────────────────────────────────────────────────────────────
+function openRegionPicker(){
+  const saved=_lsGet('pipsily_region')||'';
+  const seen=new Set();
+  const items=[{label:'Toutes les régions',value:''}];
+  _STATIC_REGIONS.forEach(r=>{const k=r.toLowerCase();if(seen.has(k))return;seen.add(k);items.push({label:r,value:r});});
+  items.forEach(it=>{it.active=(it.value===saved);});
+  const idx=Math.max(0,items.findIndex(i=>i.value===saved));
+  openPicker('📡 Ma région (TV Live)','N\'affiche que les chaînes régionales correspondantes. « Toutes les régions » pour tout voir.',items,idx,(it)=>{
+    try{ if(it.value)localStorage.setItem('pipsily_region',it.value); else localStorage.removeItem('pipsily_region'); }catch(e){}
+    closePicker();
+    cosToast('Région enregistrée',(it.value||'Toutes les régions')+' — relancez pour appliquer');
+  });
+}
+
+// ── Contrôle parental ───────────────────────────────────────────────────
+function openParental(){
+  const on=!!_lsGet('pipsily_adult_pin');
+  const items=on
+    ?[{label:'Modifier le code',value:'change'},{label:'Supprimer le code',value:'delete',danger:true}]
+    :[{label:'Créer un code PIN',value:'create'}];
+  openPicker('🔞 Contrôle parental',on?'Un code PIN protège les contenus adultes.':'Créez un code à 4 chiffres.',items,0,(it)=>{
+    if(it.value==='delete'){
+      try{localStorage.removeItem('pipsily_adult_pin');}catch(e){}
+      closePicker();cosToast('Contrôle parental','Code supprimé');
+    }else{openPinPad();}
+  });
+}
+function openPinPad(){
+  S.pinDigits=[0,0,0,0];S.pinPos=0;
+  $('cos-picker').hidden=true;
+  $('cos-pin').hidden=false;
+  S.zone='pin';renderPin();focus();
+}
+function renderPin(){
+  const wrap=$('pin-digits');wrap.innerHTML='';
+  S.pinDigits.forEach((d,i)=>{
+    const c=document.createElement('div');c.className='pin-cell';c.dataset.pc=i;
+    c.innerHTML='<span class="arrow">▲</span>'+d+'<span class="arrow">▼</span>';
+    wrap.appendChild(c);
+  });
+}
+function closePin(){$('cos-pin').hidden=true;S.zone='settings';renderSettings();focus();}
+function savePin(){
+  const code=(S.pinDigits||[]).join('');
+  if(!/^\d{4}$/.test(code)){cosToast('Contrôle parental','Code invalide');return;}
+  try{localStorage.setItem('pipsily_adult_pin',code);}catch(e){}
+  closePin();cosToast('Contrôle parental','Code enregistré ✓');
+}
+
+// ── Compte & abonnement (lecture seule) ─────────────────────────────────
+function openAccountInfo(){
+  const u=window._cosUser||{},s=u.sub||{};
+  const email=(u.session&&u.session.user&&u.session.user.email)||'—';
+  const plan=s.plan==='admin'?'Administrateur':s.plan==='unlimited'?'Illimité':s.plan==='active'?'Standard':(s.plan||'—');
+  const ok=s.ok!==false;
+  $('ci-title').textContent='👤 Compte & abonnement';
+  $('ci-body').innerHTML=
+    '<div class="ci-row"><span class="k">E-mail</span><span class="v">'+esc(email)+'</span></div>'+
+    '<div class="ci-row"><span class="k">Abonnement</span><span class="v">'+esc(plan)+'</span></div>'+
+    '<div class="ci-row"><span class="k">Statut</span><span class="v" style="color:'+(ok?'#6ef7b0':'#ff8899')+'">'+(ok?'Actif':'Inactif')+'</span></div>';
+  $('cos-info').hidden=false;
+  if(S.zone!=='cos-info')S.infoRet=S.zone;
+  S.zone='cos-info';focus();
+}
+function closeInfo(){$('cos-info').hidden=true;S.zone='settings';renderSettings();focus();}
+
+// ── Déconnexion ─────────────────────────────────────────────────────────
+function openLogoutConfirm(){
+  openPicker('🚪 Se déconnecter ?','Tu devras te reconnecter pour accéder à PIPSILY.',
+    [{label:'Annuler',value:'no'},{label:'Se déconnecter',value:'yes',danger:true}],0,(it)=>{
+      if(it.value==='yes'){
+        $('cos-picker').hidden=true;
+        try{
+          const p=(window.PIPSILY_AUTH&&window.PIPSILY_AUTH.signOut)?window.PIPSILY_AUTH.signOut():Promise.resolve();
+          p.then(()=>{location.href='./login.html';}).catch(()=>{location.href='./login.html';});
+        }catch(e){location.href='./login.html';}
+      }else{closePicker();}
+    });
 }
 
 // ══════ APERÇU LIVE IN-TILE ══════════════════════════════════════════════
@@ -2405,6 +2634,14 @@ function focus(){
   else if(z==='qual-picker'){
     qAll('.qp-item').forEach((el,i)=>el.classList.toggle('foc',i===S.qualIdx));
   }
+  else if(z==='cos-picker'){
+    const its=qAll('#cp-list .cp-item');
+    its.forEach((el,i)=>el.classList.toggle('foc',i===S.pickerIdx));
+    if(its[S.pickerIdx])its[S.pickerIdx].scrollIntoView({block:'nearest'});
+  }
+  else if(z==='pin'){
+    qAll('.pin-cell').forEach((el,i)=>el.classList.toggle('foc',i===S.pinPos));
+  }
   managePreview();
 }
 
@@ -2453,6 +2690,30 @@ function onKey(type){
       if(v){S.lastProgItem=v;playItem(v,0);}
     }
     else if(type==='B'){closeQualPicker();}
+    return;
+  }
+
+  if(z==='cos-picker'){
+    const n=(S.pickerItems||[]).length;
+    if(type==='U'){S.pickerIdx=Math.max(0,S.pickerIdx-1);focus();}
+    else if(type==='D'){S.pickerIdx=Math.min(n-1,S.pickerIdx+1);focus();}
+    else if(type==='E'){const it=S.pickerItems[S.pickerIdx];if(it&&S.pickerOnPick)S.pickerOnPick(it);}
+    else if(type==='B'){closePicker();}
+    return;
+  }
+
+  if(z==='cos-info'){
+    if(type==='B'||type==='E'){closeInfo();}
+    return;
+  }
+
+  if(z==='pin'){
+    if(type==='U'){S.pinDigits[S.pinPos]=(S.pinDigits[S.pinPos]+1)%10;renderPin();focus();}
+    else if(type==='D'){S.pinDigits[S.pinPos]=(S.pinDigits[S.pinPos]+9)%10;renderPin();focus();}
+    else if(type==='L'){S.pinPos=Math.max(0,S.pinPos-1);focus();}
+    else if(type==='R'){S.pinPos=Math.min(S.pinDigits.length-1,S.pinPos+1);focus();}
+    else if(type==='E'){savePin();}
+    else if(type==='B'){closePin();}
     return;
   }
 
@@ -2829,7 +3090,7 @@ setTimeout(()=>{$('loading').hidden=true;},25000);
   if(!_isTV && !_wantsCosmos){ location.replace('./index.html'); return; }
   // Auth identique à VOD : même Supabase, même session partagée (origine commune)
   if(window.PIPSILY_AUTH&&window.PIPSILY_AUTH.authGate){
-    try{ const a=await window.PIPSILY_AUTH.authGate(); if(!a) return; }catch(e){}
+    try{ const a=await window.PIPSILY_AUTH.authGate(); if(!a) return; window._cosUser=a; }catch(e){}
   }
   loadContent();
   loadApps();

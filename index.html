@@ -4,14 +4,13 @@
   <script>
     /* Routage interface — le choix s'applique PARTOUT : si l'utilisateur a choisi
        Cosmos (sélecteur dans Réglages), on l'ouvre quel que soit l'appareil.
-       Par défaut (aucun choix), Cosmos seulement sur Freebox TV ; sinon Xstream. */
+       Par défaut (aucun choix), Cosmos sur TOUTES les TV ; Xstream ailleurs. */
     try{
       var _isTV = /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent)
                || /\bTV\b/.test(navigator.userAgent)
                || window.PIPSILY_NATIVE === 'android_tv';
-      var _isFreebox = /Freebox/i.test(navigator.userAgent);
       var _theme = localStorage.getItem('pf_theme');
-      if(_theme==='cosmos' || (_theme===null && _isTV && _isFreebox)){ location.replace('./cosmos.html'); }
+      if(_theme==='cosmos' || (_theme===null && _isTV)){ location.replace('./cosmos.html'); }
     }catch(e){}
   </script>
   <meta charset="UTF-8" />

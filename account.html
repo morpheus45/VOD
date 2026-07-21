@@ -373,9 +373,11 @@
           card.parentNode.prepend(card);   // l'afficher EN PREMIER dans les réglages
           const sel = document.getElementById("ifaceSelect");
           const _theme = localStorage.getItem("pf_theme");
-          const _isFreebox = /Freebox/i.test(navigator.userAgent);
-          // Cosmos si choisi, ou par défaut sur Freebox
-          if(sel) sel.value = (_theme === "cosmos" || (_theme === null && _isFreebox)) ? "cosmos" : "xstream";
+          const _isTV = /AndroidTV|GoogleTV|SmartTV/i.test(navigator.userAgent)
+                     || /\bTV\b/.test(navigator.userAgent)
+                     || window.PIPSILY_NATIVE === "android_tv";
+          // Cosmos si choisi, ou par défaut sur TOUTES les TV
+          if(sel) sel.value = (_theme === "cosmos" || (_theme === null && _isTV)) ? "cosmos" : "xstream";
         }
       }catch(e){}
 
