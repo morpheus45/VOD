@@ -2763,7 +2763,13 @@ function onKey(type){
       if(s==='voice'){openVoice();return;}
       if(s==='search'){gotoSection('search');return;}
       if(s==='settings'){gotoSection('settings');return;}
-      if(s==='home'){S.zone='hero';S.hBtn=0;focus();}
+      if(s==='home'){
+        // Bug : on ne re-rendait PAS l'accueil → depuis Films/Séries/TV, le
+        // bouton Accueil laissait le contenu de l'autre onglet. Re-render si
+        // on vient d'ailleurs, puis focus sur le hero.
+        if(S.sec!=='home')gotoSection('home');
+        S.zone='hero';S.hBtn=0;focus();
+      }
       else{gotoSection(s);}
     }
     else if(type==='B'){S.zone='hero';focus();}
