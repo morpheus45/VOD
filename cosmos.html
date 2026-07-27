@@ -2087,12 +2087,29 @@ function doSearch(q){
     res.innerHTML='<div id="search-empty">Tapez pour rechercher dans les films, séries et chaînes…</div>';
     return;
   }
-  const results=S.allItems.concat(S.liveItems).filter(i=>
-    isClean(i)&&(
-      (i.title||'').toLowerCase().includes(lo)||
-      (i.category||'').toLowerCase().includes(lo)
-    )
-  ).slice(0,60);
+  // Recherche GLOBALE pondérée : classement par pertinence PUIS fusion en
+  // round-robin par type (film / série / chaîne) → aucun type ne monopolise
+  // la limite. Avant : allItems.concat(liveItems).slice(0,60) — les films,
+  // concaténés en premier, remplissaient les 60 places et éjectaient séries +
+  // chaînes (d'où « la recherche ne cherche que dans les films »).
+  const _esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const _wordRe=new RegExp('(^|[^a-z0-9])'+_esc(lo));
+  const _score=t=>{ if(t===lo)return 0; if(t.startsWith(lo))return 1; if(_wordRe.test(t))return 2; if(t.includes(lo))return 3; return 4; };
+  const _b={film:[],serie:[],live:[]};
+  S.allItems.concat(S.liveItems).forEach(i=>{
+    if(!isClean(i))return;
+    const t=(i.title||'').toLowerCase();
+    if(!(t.includes(lo)||(i.category||'').toLowerCase().includes(lo)))return;
+    i._sc=_score(t);
+    (i.isLive?_b.live:i.series_id?_b.serie:_b.film).push(i);
+  });
+  const _ord=['film','serie','live'];
+  _ord.forEach(k=>_b[k].sort((a,c)=>a._sc-c._sc||((c.added||0)-(a.added||0))));
+  const results=[]; let _rot=0;
+  while(results.length<60 && (_b.film.length||_b.serie.length||_b.live.length)){
+    let _min=Infinity; _ord.forEach(k=>{ if(_b[k].length)_min=Math.min(_min,_b[k][0]._sc); });
+    for(let n=0;n<3;n++){ const k=_ord[(_rot+n)%3]; if(_b[k].length&&_b[k][0]._sc===_min){ results.push(_b[k].shift()); _rot=(_rot+n+1)%3; break; } }
+  }
   S.gridItems=results;S.searchIdx=0;S.gridIdx=0;
   if(!results.length){res.innerHTML='<div id="search-empty">Aucun résultat pour « '+esc(q)+' »</div>';return;}
   results.forEach((item,i)=>{const c=mkCard(item,-2,i,item.isLive);c.dataset.si=i;res.appendChild(c);});
