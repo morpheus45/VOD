@@ -2380,7 +2380,16 @@ function activateSetting(idx){
   const items=qAll('.set-item');
   const action=items[idx]?.dataset.action;
   if(action==='iface'){try{localStorage.setItem('pf_theme','xstream');}catch(e){} location.replace('./index.html');return;}
-  else if(action==='reload'){window.AndroidBridge?.reloadApp?.();}
+  else if(action==='reload'){
+    // Bug : reloadApp() n'existe pas dans le bridge → le bouton ne faisait RIEN,
+    // d'où l'impossibilité de charger le nouveau code depuis l'app. clearCache()
+    // (qui vide le cache WebView PUIS recharge l'URL) est la vraie méthode ;
+    // location.reload() en repli (navigateur / plateformes sans bridge).
+    if(window.AndroidBridge&&typeof window.AndroidBridge.clearCache==='function'){
+      try{window.AndroidBridge.clearCache();return;}catch(e){}
+    }
+    try{location.reload();}catch(e){}
+  }
   else if(action==='update'){window.AndroidBridge?.checkUpdateAsync?.();}
   else if(action==='refresh'){
     try{localStorage.removeItem(CACHE_KEY);}catch{}
