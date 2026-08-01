@@ -1343,9 +1343,12 @@ function saveCache(vod,series,live){
 // ══════ CONTENT LOADING ══════════════════════════════════════════════════
 // Fetch + normalisation des 3 sources → {allVod,allSeries,liveRaw}
 async function fetchContentData(){
-  const vodJson    = await bridgeFetch(GH+'vod.json');
-  const seriesJson = await bridgeFetch(GH+'series.json');
-  const liveJson   = await bridgeFetch(GH+'live.json');
+  // Anti-cache : garantit qu'on récupère TOUJOURS le dernier .json publié
+  // (aucune couche HTTP/WebView ne peut resservir une vieille copie).
+  const _cb='?cb='+Date.now();
+  const vodJson    = await bridgeFetch(GH+'vod.json'+_cb);
+  const seriesJson = await bridgeFetch(GH+'series.json'+_cb);
+  const liveJson   = await bridgeFetch(GH+'live.json'+_cb);
   if(!vodJson&&!seriesJson&&!liveJson)return null;
   const seen=new Set(),allVod=[],allSeries=[];
   function addItem(raw,isSerie){
