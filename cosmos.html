@@ -433,6 +433,7 @@ html,body{
 .panel-act-fav,.panel-act-restart{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.2)}
 .panel-act-remove{background:rgba(229,75,75,.16);color:#ff9a9a;border:1px solid rgba(229,75,75,.4)}
 .panel-tab-cnt{opacity:.6;font-size:.85em;margin-left:4px}
+.panel-tab-cnt.inc{opacity:1;color:#ffb454;font-weight:700}
 .pep.locked{opacity:.45}
 .panel-act-btn.foc{box-shadow:0 0 0 2.5px var(--accent)}
 .panel-act-btn.is-fav{background:var(--accent);color:#fff;border-color:transparent}
@@ -1782,6 +1783,11 @@ function buildPanel(data){
     S.panelSmeta.push({sNum,count:epList.length});
   });
   S.panelSmeta.sort((a,b)=>Number(a.sNum)-Number(b.sNum));
+  // Compte d'épisodes ANNONCÉ par le fournisseur (data.seasonsMeta) → sert à
+  // signaler les saisons incomplètes (stockés < annoncés). Attention : ce compte
+  // est parfois aberrant (ex : 180 pour 6 épisodes) → on ne l'affiche pas alors.
+  S.panelAnnounced={};
+  (data.seasonsMeta||[]).forEach(m=>{ if(m&&m.num!=null)S.panelAnnounced[String(m.num)]=Number(m.count)||0; });
 
   // Liste ordonnée à plat (toutes saisons) pour calculer "épisode suivant"
   const ordered=[];
@@ -1818,7 +1824,11 @@ function buildPanel(data){
     const m=Number.isFinite(+s.sNum)?'Saison '+s.sNum:s.sNum;
     const t=document.createElement('div');
     t.className='panel-tab'+(i===selTab?' active':'');
-    t.innerHTML=esc(m)+' <span class="panel-tab-cnt">'+s.count+' ép.</span>';
+    const ann=S.panelAnnounced[s.sNum]||0;
+    const inc=ann>s.count;                 // moins d'épisodes stockés qu'annoncés
+    const showFrac=inc&&ann<=100;          // n'affiche la fraction que si l'annoncé est plausible
+    const cnt=showFrac?(s.count+'/'+ann):String(s.count);
+    t.innerHTML=esc(m)+' <span class="panel-tab-cnt'+(inc?' inc':'')+'">'+cnt+' ép.'+(inc?' ⚠':'')+'</span>';
     t.dataset.ti=i;tabs.appendChild(t);
   });
 
