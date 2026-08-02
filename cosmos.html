@@ -2201,10 +2201,11 @@ function showOnlyView(id){
 // ── Rendus par tab ───────────────────────────────────────────────────────
 function renderTabHome(){
   const rows=[];
-  // Accueil : Poursuivre = en cours + favoris, TOUS types confondus
+  // Étagère d'applications EN PREMIER (au-dessus de Poursuivre)
+  if(S.appItems.length&&storeGet('pf_show_apps',true))rows.push({title:'Applications',items:S.appItems,isApps:true});
+  // Poursuivre = en cours + favoris, TOUS types confondus
   const poursuivre=poursuivreItems(null);
   if(poursuivre.length)rows.push({title:'Poursuivre',items:poursuivre});
-  if(S.appItems.length&&storeGet('pf_show_apps',true))rows.push({title:'Applications',items:S.appItems,isApps:true});
   const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
   if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms});
   const newSeries=[...S.allSeries].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
@@ -2379,6 +2380,7 @@ function renderSettings(){
       if(n<=0)return 'Affichée · 0 app détectée (visibilité TV)';
       return 'Affichée · '+n+' apps détectées';
     })(),action:'apps'},
+    {label:'      ↳ Choisir les applications affichées',desc:'Masquer / afficher chaque application',action:'appspick'},
   ];
   if(_cosIsAdmin())items.push({label:'⚙ Admin',desc:'Ouvrir le panneau d\'administration',action:'admin'});
   items.push(
@@ -2432,6 +2434,7 @@ function activateSetting(idx){
     else{loadApps();}               // on active → (re)charger les apps installées
     renderSettings();focus();       // MAJ du libellé de l'interrupteur
   }
+  else if(action==='appspick'){openAppsPicker();}
 }
 
 // ══════ PICKER GÉNÉRIQUE (région / menus) ════════════════════════════════
@@ -3183,12 +3186,35 @@ function loadApps(){
     const PRIO=['netflix','youtube','primevideo','amazonvideo','disney','spotify','twitch','plex','kodi','molotov','canal','arte','mycanal','deezer','vlc'];
     const score=a=>{const p=(a.pkg||'').toLowerCase();const i=PRIO.findIndex(k=>p.includes(k));return i<0?99:i;};
     arr.sort((a,b)=>score(a)-score(b));
-    S.appItems=arr.map(a=>({title:a.label,image:a.img,pkg:a.pkg,isApp:true,banner:a.banner,category:'Application'}));
+    S.allApps=arr.map(a=>({title:a.label,image:a.img,pkg:a.pkg,isApp:true,banner:a.banner,category:'Application'}));
+    applyAppsFilter();   // S.allApps → S.appItems selon les apps masquées par l'utilisateur
     // Faire apparaître la rangée : re-rendre l'accueil si on y est (peu importe le zone).
     // Avant : ne re-rendait que sur le hero → si les apps arrivaient après le 1er
     // rendu, la rangée n'apparaissait jamais.
     if(S.sec==='home')renderTabHome();
   }catch(e){window._appsDetected=-1;}
+}
+// Filtre la liste complète (S.allApps) vers l'étagère (S.appItems) en retirant
+// les apps que l'utilisateur a choisi de masquer (pf_apps_hidden).
+function applyAppsFilter(){
+  const hidden=storeGet('pf_apps_hidden',[])||[];
+  S.appItems=(S.allApps||[]).filter(a=>hidden.indexOf(a.pkg)<0);
+}
+// Sélecteur : afficher/masquer chaque application de l'étagère (D-pad).
+function openAppsPicker(){
+  const all=S.allApps||[];
+  if(!all.length){cosToast('Aucune application détectée','Active l\'étagère et relance l\'app');return;}
+  const hidden=storeGet('pf_apps_hidden',[])||[];
+  const items=all.map(a=>({label:(hidden.indexOf(a.pkg)<0?'☑  ':'☐  ')+a.title,value:a.pkg,active:hidden.indexOf(a.pkg)<0}));
+  openPicker('📱 Applications affichées','OK = afficher / masquer · Retour = terminer',items,Math.max(0,S.appsPickIdx||0),(it)=>{
+    const h=storeGet('pf_apps_hidden',[])||[];
+    const i=h.indexOf(it.value);
+    if(i<0)h.push(it.value); else h.splice(i,1);   // bascule masquer/afficher
+    storeSet('pf_apps_hidden',h);
+    applyAppsFilter();
+    S.appsPickIdx=S.pickerIdx;                       // conserver la position dans la liste
+    openAppsPicker();                                // ré-ouvre rafraîchi (reste ouvert pour enchaîner)
+  });
 }
 
 // Auto-update desactive sur ce build personnalise (eviterait d'ecraser les
