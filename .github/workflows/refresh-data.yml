@@ -11,7 +11,7 @@ on:
 
   # Automatique chaque lundi et jeudi à 3h UTC
   schedule:
-    - cron: '0 3 * * 1,4'
+    - cron: '0 3 * * 1,3,5'
 
 jobs:
   refresh:
