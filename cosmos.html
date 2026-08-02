@@ -2371,7 +2371,14 @@ function renderSettings(){
     {label:'Interface : Cosmos TV',desc:'Basculer vers l\'interface PIPSILY Xstream',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
     {label:'🔞 Contrôle parental',desc:pinOn?'Code PIN actif — modifier ou supprimer':'Aucun code — en créer un',action:'parental'},
-    {label:'📱 Étagère d\'applications',desc:(storeGet('pf_show_apps',true)?'Affichée sur l\'accueil':'Masquée')+' — activer / désactiver',action:'apps'},
+    {label:'📱 Étagère d\'applications',desc:(function(){
+      if(!storeGet('pf_show_apps',true))return 'Masquée — activer';
+      if(!window.AndroidBridge||!window.AndroidBridge.getInstalledApps)return 'Indisponible — installe l\'APK v48';
+      const n=window._appsDetected;
+      if(n==null)return 'Affichée · détection en cours…';
+      if(n<=0)return 'Affichée · 0 app détectée (visibilité TV)';
+      return 'Affichée · '+n+' apps détectées';
+    })(),action:'apps'},
   ];
   if(_cosIsAdmin())items.push({label:'⚙ Admin',desc:'Ouvrir le panneau d\'administration',action:'admin'});
   items.push(
@@ -3166,18 +3173,22 @@ setTimeout(()=>{$('loading').hidden=true;},25000);
 
 // ══════ APPLICATIONS (etagere style Google TV) ═══════════════════════════
 function loadApps(){
-  if(!storeGet('pf_show_apps',true))return;   // étagère désactivée dans les réglages
-  if(!window.AndroidBridge?.getInstalledApps)return;
+  if(!storeGet('pf_show_apps',true)){window._appsDetected=0;return;}   // étagère désactivée
+  if(!window.AndroidBridge?.getInstalledApps){window._appsDetected=null;return;} // pas de bridge (APK < v48 ou pas sur TV)
   try{
     const raw=AndroidBridge.getInstalledApps();
     const arr=JSON.parse(raw||'[]');
+    window._appsDetected=arr.length;   // diagnostic (visible dans Réglages)
     // Mettre en avant les apps populaires si presentes
     const PRIO=['netflix','youtube','primevideo','amazonvideo','disney','spotify','twitch','plex','kodi','molotov','canal','arte','mycanal','deezer','vlc'];
     const score=a=>{const p=(a.pkg||'').toLowerCase();const i=PRIO.findIndex(k=>p.includes(k));return i<0?99:i;};
     arr.sort((a,b)=>score(a)-score(b));
     S.appItems=arr.map(a=>({title:a.label,image:a.img,pkg:a.pkg,isApp:true,banner:a.banner,category:'Application'}));
-    if(S.sec==='home'&&S.zone==='hero')renderTabHome(); // rafraichir si au repos
-  }catch(e){}
+    // Faire apparaître la rangée : re-rendre l'accueil si on y est (peu importe le zone).
+    // Avant : ne re-rendait que sur le hero → si les apps arrivaient après le 1er
+    // rendu, la rangée n'apparaissait jamais.
+    if(S.sec==='home')renderTabHome();
+  }catch(e){window._appsDetected=-1;}
 }
 
 // Auto-update desactive sur ce build personnalise (eviterait d'ecraser les
