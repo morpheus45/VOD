@@ -17,6 +17,19 @@
     <uses-feature android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <!-- Visibilité des apps installées (Android 11+) : requis pour l'étagère launcher
+         (lister via queryIntentActivities + lancer via getLaunchIntentForPackage) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"

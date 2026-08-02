@@ -2204,7 +2204,7 @@ function renderTabHome(){
   // Accueil : Poursuivre = en cours + favoris, TOUS types confondus
   const poursuivre=poursuivreItems(null);
   if(poursuivre.length)rows.push({title:'Poursuivre',items:poursuivre});
-  if(S.appItems.length)rows.push({title:'Applications',items:S.appItems,isApps:true});
+  if(S.appItems.length&&storeGet('pf_show_apps',true))rows.push({title:'Applications',items:S.appItems,isApps:true});
   const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
   if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms});
   const newSeries=[...S.allSeries].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
@@ -2371,6 +2371,7 @@ function renderSettings(){
     {label:'Interface : Cosmos TV',desc:'Basculer vers l\'interface PIPSILY Xstream',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
     {label:'🔞 Contrôle parental',desc:pinOn?'Code PIN actif — modifier ou supprimer':'Aucun code — en créer un',action:'parental'},
+    {label:'📱 Étagère d\'applications',desc:(storeGet('pf_show_apps',true)?'Affichée sur l\'accueil':'Masquée')+' — activer / désactiver',action:'apps'},
   ];
   if(_cosIsAdmin())items.push({label:'⚙ Admin',desc:'Ouvrir le panneau d\'administration',action:'admin'});
   items.push(
@@ -2416,6 +2417,14 @@ function activateSetting(idx){
   else if(action==='parental'){openParental();}
   else if(action==='admin'){location.href='./admin.html';}
   else if(action==='logout'){openLogoutConfirm();}
+  else if(action==='apps'){
+    // Interrupteur étagère d'applications (Cosmos TV uniquement)
+    const on=storeGet('pf_show_apps',true);
+    storeSet('pf_show_apps',!on);
+    if(on){S.appItems=[];}          // on désactive → vider l'étagère
+    else{loadApps();}               // on active → (re)charger les apps installées
+    renderSettings();focus();       // MAJ du libellé de l'interrupteur
+  }
 }
 
 // ══════ PICKER GÉNÉRIQUE (région / menus) ════════════════════════════════
@@ -3157,6 +3166,7 @@ setTimeout(()=>{$('loading').hidden=true;},25000);
 
 // ══════ APPLICATIONS (etagere style Google TV) ═══════════════════════════
 function loadApps(){
+  if(!storeGet('pf_show_apps',true))return;   // étagère désactivée dans les réglages
   if(!window.AndroidBridge?.getInstalledApps)return;
   try{
     const raw=AndroidBridge.getInstalledApps();

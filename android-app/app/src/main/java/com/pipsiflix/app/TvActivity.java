@@ -681,6 +681,59 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    //  Étagère d'applications (launcher) — liste + lance les apps installées
+    // ══════════════════════════════════════════════════════════════════════
+    /** JSON [{label,pkg,img,banner}] des apps lançables installées sur la TV. */
+    private String listInstalledApps() {
+        android.content.pm.PackageManager pm = getPackageManager();
+        java.util.LinkedHashMap<String, org.json.JSONObject> map = new java.util.LinkedHashMap<>();
+        collectLaunchApps(pm, Intent.CATEGORY_LEANBACK_LAUNCHER, map); // apps TV d'abord (bannières 16:9)
+        collectLaunchApps(pm, Intent.CATEGORY_LAUNCHER, map);          // + apps standard (ex : Play Store)
+        org.json.JSONArray arr = new org.json.JSONArray();
+        for (org.json.JSONObject o : map.values()) arr.put(o);
+        return arr.toString();
+    }
+
+    private void collectLaunchApps(android.content.pm.PackageManager pm, String category,
+                                   java.util.LinkedHashMap<String, org.json.JSONObject> out) {
+        Intent it = new Intent(Intent.ACTION_MAIN);
+        it.addCategory(category);
+        for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(it, 0)) {
+            String pkg = ri.activityInfo.packageName;
+            if (pkg == null || pkg.equals(getPackageName()) || out.containsKey(pkg)) continue;
+            try {
+                org.json.JSONObject o = new org.json.JSONObject();
+                o.put("pkg", pkg);
+                o.put("label", ri.loadLabel(pm).toString());
+                o.put("img", drawableToB64(ri.loadIcon(pm), 96, 96));
+                String banner = "";
+                try {
+                    android.graphics.drawable.Drawable bd = pm.getApplicationBanner(pkg);
+                    if (bd != null) banner = drawableToB64(bd, 320, 180);
+                } catch (Exception ignored) {}
+                o.put("banner", banner);
+                out.put(pkg, o);
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private String drawableToB64(android.graphics.drawable.Drawable d, int w, int h) {
+        if (d == null) return "";
+        try {
+            android.graphics.Bitmap bmp = android.graphics.Bitmap.createBitmap(
+                w, h, android.graphics.Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas c = new android.graphics.Canvas(bmp);
+            d.setBounds(0, 0, w, h);
+            d.draw(c);
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, baos);
+            bmp.recycle();
+            return "data:image/png;base64," + android.util.Base64.encodeToString(
+                baos.toByteArray(), android.util.Base64.NO_WRAP);
+        } catch (Exception e) { return ""; }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     //  Bridge TV
     // ══════════════════════════════════════════════════════════════════════
     class TvBridge {
@@ -752,6 +805,28 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
 
         @JavascriptInterface
         public String getDeviceType() { return "android_tv"; }
+
+        /** Étagère launcher : liste les apps installées (label, package, icône, bannière). */
+        @JavascriptInterface
+        public String getInstalledApps() {
+            try { return TvActivity.this.listInstalledApps(); }
+            catch (Exception e) { return "[]"; }
+        }
+
+        /** Étagère launcher : lance une app par son package (Leanback puis launcher standard). */
+        @JavascriptInterface
+        public void launchApp(String pkg) {
+            if (pkg == null || pkg.isEmpty()) return;
+            runOnUiThread(() -> {
+                try {
+                    android.content.pm.PackageManager pm = getPackageManager();
+                    Intent i = pm.getLeanbackLaunchIntentForPackage(pkg);
+                    if (i == null) i = pm.getLaunchIntentForPackage(pkg);
+                    if (i != null) { i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(i); }
+                    else Toast.makeText(TvActivity.this, "Impossible d'ouvrir cette application", Toast.LENGTH_SHORT).show();
+                } catch (Exception ignored) {}
+            });
+        }
 
         /** Démarre l'aperçu vidéo dans la vignette focalisée (x,y,w,h en pixels physiques). */
         @JavascriptInterface

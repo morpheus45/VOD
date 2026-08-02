@@ -1,7 +1,7 @@
 {
-  "apk_version": 47,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v47/PIPSILY.apk",
-  "changes": "Fini l'audio superposé : l'aperçu des chaînes ne peut plus tourner derrière la chaîne en cours. Et chaque tuile TV lance bien SA chaîne (les flux Réunion/Caraïbes ne se mélangent plus aux chaînes métropole).",
+  "apk_version": 48,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v48/PIPSILY.apk",
+  "changes": "Nouveau (Cosmos TV) : étagère de tes applications installées sur l'accueil (YouTube, Play Store, etc.), activable/désactivable dans Réglages. Recherche globale et corrections diverses.",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"
