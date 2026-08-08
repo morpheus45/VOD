@@ -9,6 +9,7 @@ import android.content.IntentFilter;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.speech.RecognizerIntent;
 import android.util.Log;
 import android.graphics.SurfaceTexture;
 import android.view.Gravity;
@@ -43,6 +44,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 
 import java.io.File;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -63,6 +65,7 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     private static final String APP_URL     = "https://morpheus45.github.io/VOD/";
     // Version réelle de l'APK (suivie sur versionCode du build.gradle)
     private static final String APK_VERSION = String.valueOf(BuildConfig.VERSION_CODE);
+    private static final int VOICE_REQUEST_CODE = 4711;
 
     // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
     static WeakReference<TvActivity> sInstance;
@@ -651,11 +654,38 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
             case KeyEvent.KEYCODE_CHANNEL_DOWN:
                 webView.evaluateJavascript("if(typeof goPrev==='function')goPrev();", null);
                 return true;
+            case KeyEvent.KEYCODE_SEARCH:
+            case 231:   // KEYCODE_VOICE_ASSIST
+            case 219:   // KEYCODE_ASSIST (bouton micro de la télécommande)
+                webView.evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('tv_voice'));", null);
+                return true;
             case KeyEvent.KEYCODE_DPAD_CENTER:
             case KeyEvent.KEYCODE_ENTER:
                 return false;
         }
         return super.onKeyDown(keyCode, event);
+    }
+
+    // ── Reconnaissance vocale (recherche par la voix, télécommande Freebox) ──
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == VOICE_REQUEST_CODE) {
+            String text = null;
+            if (resultCode == RESULT_OK && data != null) {
+                ArrayList<String> res = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                if (res != null && !res.isEmpty()) text = res.get(0);
+            }
+            final String t = (text == null) ? null
+                : text.replace("\\", "\\\\").replace("'", "\\'").replace("\n", " ");
+            if (webView != null) {
+                final String js = (t == null)
+                    ? "if(window.onVoiceResult)window.onVoiceResult(null);"
+                    : "if(window.onVoiceResult)window.onVoiceResult('" + t + "');";
+                webView.post(() -> webView.evaluateJavascript(js, null));
+            }
+        }
     }
 
     @Override
@@ -805,6 +835,27 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
 
         @JavascriptInterface
         public String getDeviceType() { return "android_tv"; }
+
+        /** Recherche vocale native (Android/Google) → window.onVoiceResult(texte). */
+        @JavascriptInterface
+        public void startVoiceSearch() {
+            runOnUiThread(() -> {
+                try {
+                    Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                    intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                    intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fr-FR");
+                    intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Que cherchez-vous ?");
+                    intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+                    startActivityForResult(intent, VOICE_REQUEST_CODE);
+                } catch (Exception e) {
+                    if (webView != null) webView.post(() -> webView.evaluateJavascript(
+                        "if(window.onVoiceResult)window.onVoiceResult(null);", null));
+                    Toast.makeText(TvActivity.this,
+                        "Recherche vocale indisponible sur cet appareil", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
 
         /** Étagère launcher : liste les apps installées (label, package, icône, bannière). */
         @JavascriptInterface
