@@ -4,6 +4,9 @@
     <!-- Permissions réseau -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Micro : recherche vocale (WebView Web Speech / reconnaissance) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Installation de mises à jour APK -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Démarrage automatique de l'app au boot de la TV -->

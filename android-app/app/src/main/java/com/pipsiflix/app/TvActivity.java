@@ -114,6 +114,14 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
 
         configureWebView();
 
+        // Permission micro pour la recherche vocale (WebView Web Speech)
+        if (android.os.Build.VERSION.SDK_INT >= 23 &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            try { requestPermissions(new String[]{ android.Manifest.permission.RECORD_AUDIO }, 77); }
+            catch (Exception ignored) {}
+        }
+
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
         } else {
@@ -198,6 +206,22 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
                 setContentView(R.layout.activity_tv);
                 webView = findViewById(R.id.tvWebView);
                 webView.setVisibility(View.VISIBLE);
+            }
+
+            // Autorise le micro demandé par le WebView (recherche vocale Web Speech).
+            @Override
+            public void onPermissionRequest(final android.webkit.PermissionRequest request) {
+                runOnUiThread(() -> {
+                    try {
+                        for (String res : request.getResources()) {
+                            if (android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res)) {
+                                request.grant(new String[]{ android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+                                return;
+                            }
+                        }
+                        request.deny();
+                    } catch (Exception e) { request.deny(); }
+                });
             }
         });
     }

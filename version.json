@@ -1,6 +1,6 @@
 {
-  "apk_version": 50,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v50/PIPSILY.apk",
+  "apk_version": 51,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v51/PIPSILY.apk",
   "changes": "Nouveau (Cosmos TV) : étagère de tes applications installées sur l'accueil (YouTube, Play Store, etc.), activable/désactivable dans Réglages. Recherche globale et corrections diverses.",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
