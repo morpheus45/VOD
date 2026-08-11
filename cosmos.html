@@ -2013,13 +2013,21 @@ function openVoice(){
     try{
       const recog=new SR();
       recog.lang='fr-FR';recog.interimResults=true;recog.maxAlternatives=1;
+      // Auto : dès la fin de parole (résultat final OU onend), on lance la
+      // recherche tout seul — plus besoin d'appuyer sur Retour/OK.
+      let _vDone=false;
+      const _vFinish=t=>{ if(_vDone)return; t=(t||'').trim(); if(!t){if(S.zone==='voice')closeVoice();return;} _vDone=true; try{recog.stop();}catch(e){} window.onVoiceResult(t); };
       recog.onresult=e=>{
-        const t=e.results[0][0].transcript;
-        $('voice-result').textContent=t;
-        if(e.results[0].isFinal)window.onVoiceResult(t);
+        const r=e.results[e.results.length-1];
+        const t=r[0].transcript;
+        $('voice-result').textContent=t;   // affichage live de ce qui est entendu
+        if(r.isFinal)_vFinish(t);           // résultat final → recherche auto
       };
-      recog.onerror=()=>closeVoice();
-      recog.onend=()=>{if(S.zone==='voice')closeVoice();};
+      recog.onerror=()=>{ if(!_vDone&&S.zone==='voice')closeVoice(); };
+      recog.onend=()=>{                     // fin d'écoute → recherche auto avec ce qui a été entendu
+        if(_vDone)return;
+        _vFinish(($('voice-result').textContent||'').trim());
+      };
       recog.start();return;
     }catch{}
   }
