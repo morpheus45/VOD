@@ -2098,6 +2098,12 @@ function kbActivate(){
   else if(k.a==='voice'){openVoice();return;}
   renderQuery();doSearch(S.searchQuery);
 }
+// ── Helpers recherche tolérante (accents / mots / fautes proches) ──────────
+const _SEARCH_STOP=new Set(['et','de','des','du','la','le','les','un','une','l','d','en','au','aux','a','the','of','and']);
+function _normSearch(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+// Distance d'édition ≤ 1 (insertion / suppression / substitution) — rapide.
+function _within1Search(a,b){ const la=a.length,lb=b.length; if(Math.abs(la-lb)>1)return false; let i=0,j=0,e=0; while(i<la&&j<lb){ if(a[i]===b[j]){i++;j++;continue;} if(++e>1)return false; if(la>lb)i++; else if(lb>la)j++; else{i++;j++;} } if(i<la||j<lb)e++; return e<=1; }
+
 function doSearch(q){
   S.searchQuery=q||'';
   renderQuery();
@@ -2113,15 +2119,35 @@ function doSearch(q){
   // la limite. Avant : allItems.concat(liveItems).slice(0,60) — les films,
   // concaténés en premier, remplissaient les 60 places et éjectaient séries +
   // chaînes (d'où « la recherche ne cherche que dans les films »).
-  const _esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-  const _wordRe=new RegExp('(^|[^a-z0-9])'+_esc(lo));
-  const _score=t=>{ if(t===lo)return 0; if(t.startsWith(lo))return 1; if(_wordRe.test(t))return 2; if(t.includes(lo))return 3; return 4; };
+  // Recherche TOLÉRANTE : insensible aux accents, par mots, avec correction des
+  // fautes proches (la voix transcrit « montres » au lieu de « monstres »).
+  const nq=_normSearch(q);
+  const _all=nq.split(' ').filter(Boolean);
+  const _sig=(()=>{ const s=_all.filter(w=>w.length>=2&&!_SEARCH_STOP.has(w)); return s.length?s:_all; })();
+  const _need=Math.max(1,Math.ceil(_sig.length*0.5));
+  const _tolerant=nq.length>=3;   // requêtes courtes → matching simple (perf clavier)
+  const _score2=(nt,ntw)=>{
+    if(nt===nq)return 0;
+    if(nt.startsWith(nq))return 1;
+    if(nt.includes(nq))return 2;
+    if(!_tolerant)return 99;
+    let ex=0,fz=0;
+    for(const tok of _sig){
+      if(nt.includes(tok)){ex++;continue;}
+      if(tok.length>=4){ for(const w of ntw){ if(Math.abs(w.length-tok.length)<=1&&_within1Search(w,tok)){fz++;break;} } }
+    }
+    const m=ex+fz;
+    if(m>=_sig.length)return fz?4:3;    // tous les mots (exacts ou proches)
+    if(m>=_need)return 5+(_sig.length-m); // la plupart des mots
+    return 99;
+  };
   const _b={film:[],serie:[],live:[]};
   S.allItems.concat(S.liveItems).forEach(i=>{
     if(!isClean(i))return;
-    const t=(i.title||'').toLowerCase();
-    if(!(t.includes(lo)||(i.category||'').toLowerCase().includes(lo)))return;
-    i._sc=_score(t);
+    const nt=i._nt||(i._nt=_normSearch(i.title));   // titre normalisé mis en cache
+    let sc=_score2(nt, _tolerant?(i._ntw||(i._ntw=nt.split(' '))):null);
+    if(sc>=99){ const nc=i._nc||(i._nc=_normSearch(i.category||'')); if(nc.includes(nq))sc=8; else return; }
+    i._sc=sc;
     (i.isLive?_b.live:i.series_id?_b.serie:_b.film).push(i);
   });
   const _ord=['film','serie','live'];
