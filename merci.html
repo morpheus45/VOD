@@ -87,9 +87,8 @@
   <div class="card">
     <div class="check-circle">✅</div>
     <div class="brand">PIPSILY</div>
-    <h1>Paiement confirmé !</h1>
-    <div class="plan-badge" id="planBadge">Chargement…</div>
-    <p>Merci pour votre confiance. Suivez les 3 étapes ci-dessous pour accéder à PIPSILY.</p>
+    <h1>Compte créé !</h1>
+    <p>Votre inscription est enregistrée. Suivez les étapes ci-dessous.</p>
 
     <div class="steps-box">
       <div class="steps-title">Prochaines étapes</div>
@@ -110,7 +109,7 @@
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-text">
-          Revenez sur PIPSILY et <strong>connectez-vous</strong> — votre accès <span id="planLabel">complet</span> est activé !
+          Revenez sur PIPSILY et <strong>connectez-vous</strong> — votre accès sera actif dès la <strong>validation par l'administrateur</strong>.
         </div>
       </div>
     </div>
@@ -119,29 +118,8 @@
     <a href="./login.html" class="btn-secondary">J'ai déjà un compte — Connexion</a>
 
     <div class="footer-note">
-      Votre abonnement est valable <strong style="color:#7a9cc0">1 an</strong> à compter d'aujourd'hui.<br>
-      Un email de rappel vous sera envoyé avant expiration.
+      L'accès est gratuit. Votre compte sera activé après validation par l'administrateur.
     </div>
   </div>
-
-  <script>
-    // Lire le plan depuis l'URL (?plan=solo ou ?plan=multi)
-    const params = new URLSearchParams(window.location.search);
-    const plan   = params.get("plan") || "solo";
-
-    const plans = {
-      solo:  { label: "Offre Solo — 1 écran · 1 an",  desc: "Solo (1 écran)" },
-      multi: { label: "Offre Multi — 3 écrans · 1 an", desc: "Multi (3 écrans)" },
-    };
-    const p = plans[plan] || plans.solo;
-
-    document.getElementById("planBadge").textContent  = p.label;
-    document.getElementById("planLabel").textContent  = p.desc;
-
-    // Pré-sélectionner l'onglet "Inscription" sur la page login si possible
-    const btn = document.querySelector(".btn-main");
-    // On passe le plan en paramètre pour que login.html puisse pré-remplir si besoin
-    btn.href = `./login.html?tab=signup&plan=${plan}`;
-  </script>
 </body>
 </html>

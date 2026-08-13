@@ -15,13 +15,6 @@ const SUPABASE_ANON = "sb_publishable_cNZ37Mjd57b_9nlyCvtkkA_wSIszOMR";
 const ADMIN_EMAIL   = "cedric.lago@gmail.com";
 
 // ─────────────────────────────────────────────────────────────────
-//  PAIEMENT WERO — modifiez ces valeurs avec VOTRE numéro Wero
-//  (l'utilisateur verra ces infos sur la page "Mon compte")
-// ─────────────────────────────────────────────────────────────────
-const WERO_PHONE = atob("MDYyMjQ2MTYyNA=="); // encodé — ne jamais afficher en clair
-const WERO_NAME  = "PIPSILY";
-
-// ─────────────────────────────────────────────────────────────────
 //  DÉTECTION CONFIG
 // ─────────────────────────────────────────────────────────────────
 const _configured = !SUPABASE_URL.includes("VOTRE_PROJET") && !SUPABASE_ANON.includes("VOTRE_ANON");
@@ -295,18 +288,13 @@ async function addExtraDevice(userId){
   if(!_supa) return;
   const deviceId   = getDeviceId();
   const deviceName = getDeviceName();
-  const extra_cost = 1.50;
   try {
     const { data: prof } = await _supa
       .from("profiles").select("devices_allowed").eq("id", userId).single();
     const newAllowed = (prof?.devices_allowed ?? 1) + 1;
     await _supa.from("profiles").update({ devices_allowed: newAllowed }).eq("id", userId);
     await _supa.from("devices").insert({
-      user_id: userId, device_id: deviceId, device_name: deviceName, monthly_fee: extra_cost
-    });
-    await _supa.from("payments").insert({
-      user_id: userId, amount: extra_cost, type: "extra_device",
-      notes: `Appareil supplémentaire : ${deviceName}`
+      user_id: userId, device_id: deviceId, device_name: deviceName, monthly_fee: 0
     });
   } catch(e){ console.warn("[PIPSILY] addExtraDevice:", e.message); }
 }
@@ -506,21 +494,13 @@ function _showPaywall(sub){
         </h2>
         <p style="color:#7a9cc0;margin:0 0 28px;line-height:1.65;font-size:14px">
           ${expired
-            ? "Votre abonnement a expiré. Renouvelez-le pour continuer à profiter de PIPSILY."
-            : "Votre compte est en attente d'activation. Contactez l'administrateur pour activer votre accès."}
+            ? "Votre accès a expiré. Contactez l'administrateur pour le réactiver."
+            : "Votre compte est en attente d'activation. Contactez l'administrateur pour activer votre accès (gratuit)."}
         </p>
-        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
-          border-radius:16px;padding:20px;margin-bottom:20px">
-          <div style="font-size:32px;font-weight:900;color:#38A8E8;margin-bottom:4px">4,99 €</div>
-          <div style="font-size:13px;color:#7a9cc0">/mois · accès illimité</div>
-          <div style="margin-top:12px;font-size:12px;color:#7a9cc0">
-            Appareils supplémentaires : <strong style="color:#eef4ff">+1,50 €/mois chacun</strong>
-          </div>
-        </div>
         <a href="account.html" style="display:block;padding:14px 24px;border-radius:13px;
           background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;
           text-decoration:none;font-weight:700;font-size:15px;margin-bottom:10px">
-          Mon compte &amp; renouvellement
+          Mon compte
         </a>
         <button onclick="window.PIPSILY_AUTH.signOut().then(()=>location.href='login.html')"
           style="width:100%;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);
@@ -616,8 +596,6 @@ function _showSessionExpired(){
 window.PIPSILY_AUTH = {
   supabase           : _supa,
   ADMIN_EMAIL,
-  WERO_PHONE,
-  WERO_NAME,
   getSession,
   signIn,
   signUp,

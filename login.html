@@ -41,12 +41,6 @@
     .plan-equiv{font-size:10px;color:#7a9cc0}
     .plan-badge{font-size:9px;font-weight:700;background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;border-radius:20px;padding:2px 8px;margin-bottom:2px}
     .plan-feat{font-size:11px;color:#a0bccc;margin-top:4px}
-    .paypal-block{display:none;margin-top:20px;padding:20px;border-radius:14px;border:1px solid rgba(100,220,140,.3);background:rgba(100,220,140,.06);text-align:center}
-    .paypal-block.show{display:block}
-    .paypal-block p{font-size:14px;color:#7ef7b0;margin-bottom:14px;line-height:1.6}
-    .btn-paypal{display:inline-flex;align-items:center;gap:8px;padding:14px 26px;border-radius:12px;background:linear-gradient(135deg,#009cde,#003087);color:#fff;font-size:15px;font-weight:700;text-decoration:none;box-shadow:0 4px 16px rgba(0,60,150,.4);transition:opacity .15s}
-    .btn-paypal:hover{opacity:.9}
-    .note-activation{font-size:11px;color:#7a9cc0;margin-top:12px;line-height:1.6}
   </style>
 </head>
 <body>
@@ -78,36 +72,9 @@
             <input type="password" id="pwConfirm" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" autocomplete="new-password" minlength="8" />
           </div>
         </div>
-        <div class="plan-label">Choisir votre abonnement</div>
-        <div class="plans-grid">
-          <label class="plan-option">
-            <input type="radio" name="plan" value="solo" checked />
-            <div class="plan-box">
-              <div class="plan-name">Solo</div>
-              <div class="plan-price">42<span> / an</span></div>
-              <div class="plan-equiv">soit 3,50 par mois</div>
-              <div class="plan-feat">1 ecran - 1 appareil</div>
-            </div>
-          </label>
-          <label class="plan-option">
-            <input type="radio" name="plan" value="multi" />
-            <div class="plan-box">
-              <div class="plan-badge">Populaire</div>
-              <div class="plan-name">Multi</div>
-              <div class="plan-price">53<span> / an</span></div>
-              <div class="plan-equiv">soit 4,42 par mois</div>
-              <div class="plan-feat">3 ecrans - 3 appareils</div>
-            </div>
-          </label>
-        </div>
       </div>
       <button type="submit" class="btn-primary" id="submitBtn">Se connecter</button>
     </form>
-    <div class="paypal-block" id="paypalBlock">
-      <p>Compte cree !<br>Finalisez votre abonnement en payant ci-dessous :</p>
-      <a href="#" id="paypalLink" class="btn-paypal" target="_blank" rel="noopener">Payer via PayPal</a>
-      <div class="note-activation">Paiement unique annuel - aucun prelevement automatique.<br>Votre acces sera active sous quelques heures apres verification du paiement.</div>
-    </div>
     <div class="msg" id="authMsg"></div>
     <a href="#" class="forgot" id="forgotLink" onclick="forgotPw(event)">Mot de passe oublie ?</a>
   </div>
@@ -125,11 +92,8 @@
   document.body.prepend(b);document.body.style.paddingTop=(b.offsetHeight||60)+'px';
   document.getElementById('xb').onclick=()=>{b.remove();document.body.style.paddingTop='';localStorage.setItem('pf_apk_install_dismiss',String(Date.now()+604800000))};
 })();
-const PP={solo:'https://paypal.me/pipsily/42',multi:'https://paypal.me/pipsily/53'};
-const PL={solo:'42 EUR Solo (1 ecran)',multi:'53 EUR Multi (3 ecrans)'};
 const _A=window.PIPSILY_AUTH||null;let mode='login';
 if(_A&&_A.getSession){_A.getSession().then(s=>{if(s)location.href='./index.html'}).catch(()=>{})}
-const sp=()=>(document.querySelector('input[name="plan"]:checked')||{}).value||'solo';
 function switchTab(m){
   mode=m;
   document.getElementById('tabLogin').classList.toggle('active',m==='login');
@@ -138,7 +102,6 @@ function switchTab(m){
   document.getElementById('submitBtn').textContent=m==='login'?'Se connecter':'Creer mon compte';
   document.getElementById('pwInput').autocomplete=m==='login'?'current-password':'new-password';
   document.getElementById('forgotLink').style.display=m==='login'?'block':'none';
-  document.getElementById('paypalBlock').classList.remove('show');
   document.getElementById('authForm').style.display='block';
   document.getElementById('tabsBar').style.display='';
   const pc=document.getElementById('pwConfirm');if(pc)pc.required=m==='signup';clearMsg();
@@ -183,9 +146,8 @@ document.getElementById('authForm').addEventListener('submit',async e=>{
         showMsg('success','Compte cree ! Verifiez votre boite mail pour confirmer votre adresse, puis revenez vous connecter.');
         return;
       }
-      const plan=sp();const lnk=document.getElementById('paypalLink');
-      lnk.href=PP[plan];lnk.textContent='Payer '+PL[plan]+' via PayPal';
-      document.getElementById('paypalBlock').classList.add('show');
+      // Compte créé et connecté : accès en attente de validation par l'administrateur
+      showMsg('success','Compte cree ! Votre acces doit maintenant etre valide par l\'administrateur. Vous serez prevenu des l\'activation.');
       document.getElementById('authForm').style.display='none';
       document.getElementById('tabsBar').style.display='none';
     }else{

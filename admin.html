@@ -256,7 +256,6 @@
     }
 
     function fmtDate(iso){ if(!iso) return "—"; return new Date(iso).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) }
-    function fmtMoney(n){ return typeof n === "number" ? n.toFixed(2).replace(".",",")+" €" : "—" }
 
     function statusBadge(p){
       if(p.plan==="admin")     return '<span class="badge badge--admin">⚡ Admin</span>';
@@ -265,17 +264,6 @@
       if(exp && exp > new Date()) return '<span class="badge badge--active">✓ Actif</span>';
       if(exp) return '<span class="badge badge--expired">Expiré</span>';
       return '<span class="badge badge--pending">⏳ En attente</span>';
-    }
-
-    function calcAnnualRevenue(users){
-      // Calcul basé sur les abonnements annuels actifs
-      return users.reduce((sum, u) => {
-        if(u.plan === "admin" || u.plan === "unlimited" || u.plan === "pending") return sum;
-        const exp = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
-        if(!exp || exp < new Date()) return sum;
-        // Déterminer le plan selon devices_allowed (3 → Multi 53€, 1 → Solo 42€)
-        return sum + (u.devices_allowed >= 3 ? 53 : 42);
-      }, 0);
     }
 
     function renderAdmin(users, payments, devices, sessions){
@@ -291,11 +279,8 @@
         const exp = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
         return !exp || exp < now;
       });
-      const revenue   = calcAnnualRevenue(users);
       const activeCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
       const connected = (sessions||[]).filter(s => s.last_seen && s.last_seen > activeCutoff).length;
-      // Paiements en attente de confirmation (Wero déclaré par utilisateur)
-      const pendingPayments = (payments||[]).filter(p => !p.confirmed_at);
 
       document.getElementById("adminContent").innerHTML = `
         <!-- Stats -->
@@ -320,53 +305,7 @@
             <div class="stat-num">${connected}</div>
             <div class="stat-label">Connectés</div>
           </div>
-          <div class="stat-card stat-card--accent">
-            <div class="stat-num">${fmtMoney(revenue)}</div>
-            <div class="stat-label">CA annuel</div>
-          </div>
-          <div class="stat-card stat-card--accent">
-            <div class="stat-num">${fmtMoney(revenue / 12)}</div>
-            <div class="stat-label">CA mensuel (est.)</div>
-          </div>
         </div>
-
-        ${pendingPayments.length === 0 ? "" : `
-        <!-- ── Paiements Wero en attente ── -->
-        <div class="card" style="border-color:rgba(56,168,232,.4);background:rgba(56,168,232,.05)">
-          <div class="card-title" style="color:#38A8E8">
-            💰 Paiements en attente de confirmation (${pendingPayments.length})
-          </div>
-          <p style="font-size:13px;color:#7a9cc0;margin-bottom:14px;line-height:1.5">
-            Vérifiez la réception sur votre application Wero, puis cliquez sur
-            <strong style="color:#6ef7b0">Confirmer</strong> pour activer le compte 30 jours.
-          </p>
-          ${pendingPayments.map(p => {
-            const u = users.find(x => x.id === p.user_id);
-            return `
-              <div style="display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:8px;
-                border-radius:12px;background:rgba(56,168,232,.08);border:1px solid rgba(56,168,232,.25);
-                flex-wrap:wrap">
-                <div style="flex:1;min-width:180px">
-                  <div style="font-size:13px;font-weight:700;color:#eef4ff">${_esc(u?.email || p.user_id)}</div>
-                  <div style="font-size:11px;color:#7a9cc0;margin-top:3px">
-                    Déclaré ${fmtRelative(p.created_at)} · ${_esc(p.notes)}
-                  </div>
-                </div>
-                <div style="font-size:18px;font-weight:900;color:#6ef7b0">${fmtMoney(p.amount)}</div>
-                <div style="display:flex;gap:6px">
-                  <button class="action-btn action-btn--green" style="flex:0 0 auto;padding:9px 16px"
-                    onclick="confirmPayment('${p.id}','${p.user_id}',${p.amount})">
-                    ✓ Confirmer
-                  </button>
-                  <button class="action-btn action-btn--red" style="flex:0 0 auto;padding:9px 12px"
-                    onclick="rejectPayment('${p.id}')">
-                    ✕ Rejeter
-                  </button>
-                </div>
-              </div>`;
-          }).join("")}
-        </div>
-        `}
 
         <!-- Créer un compte -->
         <div class="card">
@@ -375,8 +314,6 @@
             <input type="email" id="newEmail" placeholder="email@exemple.com" autocomplete="off" />
             <input type="password" id="newPw" placeholder="Mot de passe provisoire" autocomplete="new-password" />
             <select id="newPlan">
-              <option value="solo">Solo 42 €/an — 1 appareil (365 j)</option>
-              <option value="multi">Multi 53 €/an — 3 appareils (365 j)</option>
               <option value="unlimited">Illimité (sans expiration)</option>
               <option value="admin">Admin</option>
               <option value="test">Test (7 jours)</option>
@@ -427,9 +364,6 @@
         const exp      = u.subscription_expires_at ? new Date(u.subscription_expires_at) : null;
         const userDevs = (window._allDevices || devices || []).filter(d=>d.user_id===u.id);
         const userSess = (window._allSessions || sessions || []).filter(s=>s.user_id===u.id);
-        const devFees  = userDevs.reduce((s,d)=>s+(d.monthly_fee||0),0);
-        const monthly  = (u.plan==="admin"||u.plan==="unlimited"||u.plan==="pending") ? null :
-          (exp && exp > new Date() ? fmtMoney(4.99+devFees) : null);
         const isMe     = (u.email||"").toLowerCase() === (A.ADMIN_EMAIL||"").toLowerCase();
         const devLimit = u.plan==="admin"||u.plan==="unlimited" ? "∞" : (u.devices_allowed||1);
         const isOnline = userSess.length > 0;
@@ -460,18 +394,13 @@
             <div class="user-card__meta">
               ${exp ? `<span>📅 ${fmtDate(u.subscription_expires_at)}</span>` : ""}
               <span>📱 ${userDevs.length}/${devLimit} appareils</span>
-              ${monthly ? `<span>💳 ${monthly}/mois</span>` : ""}
             </div>
             ${sessHtml}
             ${isMe
               ? `<div style="font-size:12px;color:#7a9cc0;padding:4px 0">Votre compte administrateur</div>`
               : `<div class="user-card__actions">
-                  <button class="action-btn" style="background:rgba(110,247,176,.12);color:#6ef7b0;border:1px solid rgba(110,247,176,.3);font-weight:800"
-                    onclick="activateAnnual('${u.id}',1)">Solo 42€/an</button>
-                  <button class="action-btn" style="background:rgba(56,168,232,.12);color:#38A8E8;border:1px solid rgba(56,168,232,.3);font-weight:800"
-                    onclick="activateAnnual('${u.id}',3)">Multi 53€/an</button>
-                  <button class="action-btn" style="background:rgba(123,95,232,.15);color:#b59aff;border:1px solid rgba(123,95,232,.45);font-weight:800"
-                    onclick="setUnlimited('${u.id}')">∞ Illimité</button>
+                  <button class="action-btn" style="background:rgba(110,247,176,.15);color:#6ef7b0;border:1px solid rgba(110,247,176,.45);font-weight:800"
+                    onclick="setUnlimited('${u.id}')">✓ Valider (illimité)</button>
                   <button class="action-btn action-btn--green"  onclick="activateUser('${u.id}',30)">+30 jours</button>
                   <button class="action-btn action-btn--gold"   onclick="setTest('${u.id}')">Test 7j</button>
                   <button class="action-btn action-btn--red"    onclick="deactivate('${u.id}')">Bloquer</button>
@@ -558,45 +487,12 @@
       }
     }
 
-    // ── Activation plan annuel Solo (1 appareil) ou Multi (3 appareils) ──
-    async function activateAnnual(userId, devices){
-      const label = devices === 3 ? "Multi 53 €/an (3 appareils)" : "Solo 42 €/an (1 appareil)";
-      const amount = devices === 3 ? 53 : 42;
-      if(!confirm(`Activer ${label} pour cet utilisateur ?\nAccès valable 365 jours.`)) return;
-      try {
-        const expAt = new Date(Date.now() + 365*24*3600*1000).toISOString();
-        const { error } = await A.supabase.from("profiles")
-          .update({ plan:"active", subscription_expires_at: expAt, devices_allowed: devices }).eq("id", userId);
-        if(error) throw error;
-        try {
-          await A.supabase.from("payments").insert({
-            user_id: userId, amount, type:"subscription",
-            period_start: new Date().toISOString().slice(0,10),
-            period_end: expAt.slice(0,10),
-            confirmed_at: new Date().toISOString(), confirmed_by: _session?.user?.id,
-            notes: label
-          });
-        } catch{}
-        showGlobalMsg(`✓ ${label} activé — 365 jours`);
-        loadAdmin();
-      } catch(err){ alert("Erreur activation : " + (err.message||err)); }
-    }
-
     async function activateUser(userId, days){
       try {
         const expAt = new Date(Date.now() + days*24*3600*1000).toISOString();
         const { error } = await A.supabase.from("profiles")
           .update({ plan:"active", subscription_expires_at: expAt }).eq("id", userId);
         if(error) throw error;
-        // Enregistrer le paiement (fire-and-forget, ne bloque pas l'activation)
-        try {
-          await A.supabase.from("payments").insert({
-            user_id: userId, amount: 4.99, type:"subscription",
-            period_start: new Date().toISOString().slice(0,10),
-            period_end: expAt.slice(0,10),
-            confirmed_at: new Date().toISOString(), confirmed_by: _session?.user?.id
-          });
-        } catch{}
         showGlobalMsg("✓ Activé pour " + days + " jours");
         loadAdmin();
       } catch(err){ alert("Erreur activation : " + (err.message||err)); }
@@ -647,43 +543,6 @@
         const { error } = await A.supabase.from("profiles").delete().eq("id", userId);
         if(error) throw error;
         showGlobalMsg("✓ Compte supprimé : " + email);
-        loadAdmin();
-      } catch(err){
-        alert("Erreur : " + err.message);
-      }
-    }
-
-    // ── Confirmation paiement Wero : marque payé + active le compte 30j ──
-    async function confirmPayment(paymentId, userId, amount){
-      if(!confirm(`Confirmer la réception de ${amount.toFixed(2).replace(".",",")} € via Wero ?\n\nLe compte sera activé pour 30 jours.`)) return;
-      try {
-        const expAt = new Date(Date.now() + 30*24*3600*1000).toISOString();
-        // 1. Marquer le paiement comme confirmé
-        await A.supabase.from("payments").update({
-          confirmed_at: new Date().toISOString(),
-          confirmed_by: _session.user.id,
-          period_start: new Date().toISOString().slice(0,10),
-          period_end:   expAt.slice(0,10)
-        }).eq("id", paymentId);
-        // 2. Activer le profil utilisateur
-        await A.supabase.from("profiles").update({
-          plan: "active",
-          subscription_expires_at: expAt
-        }).eq("id", userId);
-        showGlobalMsg("✓ Paiement confirmé · compte activé 30 jours");
-        loadAdmin();
-      } catch(err){
-        alert("Erreur : " + err.message);
-      }
-    }
-
-    // ── Rejet paiement (utilisateur n'a pas vraiment payé) ──
-    async function rejectPayment(paymentId){
-      if(!confirm("Rejeter ce paiement ? L'utilisateur pourra à nouveau cliquer 'J'ai payé'.")) return;
-      try {
-        const { error } = await A.supabase.from("payments").delete().eq("id", paymentId);
-        if(error) throw error;
-        showGlobalMsg("✓ Paiement rejeté");
         loadAdmin();
       } catch(err){
         alert("Erreur : " + err.message);

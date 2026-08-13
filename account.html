@@ -202,13 +202,11 @@
     function renderPage(session, prof, devs){
       const currentDevice = A.getDeviceId();
       const expiresAt = prof.subscription_expires_at ? new Date(prof.subscription_expires_at) : null;
-      const monthlyTotal = 4.99 + devs.reduce((s,d) => s + (d.monthly_fee || 0), 0);
-
       document.getElementById("pageContent").innerHTML = `
 
-        <!-- Abonnement -->
+        <!-- Accès -->
         <div class="card">
-          <div class="card-title">Abonnement</div>
+          <div class="card-title">Mon accès</div>
           <div class="info-row">
             <span class="info-label">Statut</span>
             <span>${statusBadge(prof)}</span>
@@ -219,60 +217,21 @@
           </div>
           <div class="info-row">
             <span class="info-label">Plan</span>
-            <span class="info-value">${prof.plan === "admin" ? "Administrateur" : prof.plan === "unlimited" ? "Illimité" : "Standard 4,99 €/mois"}</span>
+            <span class="info-value">${prof.plan === "admin" ? "Administrateur" : prof.plan === "unlimited" ? "Illimité" : prof.ok ? "Accès validé" : "En attente de validation"}</span>
           </div>
           ${expiresAt ? `
           <div class="info-row">
             <span class="info-label">Valable jusqu'au</span>
             <span class="info-value">${fmtDate(expiresAt)}</span>
           </div>` : ""}
-          ${prof.plan === "admin" || prof.plan === "unlimited" ? "" : `
-          <div class="info-row">
-            <span class="info-label">Total mensuel</span>
-            <span class="info-value" style="color:#38A8E8;font-size:15px;font-weight:800">${monthlyTotal.toFixed(2).replace(".",",")} €</span>
-          </div>`}
         </div>
 
-        ${prof.plan === "admin" || prof.plan === "unlimited" ? "" : `
-        <!-- ── Paiement Wero ── -->
-        <div class="card" id="weroCard">
-          <div class="card-title">💳 Payer avec Wero</div>
-          <p style="font-size:13px;color:#7a9cc0;line-height:1.6;margin-bottom:14px">
-            Wero est l'appli de paiement instantané intégrée à votre banque
-            (Crédit Agricole, BNP, Société Générale, La Banque Postale, etc.).
-            Le paiement est gratuit et instantané.
-          </p>
-          <div style="background:rgba(56,168,232,.08);border:1px solid rgba(56,168,232,.25);border-radius:12px;padding:16px;margin-bottom:14px">
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-              <span style="font-size:12px;color:#7a9cc0">Bénéficiaire</span>
-              <span style="font-size:13px;font-weight:700;color:#eef4ff" id="weroName">${A.WERO_NAME || "PIPSILY"}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-              <span style="font-size:12px;color:#7a9cc0">Numéro de téléphone</span>
-              <span style="font-size:14px;font-weight:800;color:#38A8E8;font-family:monospace" id="weroPhone">${A.WERO_PHONE || "06 12 34 56 78"}</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-              <span style="font-size:12px;color:#7a9cc0">Montant à payer</span>
-              <span style="font-size:18px;font-weight:900;color:#6ef7b0">${monthlyTotal.toFixed(2).replace(".",",")} €</span>
-            </div>
-            <div style="display:flex;justify-content:space-between">
-              <span style="font-size:12px;color:#7a9cc0">Référence à indiquer</span>
-              <span style="font-size:12px;font-weight:700;color:#eef4ff;font-family:monospace">${_esc(session.user.email)}</span>
-            </div>
-          </div>
-          <ol style="font-size:13px;color:#7a9cc0;line-height:1.8;padding-left:18px;margin-bottom:14px">
-            <li>Ouvrez l'appli Wero (ou votre banque)</li>
-            <li>Envoyez <strong style="color:#6ef7b0">${monthlyTotal.toFixed(2).replace(".",",")} €</strong> au numéro <strong style="color:#38A8E8;font-family:monospace">${A.WERO_PHONE || "06 12 34 56 78"}</strong></li>
-            <li>Indiquez votre e-mail en référence : <strong style="color:#eef4ff">${_esc(session.user.email)}</strong></li>
-            <li>Cliquez sur "J'ai payé" ci-dessous</li>
-          </ol>
-          <button class="btn btn-primary" id="paidBtn" onclick="declarePayment(${monthlyTotal})" style="width:100%">
-            ✅ J'ai payé ${monthlyTotal.toFixed(2).replace(".",",")} €
-          </button>
-          <div class="msg" id="payMsg"></div>
-          <p style="font-size:11px;color:#7a9cc0;margin-top:10px;text-align:center;line-height:1.5">
-            Une fois le paiement reçu et confirmé, votre compte sera activé pour 30 jours.<br>
-            <strong>Activation généralement en moins d'1 heure.</strong>
+        ${prof.ok ? "" : `
+        <!-- En attente de validation -->
+        <div class="card">
+          <div class="card-title">⏳ En attente de validation</div>
+          <p style="font-size:13px;color:#7a9cc0;line-height:1.6">
+            Votre compte a bien été créé. L'accès (gratuit) sera activé dès que l'administrateur aura validé votre inscription.
           </p>
         </div>
         `}
@@ -291,14 +250,9 @@
                     </div>
                     <div class="device-meta">Ajouté le ${fmtDate(d.created_at)} · Vu le ${fmtDate(d.last_seen)}</div>
                   </div>
-                  ${d.monthly_fee > 0 ? `<span class="device-fee">+${(d.monthly_fee).toFixed(2).replace(".",",")} €/mois</span>` : ""}
                 </div>`).join("")
             }
           </div>
-          ${prof.plan !== "admin" && prof.plan !== "unlimited" ? `
-          <p style="margin-top:14px;font-size:12px;color:#7a9cc0;line-height:1.5">
-            Appareil supplémentaire : <strong style="color:#eef4ff">+1,50 €/mois</strong> facturé automatiquement.
-          </p>` : ""}
         </div>
 
         <!-- Ma région -->
@@ -469,39 +423,6 @@
       if(msg){ msg.style.color = "#7CE2A8"; msg.textContent = "Interface appliquée — ouverture…"; }
       // index.html route automatiquement vers la bonne interface selon pf_theme
       setTimeout(() => { window.location.href = "./index.html"; }, 500);
-    }
-
-    // ── Déclaration de paiement Wero (statut "en attente" jusqu'à confirmation admin) ──
-    async function declarePayment(amount){
-      const btn = document.getElementById("paidBtn");
-      const msg = document.getElementById("payMsg");
-      btn.disabled = true; btn.textContent = "Envoi…";
-      try {
-        if(!A.supabase) throw new Error("Supabase non configuré");
-        // Vérifier qu'il n'y a pas déjà un paiement en attente
-        const { data: existing } = await A.supabase.from("payments")
-          .select("id").eq("user_id", window._userId).is("confirmed_at", null);
-        if(existing && existing.length > 0){
-          showMsg(msg, "error", "Un paiement est déjà en attente de confirmation. Patientez ou contactez l'administrateur.");
-          btn.disabled = false; btn.textContent = `✅ J'ai payé ${amount.toFixed(2).replace(".",",")} €`;
-          return;
-        }
-        const { error } = await A.supabase.from("payments").insert({
-          user_id: window._userId,
-          amount: amount,
-          type: "subscription",
-          notes: "Paiement Wero déclaré par l'utilisateur — en attente de confirmation",
-          confirmed_at: null
-        });
-        if(error) throw error;
-        showMsg(msg, "success",
-          "✅ Paiement déclaré ! L'administrateur sera notifié et activera votre compte après vérification (généralement en moins d'1 heure).");
-        btn.textContent = "⏳ En attente de confirmation";
-        // Rester désactivé
-      } catch(err){
-        showMsg(msg, "error", "Erreur : " + (err.message || err));
-        btn.disabled = false; btn.textContent = `✅ J'ai payé ${amount.toFixed(2).replace(".",",")} €`;
-      }
     }
 
     function showMsg(el, type, text){

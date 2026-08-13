@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PIPSILY — Accès illimité à votre divertissement</title>
-  <meta name="description" content="Films, séries, sport en direct. Accès illimité sur tous vos appareils. Abonnez-vous dès 42€/an." />
+  <meta name="description" content="Films, séries, sport en direct. Accès sur tous vos appareils." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" />
@@ -290,14 +290,13 @@
 <body>
 
   <!-- Bouton illimité discret (quasi invisible) -->
-  <button id="secretBtn" onclick="openModal()" title=""></button>
 
   <!-- Nav -->
   <nav>
     <div class="nav-logo">PIPSILY</div>
     <div style="display:flex;align-items:center">
       <a href="./login.html" class="nav-login">Connexion</a>
-      <a href="#pricing" class="nav-cta">Voir les offres</a>
+      <a href="./login.html" class="nav-cta">Se connecter</a>
     </div>
   </nav>
 
@@ -307,7 +306,7 @@
     <h1>Regardez <span>tout ce que vous voulez</span>,<br>quand vous voulez</h1>
     <p>Films, séries, et bien plus encore. Accès illimité sur tous vos appareils — TV, téléphone, tablette. Sans pub, sans engagement.</p>
     <div class="hero-btns">
-      <a href="#pricing" class="btn-primary">🎬 Choisir mon offre</a>
+      <a href="./login.html" class="btn-primary">🎬 Créer mon compte</a>
       <a href="./login.html" class="btn-ghost">J'ai déjà un compte</a>
     </div>
   </section>
@@ -333,7 +332,7 @@
       <div class="feat-card">
         <div class="feat-icon">📺</div>
         <div class="feat-title">Sur tous vos écrans</div>
-        <div class="feat-desc">TV Samsung, Android TV, Fire TV, iPhone, iPad, Android — un seul abonnement.</div>
+        <div class="feat-desc">TV Samsung, Android TV, Fire TV, iPhone, iPad, Android — un seul compte.</div>
       </div>
       <div class="feat-card">
         <div class="feat-icon">⚡</div>
@@ -348,88 +347,35 @@
     </div>
   </section>
 
-  <!-- Pricing -->
-  <section class="pricing" id="pricing">
-    <div class="section-label">Tarifs</div>
-    <div class="section-title">Simple. Transparent. Sans surprise.</div>
-    <div class="pricing-grid">
-
-      <!-- Solo -->
-      <div class="plan-card">
-        <div class="plan-name">Solo</div>
-        <div class="plan-price"><sup>€</sup>42<sub>/an</sub></div>
-        <div class="plan-equiv">soit 3,50 €/mois</div>
-        <div class="plan-sep"></div>
-        <ul class="plan-features">
-          <li><span class="check">✓</span><div><strong>1 écran</strong> simultané</div></li>
-          <li><span class="check">✓</span><div><strong>1 appareil</strong> enregistré</div></li>
-          <li><span class="check">✓</span><div>Accès catalogue <strong>complet</strong></div></li>
-          <li><span class="check">✓</span><div>Renouvellement annuel</div></li>
-        </ul>
-        <a href="https://paypal.me/pipsily/42" target="_blank" rel="noopener" class="plan-btn plan-btn--ghost" id="btnSolo">
-          Payer 42 € →
-        </a>
-      </div>
-
-      <!-- Multi -->
-      <div class="plan-card plan-card--popular">
-        <div class="popular-badge">⭐ Le plus populaire</div>
-        <div class="plan-name">Multi</div>
-        <div class="plan-price"><sup>€</sup>53<sub>/an</sub></div>
-        <div class="plan-equiv">soit 4,42 €/mois</div>
-        <div class="plan-sep"></div>
-        <ul class="plan-features">
-          <li><span class="check">✓</span><div><strong>3 écrans</strong> simultanés</div></li>
-          <li><span class="check">✓</span><div><strong>3 appareils</strong> enregistrés</div></li>
-          <li><span class="check">✓</span><div>Accès catalogue <strong>complet</strong></div></li>
-          <li><span class="check">✓</span><div>Parfait pour <strong>la famille</strong></div></li>
-        </ul>
-        <a href="https://paypal.me/pipsily/53" target="_blank" rel="noopener" class="plan-btn plan-btn--primary" id="btnMulti">
-          Payer 53 € →
-        </a>
-      </div>
-
+  <!-- Accès -->
+  <section class="pricing" id="acces">
+    <div class="section-label">Accès</div>
+    <div class="section-title">Créez votre compte, l'accès est validé par l'administrateur.</div>
+    <div style="text-align:center;margin-top:22px">
+      <a href="./login.html" class="btn-primary">Créer mon compte / Se connecter →</a>
     </div>
   </section>
-
-  <!-- Garantie -->
-  <div class="garantie">
-    <strong>🔄 Renouvellement annuel.</strong> Votre accès est valable <strong>1 an</strong> à compter du paiement.<br>
-    À expiration, un rappel vous est envoyé pour renouveler. Aucun prélèvement automatique.
-  </div>
 
   <!-- FAQ -->
   <section class="faq-wrap">
     <div class="section-label" style="text-align:center;margin-bottom:24px">Questions fréquentes</div>
 
     <div class="faq-item">
-      <button class="faq-q">Comment accéder après le paiement ? <span class="faq-arrow">▼</span></button>
+      <button class="faq-q">Comment accéder à PIPSILY ? <span class="faq-arrow">▼</span></button>
       <div class="faq-a"><div class="faq-a-inner">
-        Après le paiement PayPal, créez votre compte PIPSILY avec la même adresse email et validez le lien de confirmation. Votre accès est activé manuellement après vérification du paiement — généralement en quelques heures.
+        Créez votre compte PIPSILY et validez le lien de confirmation reçu par email. Votre accès (gratuit) est ensuite activé manuellement par l'administrateur.
       </div></div>
     </div>
     <div class="faq-item">
       <button class="faq-q">Sur combien d'appareils puis-je regarder ? <span class="faq-arrow">▼</span></button>
       <div class="faq-a"><div class="faq-a-inner">
-        Avec Solo : 1 appareil enregistré, 1 écran à la fois. Avec Multi : 3 appareils enregistrés, jusqu'à 3 écrans simultanément. Vous pouvez gérer vos appareils depuis votre espace Mon compte.
+        Vous pouvez enregistrer vos appareils et gérer vos écrans depuis votre espace Mon compte.
       </div></div>
     </div>
     <div class="faq-item">
-      <button class="faq-q">Est-ce que l'abonnement se renouvelle automatiquement ? <span class="faq-arrow">▼</span></button>
+      <button class="faq-q">Je n'ai pas encore accès — que faire ? <span class="faq-arrow">▼</span></button>
       <div class="faq-a"><div class="faq-a-inner">
-        Non. C'est un paiement unique valable 1 an. Aucun prélèvement automatique. À expiration, vous choisissez librement de renouveler ou non.
-      </div></div>
-    </div>
-    <div class="faq-item">
-      <button class="faq-q">Quel moyen de paiement est accepté ? <span class="faq-arrow">▼</span></button>
-      <div class="faq-a"><div class="faq-a-inner">
-        Paiement sécurisé via <strong>PayPal</strong>. Vous êtes redirigé vers PayPal pour régler par carte bancaire ou solde PayPal. Vos données bancaires ne transitent jamais par nos serveurs. Les frais de gestion PayPal sont inclus dans le prix affiché.
-      </div></div>
-    </div>
-    <div class="faq-item">
-      <button class="faq-q">Je n'ai pas reçu mon accès après paiement — que faire ? <span class="faq-arrow">▼</span></button>
-      <div class="faq-a"><div class="faq-a-inner">
-        L'activation est manuelle — comptez quelques heures maximum. Vérifiez d'abord vos spams. Si vous n'avez toujours pas accès après 24h, connectez-vous et envoyez un message depuis votre compte — nous résoudrons le problème rapidement.
+        L'activation est manuelle. Vérifiez d'abord vos spams pour l'email de confirmation. Si vous n'avez toujours pas accès, contactez l'administrateur.
       </div></div>
     </div>
   </section>
@@ -446,20 +392,6 @@
     </div>
   </footer>
 
-  <!-- Modale Illimité -->
-  <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
-    <div class="modal">
-      <button class="modal-close" onclick="closeModal()">✕</button>
-      <div style="font-size:36px;margin-bottom:12px">⚡</div>
-      <h3>Accès Illimité</h3>
-      <p>Laissez votre email — nous vous contacterons pour discuter de votre offre personnalisée.</p>
-      <input type="email" id="illiEmail" placeholder="votre@email.com" />
-      <input type="text" id="illiNote" placeholder="Message (optionnel)" />
-      <button class="modal-submit" id="illiBtn" onclick="submitIllimite()">Envoyer la demande</button>
-      <div class="modal-msg" id="illiMsg"></div>
-    </div>
-  </div>
-
   <script>
     // ── FAQ ──
     document.querySelectorAll(".faq-q").forEach(btn => {
@@ -470,45 +402,6 @@
         if(!isOpen) item.classList.add("open");
       });
     });
-
-    // ── Modale Illimité ──
-    function openModal(){ document.getElementById("modalOverlay").classList.add("open"); }
-    function closeModal(){ document.getElementById("modalOverlay").classList.remove("open"); }
-
-    async function submitIllimite(){
-      const email = document.getElementById("illiEmail").value.trim();
-      const note  = document.getElementById("illiNote").value.trim();
-      const btn   = document.getElementById("illiBtn");
-      const msg   = document.getElementById("illiMsg");
-      if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-        msg.textContent = "Adresse email invalide.";
-        msg.className = "modal-msg err";
-        return;
-      }
-      btn.disabled = true;
-      btn.textContent = "Envoi…";
-      msg.textContent = "";
-      try {
-        // Enregistrement dans Supabase (table contact_requests)
-        const A = window.PIPSILY_AUTH;
-        if(A?.supabase){
-          await A.supabase.from("contact_requests").insert({
-            email, note: note || null, plan: "unlimited", created_at: new Date().toISOString()
-          });
-        }
-        msg.textContent = "✅ Demande envoyée ! Nous vous répondrons sous 24h.";
-        msg.className = "modal-msg ok";
-        document.getElementById("illiEmail").value = "";
-        document.getElementById("illiNote").value = "";
-      } catch(e) {
-        // Fallback si Supabase non dispo : email mailto
-        window.location.href = `mailto:contact@pipsily.fr?subject=Demande%20acc%C3%A8s%20illimit%C3%A9&body=Email%3A%20${encodeURIComponent(email)}%0AMessage%3A%20${encodeURIComponent(note)}`;
-        msg.textContent = "✅ Votre client email s'est ouvert.";
-        msg.className = "modal-msg ok";
-      }
-      btn.disabled = false;
-      btn.textContent = "Envoyer la demande";
-    }
 
   </script>
 
