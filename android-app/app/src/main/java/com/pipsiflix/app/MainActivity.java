@@ -48,6 +48,9 @@ public class MainActivity extends AppCompatActivity {
     WebView     webView;
     ProgressBar progressBar;
 
+    /** Moteur vocal hors-ligne (Vosk), à la demande sur les appareils sans moteur système (Fire TV). */
+    private VoskVoice voskVoice;
+
     // ── Téléchargement APK ──────────────────────────────────────────────
     private long              apkDownloadId = -1;
     private BroadcastReceiver apkReceiver   = null;
@@ -79,6 +82,14 @@ public class MainActivity extends AppCompatActivity {
         sInstance   = new WeakReference<>(this);
 
         configureWebView();
+
+        // Permission micro (recherche vocale hors-ligne Vosk sur appareils sans moteur système)
+        if (Build.VERSION.SDK_INT >= 23 &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            try { requestPermissions(new String[]{ android.Manifest.permission.RECORD_AUDIO }, 77); }
+            catch (Exception ignored) {}
+        }
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
@@ -493,6 +504,11 @@ public class MainActivity extends AppCompatActivity {
         return super.onKeyDown(keyCode, event);
     }
 
+    /** Exécute du JS dans la WebView (thread-safe). */
+    private void runJs(String js) {
+        if (webView != null) webView.post(() -> webView.evaluateJavascript(js, null));
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     //  Bridge JavaScript ↔ Java  (window.AndroidBridge)
     // ══════════════════════════════════════════════════════════════════════
@@ -575,6 +591,50 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public String getDeviceType() {
             return "android_phone";
+        }
+
+        /**
+         * Moteur vocal côté web : "web" si un moteur système existe (Google/Android TV)
+         * → Web Speech ; "vosk" si aucun (Fire TV) → reconnaissance hors-ligne embarquée.
+         */
+        @JavascriptInterface
+        public String voiceEngine() {
+            try {
+                boolean hasIntent = !getPackageManager().queryIntentActivities(
+                        new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH), 0).isEmpty();
+                boolean hasService = android.speech.SpeechRecognizer.isRecognitionAvailable(MainActivity.this);
+                return (hasIntent || hasService) ? "web" : "vosk";
+            } catch (Exception e) {
+                return "web";
+            }
+        }
+
+        /** Démarre la reconnaissance hors-ligne Vosk (Fire TV). Résultats → window.onVoice*. */
+        @JavascriptInterface
+        public void startVoskVoice() {
+            runOnUiThread(() -> {
+                if (voskVoice == null) voskVoice = new VoskVoice(MainActivity.this);
+                voskVoice.start(new VoskVoice.Cb() {
+                    @Override public void onStatus(String m) {
+                        runJs("if(window.onVoiceStatus)window.onVoiceStatus('" + TvActivity.jsEsc(m) + "');");
+                    }
+                    @Override public void onPartial(String t) {
+                        runJs("if(window.onVoicePartial)window.onVoicePartial('" + TvActivity.jsEsc(t) + "');");
+                    }
+                    @Override public void onFinal(String t) {
+                        runJs("if(window.onVoiceResult)window.onVoiceResult('" + TvActivity.jsEsc(t) + "');");
+                    }
+                    @Override public void onError(String m) {
+                        runJs("if(window.onVoiceError)window.onVoiceError('" + TvActivity.jsEsc(m) + "');");
+                    }
+                });
+            });
+        }
+
+        /** Arrête l'écoute Vosk (libère le micro). */
+        @JavascriptInterface
+        public void stopVoskVoice() {
+            runOnUiThread(() -> { if (voskVoice != null) voskVoice.stop(); });
         }
 
         /**
