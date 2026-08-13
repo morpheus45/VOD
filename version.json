@@ -1,7 +1,7 @@
 {
-  "apk_version": 52,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v52/PIPSILY.apk",
-  "changes": "Démarrage auto plus fiable sur Fire TV (lancement différé après le boot). Recherche vocale et globale améliorées, corrections diverses.",
+  "apk_version": 53,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v53/PIPSILY.apk",
+  "changes": "Recherche vocale hors-ligne (Vosk) sur les appareils sans moteur Google (Fire TV) : le moteur français se télécharge au 1er usage. Démarrage auto différé au boot, corrections diverses.",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"

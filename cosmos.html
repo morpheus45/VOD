@@ -2003,6 +2003,14 @@ function openVoice(){
   $('voice-text').textContent='Je vous ecoute...';
   if(S.zone!=='voice')S.voiceRet=S.zone;   // zone d'origine pour restaurer au Back
   S.zone='voice';focus();
+  // 0) Appareils SANS moteur vocal système (Fire TV : ni Google, ni RecognitionService)
+  //    → reconnaissance HORS-LIGNE Vosk (native). Le modèle FR se télécharge au 1er usage.
+  try{
+    if(window.AndroidBridge?.voiceEngine && AndroidBridge.voiceEngine()==='vosk'
+       && AndroidBridge.startVoskVoice){
+      AndroidBridge.startVoskVoice(); return;   // résultats via window.onVoice* (voir plus bas)
+    }
+  }catch(e){}
   // 1) Web Speech (PIPSILY écoute lui-même) — PRÉFÉRÉ : il rend la main tout
   //    seul dès la fin de parole (résultat final / onend), donc la recherche
   //    s'affiche en auto. Le chemin natif Katniss de la Freebox, lui, n'affiche
@@ -2040,6 +2048,7 @@ function openVoice(){
   setTimeout(closeVoice,2000);
 }
 function closeVoice(){
+  try{if(window.AndroidBridge?.stopVoskVoice)AndroidBridge.stopVoskVoice();}catch(e){}  // libère le micro Vosk
   $('voice-overlay').hidden=true;
   S.zone=S.voiceRet||(S.sec==='home'?'hero':S.sec==='grid'?'grid':'row');S.voiceRet=null;focus();
 }
@@ -2049,6 +2058,10 @@ window.onVoiceResult=function(text){
   $('voice-text').textContent='';
   setTimeout(()=>{closeVoice();openSearchResults(text);},700);
 };
+// Vosk (Fire TV) : hypothèse en cours, statut (téléchargement du modèle), erreur.
+window.onVoicePartial=function(t){ if(S.zone==='voice')$('voice-result').textContent=t||''; };
+window.onVoiceStatus=function(m){ if(S.zone==='voice')$('voice-text').textContent=(m&&m.length)?m:'Je vous ecoute...'; };
+window.onVoiceError=function(m){ if(S.zone==='voice'){ $('voice-text').textContent='Recherche vocale indisponible'; setTimeout(closeVoice,1800); } };
 
 // ══════ QUALITY PICKER ══════════════════════════════════════════════════
 function openQualPicker(item){

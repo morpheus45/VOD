@@ -67,6 +67,9 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     private static final String APK_VERSION = String.valueOf(BuildConfig.VERSION_CODE);
     private static final int VOICE_REQUEST_CODE = 4711;
 
+    /** Moteur vocal hors-ligne (Vosk), instancié à la demande sur les appareils sans moteur système. */
+    private VoskVoice voskVoice;
+
     // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
     static WeakReference<TvActivity> sInstance;
 
@@ -790,6 +793,18 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     // ══════════════════════════════════════════════════════════════════════
     //  Bridge TV
     // ══════════════════════════════════════════════════════════════════════
+    /** Exécute du JS dans la WebView (thread-safe). */
+    private void runJs(String js) {
+        if (webView != null) webView.post(() -> webView.evaluateJavascript(js, null));
+    }
+
+    /** Échappe une chaîne pour insertion dans un littéral JS entre apostrophes. */
+    static String jsEsc(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\").replace("'", "\\'")
+                .replace("\n", " ").replace("\r", " ");
+    }
+
     class TvBridge {
 
         /** Lecteur natif ExoPlayer — appelé par app.js PipPlayer */
@@ -879,6 +894,51 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
                         "Recherche vocale indisponible sur cet appareil", Toast.LENGTH_SHORT).show();
                 }
             });
+        }
+
+        /**
+         * Quel moteur vocal utiliser côté web :
+         *  - "web"  : un moteur système existe (Google/Android TV) → Web Speech (WebView), retour auto.
+         *  - "vosk" : aucun moteur système (Fire TV) → reconnaissance hors-ligne Vosk embarquée.
+         */
+        @JavascriptInterface
+        public String voiceEngine() {
+            try {
+                boolean hasIntent = !getPackageManager().queryIntentActivities(
+                        new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH), 0).isEmpty();
+                boolean hasService = android.speech.SpeechRecognizer.isRecognitionAvailable(TvActivity.this);
+                return (hasIntent || hasService) ? "web" : "vosk";
+            } catch (Exception e) {
+                return "web";
+            }
+        }
+
+        /** Démarre la reconnaissance hors-ligne Vosk (Fire TV). Résultats → window.onVoice*. */
+        @JavascriptInterface
+        public void startVoskVoice() {
+            runOnUiThread(() -> {
+                if (voskVoice == null) voskVoice = new VoskVoice(TvActivity.this);
+                voskVoice.start(new VoskVoice.Cb() {
+                    @Override public void onStatus(String m) {
+                        runJs("if(window.onVoiceStatus)window.onVoiceStatus('" + jsEsc(m) + "');");
+                    }
+                    @Override public void onPartial(String t) {
+                        runJs("if(window.onVoicePartial)window.onVoicePartial('" + jsEsc(t) + "');");
+                    }
+                    @Override public void onFinal(String t) {
+                        runJs("if(window.onVoiceResult)window.onVoiceResult('" + jsEsc(t) + "');");
+                    }
+                    @Override public void onError(String m) {
+                        runJs("if(window.onVoiceError)window.onVoiceError('" + jsEsc(m) + "');");
+                    }
+                });
+            });
+        }
+
+        /** Arrête l'écoute Vosk (libère le micro). */
+        @JavascriptInterface
+        public void stopVoskVoice() {
+            runOnUiThread(() -> { if (voskVoice != null) voskVoice.stop(); });
         }
 
         /** Étagère launcher : liste les apps installées (label, package, icône, bannière). */
