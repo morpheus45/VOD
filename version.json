@@ -1,7 +1,7 @@
 {
-  "apk_version": 51,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v51/PIPSILY.apk",
-  "changes": "Nouveau (Cosmos TV) : étagère de tes applications installées sur l'accueil (YouTube, Play Store, etc.), activable/désactivable dans Réglages. Recherche globale et corrections diverses.",
+  "apk_version": 52,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v52/PIPSILY.apk",
+  "changes": "Démarrage auto plus fiable sur Fire TV (lancement différé après le boot). Recherche vocale et globale améliorées, corrections diverses.",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"
