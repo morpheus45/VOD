@@ -2003,27 +2003,30 @@ function openVoice(){
   $('voice-text').textContent='Je vous ecoute...';
   if(S.zone!=='voice')S.voiceRet=S.zone;   // zone d'origine pour restaurer au Back
   S.zone='voice';focus();
-  // Android bridge
-  if(window.AndroidBridge?.startVoiceSearch){
-    try{AndroidBridge.startVoiceSearch();return;}catch{}
-  }
-  // Web Speech API
+  // 1) Web Speech (PIPSILY écoute lui-même) — PRÉFÉRÉ : il rend la main tout
+  //    seul dès la fin de parole (résultat final / onend), donc la recherche
+  //    s'affiche en auto. Le chemin natif Katniss de la Freebox, lui, n'affiche
+  //    le texte qu'après un appui Retour → on ne l'utilise qu'en repli.
+  const _nativeVoice=()=>{ if(window.AndroidBridge?.startVoiceSearch){ try{AndroidBridge.startVoiceSearch();return true;}catch{} } return false; };
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   if(SR){
     try{
       const recog=new SR();
       recog.lang='fr-FR';recog.interimResults=true;recog.maxAlternatives=1;
-      // Auto : dès la fin de parole (résultat final OU onend), on lance la
-      // recherche tout seul — plus besoin d'appuyer sur Retour/OK.
-      let _vDone=false;
+      let _vDone=false,_vStarted=false;
       const _vFinish=t=>{ if(_vDone)return; t=(t||'').trim(); if(!t){if(S.zone==='voice')closeVoice();return;} _vDone=true; try{recog.stop();}catch(e){} window.onVoiceResult(t); };
+      recog.onstart=()=>{ _vStarted=true; };
       recog.onresult=e=>{
         const r=e.results[e.results.length-1];
         const t=r[0].transcript;
         $('voice-result').textContent=t;   // affichage live de ce qui est entendu
         if(r.isFinal)_vFinish(t);           // résultat final → recherche auto
       };
-      recog.onerror=()=>{ if(!_vDone&&S.zone==='voice')closeVoice(); };
+      recog.onerror=()=>{
+        // écoute jamais démarrée (micro refusé/indispo) → repli natif Katniss
+        if(!_vStarted&&!_vDone){ _vDone=true; if(_nativeVoice())return; }
+        if(!_vDone&&S.zone==='voice')closeVoice();
+      };
       recog.onend=()=>{                     // fin d'écoute → recherche auto avec ce qui a été entendu
         if(_vDone)return;
         _vFinish(($('voice-result').textContent||'').trim());
@@ -2031,6 +2034,8 @@ function openVoice(){
       recog.start();return;
     }catch{}
   }
+  // 2) Repli : reconnaissance vocale native Android/Katniss (nécessite Retour)
+  if(_nativeVoice())return;
   $('voice-text').textContent='Recherche vocale non disponible';
   setTimeout(closeVoice,2000);
 }
