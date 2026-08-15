@@ -78,6 +78,36 @@ public class PlayerActivity extends FragmentActivity {
     private String   currentUrl      = "";    // URL en cours (pour rapport de progression)
     private long     startPositionMs = 0L;   // position de reprise (0 = depuis le début)
 
+    // Sauvegarde périodique de la progression (toutes les 15 s) : indispensable pour
+    // reprendre au bon endroit même si l'appli est coupée brutalement (swipe, kill
+    // système, coupure) — onDestroy() n'est alors pas garanti d'être appelé.
+    private static final long PROGRESS_SAVE_INTERVAL_MS = 15000L;
+    private final android.os.Handler progHandler =
+        new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable progRunnable = new Runnable() {
+        @Override public void run() {
+            reportCurrentProgress();
+            progHandler.postDelayed(this, PROGRESS_SAVE_INTERVAL_MS);
+        }
+    };
+
+    /** Remonte la position actuelle au WebView (sauvegarde) sans libérer le player. */
+    private void reportCurrentProgress() {
+        if (player == null || currentUrl.isEmpty()) return;
+        try {
+            long posMs = player.getCurrentPosition();
+            long durMs = player.getDuration();
+            long safeDur = (durMs > 0 && durMs != Long.MIN_VALUE) ? durMs : 0;
+            if (posMs > 30000) {
+                if (MainActivity.sInstance != null && MainActivity.sInstance.get() != null) {
+                    MainActivity.reportProgress(currentUrl, posMs, safeDur);
+                } else {
+                    TvActivity.reportProgress(currentUrl, posMs, safeDur);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
     // ─── Lifecycle ────────────────────────────────────────────────────
     @SuppressLint("SourceLockedOrientationActivity")
     @Override
@@ -514,6 +544,10 @@ public class PlayerActivity extends FragmentActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        // Sauver la position dès le passage en arrière-plan (appelé de façon fiable,
+        // contrairement à onDestroy lors d'un kill brutal) + stopper le minuteur.
+        progHandler.removeCallbacks(progRunnable);
+        reportCurrentProgress();
         if (player != null) player.pause();
     }
 
@@ -521,27 +555,18 @@ public class PlayerActivity extends FragmentActivity {
     protected void onResume() {
         super.onResume();
         setImmersive();
+        // (Re)démarrer la sauvegarde périodique pendant la lecture au premier plan.
+        progHandler.removeCallbacks(progRunnable);
+        progHandler.postDelayed(progRunnable, PROGRESS_SAVE_INTERVAL_MS);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        progHandler.removeCallbacks(progRunnable);
         // ── Remonter la progression au WebView avant de libérer le player ──
         if (player != null && !currentUrl.isEmpty()) {
-            long posMs = player.getCurrentPosition();
-            long durMs = player.getDuration();
-            // Correction : pour les flux HLS (séries), getDuration() retourne
-            // Long.MIN_VALUE (TIME_UNSET) si non encore connu → durMs > 0 échoue.
-            // On rapporte dès 30s regardées ; on passe durMs=0 si inconnue
-            // (le JS gère le cas durée=0 via un pct de secours).
-            long safeDur = (durMs > 0 && durMs != Long.MIN_VALUE) ? durMs : 0;
-            if (posMs > 30000) {
-                if (MainActivity.sInstance != null && MainActivity.sInstance.get() != null) {
-                    MainActivity.reportProgress(currentUrl, posMs, safeDur);
-                } else {
-                    TvActivity.reportProgress(currentUrl, posMs, safeDur);
-                }
-            }
+            reportCurrentProgress();   // getDuration()=TIME_UNSET géré (durMs=0) côté JS
             player.release();
             player = null;
         }

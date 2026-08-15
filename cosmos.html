@@ -1106,6 +1106,16 @@ function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.fl
 function isClean(i){return !ADULT_RE.test(i.category||'')&&!ADULT_RE.test(i.title||'');}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function pad2(n){return String(n).padStart(2,'0');}
+// Code d'épisode UNIFIÉ — l'écriture (sauvegarde progression) ET la lecture
+// (reprise) DOIVENT produire exactement le même code, sinon la reprise casse au
+// fil des saisons. Saison = ep.season, sinon la clé de saison (sNum) ; épisode =
+// ep.episode_num, sinon l'index+1. Ne jamais retomber sur "1" pour la saison
+// (sinon toutes les saisons sans champ season se télescopent sur S01).
+function epCode(ep,idx,sNum){
+  const s=(ep&&ep.season!=null&&ep.season!=='')?ep.season:sNum;
+  const e=(ep&&ep.episode_num!=null&&ep.episode_num!=='')?ep.episode_num:((idx|0)+1);
+  return 'S'+pad2(s)+'E'+pad2(e);
+}
 // Sous-titre de carte lisible : retire les tokens techniques bruts, Title Case
 const CAT_FR={movies:'Films',movie:'Film','tv shows':'Séries','tv show':'Série',series:'Séries',
   kids:'Enfants',action:'Action',comedy:'Comédie',drama:'Drame',horror:'Horreur',thriller:'Thriller',
@@ -1792,7 +1802,7 @@ function buildPanel(data){
   // Liste ordonnée à plat (toutes saisons) pour calculer "épisode suivant"
   const ordered=[];
   S.panelSmeta.forEach(sm=>(S.panelSmap[sm.sNum]||[]).forEach((ep,ei)=>ordered.push({sNum:sm.sNum,ei,ep})));
-  const codeOf=o=>'S'+pad2(o.ep.season||o.sNum)+'E'+pad2(o.ep.episode_num||o.ei+1);
+  const codeOf=o=>epCode(o.ep,o.ei,o.sNum);
 
   // Dernier épisode regardé (en cours OU terminé) — MÊME logique que Xstream
   try{
@@ -1805,7 +1815,8 @@ function buildPanel(data){
       const pct=pctOf(e); if(pct<=0)continue;
       if(!best||(e.ts||0)>best.ts)best={sn:parseInt(m[1],10),en:parseInt(m[2],10),pct,ts:e.ts||0};}
     if(best){
-      const ci=ordered.findIndex(o=>Number(o.sNum)===best.sn&&Number(o.ep.episode_num)===best.en);
+      const _bestCode='S'+pad2(best.sn)+'E'+pad2(best.en);
+      const ci=ordered.findIndex(o=>codeOf(o)===_bestCode);
       if(best.pct>=95){
         if(ci>=0&&ci+1<ordered.length){const nx=ordered[ci+1];S.panelWatch={mode:'next',sNum:nx.sNum,ei:nx.ei,code:codeOf(nx),pct:0};}
         else if(ci>=0){const o=ordered[ci];S.panelWatch={mode:'resume',sNum:o.sNum,ei:o.ei,code:codeOf(o),pct:best.pct};}
@@ -1855,7 +1866,7 @@ function renderEps(sNum){
   const prog=getProg();
   const eps=$('panel-eps');eps.innerHTML='';
   epList.forEach((ep,i)=>{
-    const code='S'+pad2(ep.season||1)+'E'+pad2(ep.episode_num||i+1);
+    const code=epCode(ep,i,sNum);
     const pk=`${S.panelItem.series_id}||${code}`;
     const pct=pctOf(prog[pk]);
     const done=pct>=90;
@@ -1902,7 +1913,7 @@ function playSeriesFromStart(){
 function playPanelEp(ei){
   const ep=S.panelEps[ei];if(!ep)return;
   S.resumeEpIdx=ei;
-  const code='S'+pad2(ep.season||1)+'E'+pad2(ep.episode_num||ei+1);
+  const code=epCode(ep,ei,S.panelSelSeason);
   const pk=`${S.panelItem.series_id}||${code}`;
   const prog=getProg()[pk];
   const pct=pctOf(prog);
@@ -1923,14 +1934,14 @@ function epUrl(ep){
 function doPlayEp(ei,startMs){
   const ep=S.panelEps[ei];if(!ep)return;
   const url=epUrl(ep);if(!url)return;
-  const code='S'+pad2(ep.season||1)+'E'+pad2(ep.episode_num||ei+1);
+  const code=epCode(ep,ei,S.panelSelSeason);
   const sid=S.panelItem.series_id;
   const title=`${S.panelItem.title} · ${code}`;
   // Playlist plate de TOUTES les saisons → next + passage auto à l'épisode suivant
   const all=[];
-  S.panelSmeta.forEach(sm=>(S.panelSmap[sm.sNum]||[]).forEach((e)=>all.push(e)));
-  const eps=all.map(e=>{const c='S'+pad2(e.season||1)+'E'+pad2(e.episode_num);
-    return{url:epUrl(e),episode_label:c,title:e.title||e.info?.name||'',progress_key:`${sid}||${c}`};}).filter(e=>e.url);
+  S.panelSmeta.forEach(sm=>(S.panelSmap[sm.sNum]||[]).forEach((e,ix)=>all.push({e,sNum:sm.sNum,ix})));
+  const eps=all.map(o=>{const c=epCode(o.e,o.ix,o.sNum);
+    return{url:epUrl(o.e),episode_label:c,title:o.e.title||o.e.info?.name||'',progress_key:`${sid}||${c}`};}).filter(e=>e.url);
   const curIdx=eps.findIndex(e=>e.url===url);
   // Map url → clé de progression : sauver le BON épisode même après auto-advance
   window._epUrlMap=window._epUrlMap||{};eps.forEach(e=>{if(e.url)window._epUrlMap[e.url]=e.progress_key;});
