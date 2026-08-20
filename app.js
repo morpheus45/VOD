@@ -1287,7 +1287,10 @@ function openVodPanel(item){
   panel.addEventListener("click", e => { if(e.target === panel) closeVodPanel(); }, { once: true });
 
   if(savedMs > 0){
-    $("vodResumeBtn").addEventListener("click", () => { closeVodPanel(); playItem(item); });
+    // Web seulement : fermer le panneau SANS history.back() (sinon le popstate
+    // retombe sur le lecteur overlay et le referme aussitôt → retour à l'affiche).
+    // Sur APK, lecture native → pas d'overlay → on garde le comportement d'origine.
+    $("vodResumeBtn").addEventListener("click", () => { closeVodPanel(typeof window.AndroidBridge==="undefined"); playItem(item); });
     $("vodRestartBtn").addEventListener("click", () => {
       // Supprimer la progression sauvegardée puis lire depuis le début
       const prog = getProg();
@@ -1296,11 +1299,11 @@ function openVodPanel(item){
       delete prog[itemKey(item)];
       storeSet(STORE.progress, prog);
       _invalidateCache();
-      closeVodPanel();
+      closeVodPanel(typeof window.AndroidBridge==="undefined");
       playItem(item);
     });
   } else {
-    $("vodPlayBtn").addEventListener("click", () => { closeVodPanel(); playItem(item); });
+    $("vodPlayBtn").addEventListener("click", () => { closeVodPanel(typeof window.AndroidBridge==="undefined"); playItem(item); });
   }
 
   $("vodFavBtn").addEventListener("click", () => {
