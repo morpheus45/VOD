@@ -197,6 +197,23 @@ public class MainActivity extends AppCompatActivity {
                 webView.setVisibility(View.VISIBLE);
                 customView = null;
             }
+
+            // Autorise le micro demandé par le WebView (recherche vocale Web Speech,
+            // ex. Google TV / Metz qui ont un moteur de reconnaissance système).
+            @Override
+            public void onPermissionRequest(final android.webkit.PermissionRequest request) {
+                runOnUiThread(() -> {
+                    try {
+                        for (String res : request.getResources()) {
+                            if (android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res)) {
+                                request.grant(new String[]{ android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE });
+                                return;
+                            }
+                        }
+                        request.deny();
+                    } catch (Exception e) { request.deny(); }
+                });
+            }
         });
     }
 

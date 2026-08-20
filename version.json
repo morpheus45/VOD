@@ -1,6 +1,6 @@
 {
-  "apk_version": 55,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v55/PIPSILY.apk",
+  "apk_version": 56,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v56/PIPSILY.apk",
   "changes": "Reprise de lecture corrigée : sauvegarde régulière de la position (même si l'appli est coupée brutalement) pour films et séries, et reprise fiable du bon épisode au fil des saisons.",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
