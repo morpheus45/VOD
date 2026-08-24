@@ -246,8 +246,12 @@ const PipPlayer = {
           catch(e){ window.open(rawUrl, "_blank", "noopener"); }
         }, 600);
       } else {
-        // PC / navigateur : ouvrir rawUrl (HTTP) dans un nouvel onglet — VLC ou lecteur natif
-        window.open(rawUrl, "_blank", "noopener");
+        // PC / navigateur : NE PAS ouvrir d'onglet mort (le flux HTTP est de toute
+        // façon bloqué/injoignable sur PC). On affiche un message et l'utilisateur
+        // peut « 🔗 Copier le lien » (bouton du lecteur) pour VLC.
+        this._showStatus(
+          "❌ Ce flux ne peut pas être lu dans le navigateur. Utilisez « 🔗 Copier le lien » " +
+          "(à ouvrir dans VLC), ou l'application sur TV/mobile.", true);
       }
     };
 
@@ -4121,6 +4125,12 @@ async function boot(){
 
     // Surveillance session : déconnexion forcée si autre appareil se connecte (Standard/Test)
     window.PIPSILY_AUTH.startSessionWatcher?.(S._userId);
+  } else {
+    // auth.js absent ou non exécuté (CDN coupé, erreur de parsing, blocage réseau).
+    // Sans ce garde-fou, l'app démarrait sans JAMAIS afficher l'écran de connexion.
+    console.error("[PIPSILY] auth.js indisponible — redirection vers login.html");
+    location.replace("./login.html");
+    return;
   }
 
   // Navigation type

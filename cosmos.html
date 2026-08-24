@@ -3229,7 +3229,12 @@ setTimeout(()=>{$('loading').hidden=true;},25000);
   if(!_isTV && !_wantsCosmos){ location.replace('./index.html'); return; }
   // Auth identique à VOD : même Supabase, même session partagée (origine commune)
   if(window.PIPSILY_AUTH&&window.PIPSILY_AUTH.authGate){
-    try{ const a=await window.PIPSILY_AUTH.authGate(); if(!a) return; window._cosUser=a; }catch(e){}
+    try{ const a=await window.PIPSILY_AUTH.authGate(); if(!a) return; window._cosUser=a; }
+    catch(e){ console.error('[PIPSILY] authGate:', e && e.message); location.replace('./login.html'); return; }
+  }else{
+    // auth.js absent ou non exécuté : ne JAMAIS démarrer Cosmos sans écran de connexion.
+    console.error('[PIPSILY] auth.js indisponible — redirection vers login.html');
+    location.replace('./login.html'); return;
   }
   loadContent();
   loadApps();

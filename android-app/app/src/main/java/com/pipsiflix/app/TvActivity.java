@@ -24,6 +24,11 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebResourceError;
+import android.webkit.RenderProcessGoneDetail;
+import android.webkit.SslErrorHandler;
+import android.net.http.SslError;
+import androidx.annotation.RequiresApi;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 import org.json.JSONArray;
@@ -72,6 +77,10 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
 
     // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
     static WeakReference<TvActivity> sInstance;
+
+    // Garde anti-boucle : renderer mort en boucle (OOM) → ne pas recréer indéfiniment.
+    private static long sLastRecreate  = 0;
+    private static int  sRecreateCount = 0;
 
     WebView webView;
 
@@ -191,6 +200,61 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
                     "window.PIPSILY_NATIVE='android_tv';" +
                     "window.PIPSIFLIX_NATIVE='android_tv';" +   // compat legacy
                     "document.querySelector('.nav-btn')?.focus();", null);
+            }
+
+            // ── Échec de chargement de la page principale ─────────────────
+            //   Sans ce handler, une panne réseau ou TLS donnait un écran
+            //   BLANC muet : ni message d'erreur, ni écran de connexion.
+            @Override
+            @RequiresApi(23)
+            public void onReceivedError(WebView view, WebResourceRequest request,
+                                        WebResourceError error) {
+                if (!request.isForMainFrame()) return;   // ignorer images / CDN
+                Log.e(TAG, "Erreur page : " + error.getErrorCode() + " " + error.getDescription());
+                showLoadError(view, "Connexion impossible",
+                    "Code " + error.getErrorCode() + " — " + error.getDescription());
+            }
+
+            // ── Certificat TLS refusé ────────────────────────────────────
+            //   Cas classique en voiture : sans pile RTC, l'horloge repart à
+            //   zéro à chaque coupure et le certificat paraît hors validité.
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                handler.cancel();   // jamais proceed() : ce serait accepter un MITM
+                String failUrl = error.getUrl();
+                Log.e(TAG, "Erreur SSL (" + error.getPrimaryError() + ") : " + failUrl);
+                // N'écraser l'app QUE si c'est la page principale (même origine) qui échoue.
+                if (failUrl != null && failUrl.startsWith(APP_URL)) {
+                    showLoadError(view, "Certificat refusé",
+                        "Vérifiez la DATE et l'HEURE de l'appareil : une horloge fausse fait "
+                      + "échouer la vérification du certificat (code " + error.getPrimaryError() + ").");
+                }
+            }
+
+            // ── Processus de rendu mort (OOM sur appareil 2 Go) ───────────
+            //   Sans « return true », Android tue TOUT le process de l'app.
+            @Override
+            @RequiresApi(26)
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                Log.e(TAG, "Renderer mort (crash=" + detail.didCrash() + ")");
+                try {
+                    android.view.ViewGroup p = (android.view.ViewGroup) view.getParent();
+                    if (p != null) p.removeView(view);
+                    view.destroy();
+                } catch (Exception ignored) {}
+                // Anti-boucle : plusieurs morts rapprochées → arrêt propre au lieu de boucler.
+                long now = System.currentTimeMillis();
+                sRecreateCount = (now - sLastRecreate < 15000) ? sRecreateCount + 1 : 0;
+                sLastRecreate = now;
+                if (sRecreateCount >= 2) {
+                    Log.e(TAG, "Boucle de crash renderer — arrêt propre");
+                    Toast.makeText(getApplicationContext(),
+                        "Mémoire insuffisante — relancez l'application", Toast.LENGTH_LONG).show();
+                    finish();
+                } else {
+                    recreate();
+                }
+                return true;   // true = géré, ne pas tuer l'application
             }
         });
 
@@ -472,6 +536,26 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         super.onPause();
         previewForeground = false;
         stopLivePreview();
+    }
+
+    /**
+     * Affiche un écran d'erreur LISIBLE dans le WebView au lieu d'une page
+     * blanche. Sans ça, tout échec de chargement était silencieux.
+     */
+    private void showLoadError(WebView view, String title, String detail) {
+        String html =
+            "<html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
+          + "<style>body{margin:0;min-height:100vh;display:flex;align-items:center;"
+          + "justify-content:center;background:#05080f;color:#eef4ff;text-align:center;"
+          + "font-family:sans-serif;padding:24px}h2{margin:0 0 12px;font-size:22px}"
+          + "p{color:#9ab;line-height:1.6;max-width:520px;margin:0 auto}"
+          + "code{color:#82b4ff;font-size:13px;word-break:break-all}"
+          + "a{display:inline-block;margin-top:20px;padding:12px 28px;border-radius:999px;"
+          + "background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;font-weight:700;"
+          + "text-decoration:none}</style></head><body><div><h2>" + title + "</h2>"
+          + "<p>" + detail + "</p><p><code>" + APP_URL + "</code></p>"
+          + "<a href='" + APP_URL + "'>Réessayer</a></div></body></html>";
+        view.loadDataWithBaseURL(APP_URL, html, "text/html", "UTF-8", null);
     }
 
     @Override
