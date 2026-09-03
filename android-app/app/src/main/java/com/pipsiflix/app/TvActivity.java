@@ -498,7 +498,7 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
                         return;
                     }
                 }
-                Uri uri = FileProvider.getUriForFile(this, "com.pipsiflix.app.provider", apkFile);
+                Uri uri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".provider", apkFile);
                 Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);
                 install.setDataAndType(uri, "application/vnd.android.package-archive");
                 install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);

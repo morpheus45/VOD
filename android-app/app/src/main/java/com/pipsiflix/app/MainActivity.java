@@ -504,7 +504,7 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
                 }
-                Uri uri = FileProvider.getUriForFile(this, "com.pipsiflix.app.provider", apkFile);
+                Uri uri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".provider", apkFile);
                 Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);
                 install.setDataAndType(uri, "application/vnd.android.package-archive");
                 install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -695,6 +695,22 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public String getDeviceType() {
             return "android_phone";
+        }
+
+        /**
+         * Canal de mise à jour de cette build.
+         *
+         * PIPSILY CAR est un paquet distinct (com.pipsiflix.car) : lui proposer
+         * PIPSILY.apk n'updaterait rien, cela installerait une seconde appli
+         * à côté. Le site lit ce canal pour choisir car_version / car_url
+         * dans version.json au lieu de apk_version / apk_url.
+         *
+         * Les builds TV/téléphone n'exposent pas cette méthode : le site
+         * retombe alors tout seul sur le canal par défaut.
+         */
+        @JavascriptInterface
+        public String getUpdateChannel() {
+            return "car";
         }
 
         /**

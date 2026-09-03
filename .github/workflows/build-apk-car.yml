@@ -1,0 +1,156 @@
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  PIPSILY CAR — build de la variante autoradio (branche `car`)     ║
+# ╚══════════════════════════════════════════════════════════════════╝
+#
+# Canal totalement séparé de build-apk.yml (qui ne tourne que sur main) :
+#   • paquet      com.pipsiflix.car   (≠ com.pipsiflix.app)
+#   • artefact    PIPSILY-CAR.apk     (≠ PIPSILY.apk)
+#   • tag         car-vNNNN           (≠ vNN)
+#   • make_latest false               → ne vole pas la "latest release" à la TV
+
+name: 🚗 Build & Release PIPSILY CAR
+
+on:
+  push:
+    branches: [car]
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/build-apk-car.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compiler et publier PIPSILY-CAR.apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: ☕ Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: 🔧 Chmod gradlew
+        run: chmod +x android-app/gradlew
+
+      # Garde-fou : si la branche `car` est un jour rebasée sur main sans les
+      # patchs, échouer ici plutôt que publier une version TV sous le nom CAR
+      # (HOME + démarrage auto seraient réintroduits sur l'autoradio).
+      - name: 🛡️ Vérifier la variante CAR
+        run: |
+          set -e
+          G=android-app/app/build.gradle
+          M=android-app/app/src/main/AndroidManifest.xml
+          grep -q 'applicationId "com.pipsiflix.car"' "$G" \
+            || { echo "::error::applicationId n'est pas com.pipsiflix.car"; exit 1; }
+          grep -q "abiFilters 'armeabi-v7a'" "$G" \
+            || { echo "::error::abiFilters ARMv7 absent"; exit 1; }
+          ! grep -q 'category.HOME' "$M" \
+            || { echo "::error::category.HOME present : l appli se declarerait launcher"; exit 1; }
+          ! grep -q 'LEANBACK_LAUNCHER' "$M" \
+            || { echo "::error::LEANBACK_LAUNCHER present"; exit 1; }
+          ! grep -q 'BootReceiver' "$M" \
+            || { echo "::error::BootReceiver present : demarrage auto au contact"; exit 1; }
+          echo "✅ Variante CAR conforme"
+
+      - name: 📖 Lire versionCode depuis build.gradle
+        id: ver
+        run: |
+          CODE=$(grep 'versionCode' android-app/app/build.gradle | grep -oP '\d+')
+          NAME=$(grep 'versionName' android-app/app/build.gradle | grep -oP '"[^"]+"' | tr -d '"')
+          echo "code=$CODE" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "➜ versionCode=$CODE  versionName=$NAME"
+
+      # Même keystore que PIPSILY : le paquet différant, aucun conflit de signature.
+      - name: 🔑 Décoder le keystore
+        id: ks
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.jks
+            echo "ks_path=/tmp/release.jks" >> $GITHUB_OUTPUT
+            echo "✅ Keystore release → APK signé"
+          else
+            echo "::error::KEYSTORE_BASE64 absent — un APK debug n est pas installable par-dessus un release"
+            exit 1
+          fi
+
+      - name: 🔨 Build APK
+        working-directory: android-app
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="${{ steps.ks.outputs.ks_path }}" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+          cp app/build/outputs/apk/release/app-release.apk PIPSILY-CAR.apk
+          ls -lh PIPSILY-CAR.apk
+
+      - name: 🏷️ Tagger le commit
+        run: |
+          TAG="car-v${{ steps.ver.outputs.code }}"
+          git tag -f $TAG
+          git push origin $TAG --force
+        continue-on-error: true
+
+      - name: 🚀 Publier la Release GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: car-v${{ steps.ver.outputs.code }}
+          name: "PIPSILY CAR v${{ steps.ver.outputs.name }}"
+          draft: false
+          prerelease: false
+          make_latest: false
+          body: |
+            ## PIPSILY CAR v${{ steps.ver.outputs.name }}
+
+            Variante autoradio — Android 12 ARMv7, écran tactile.
+            Application **séparée** de PIPSILY (paquet `com.pipsiflix.car`) :
+            les deux peuvent cohabiter sur un même appareil.
+
+            Pas de déclaration d'écran d'accueil, pas de démarrage automatique
+            au contact, pas d'icône Leanback, APK ARMv7 uniquement.
+
+            > Build ${{ github.sha }} · ${{ github.event_name }}
+          files: android-app/PIPSILY-CAR.apk
+          overwrite_files: true
+
+      # ─── Canal de MAJ : publier car_version / car_url dans version.json ──
+      # version.json vit sur main (c est lui que sert GitHub Pages). On le met
+      # à jour depuis ici, sans toucher apk_version/apk_url du canal TV.
+      - name: 📝 Publier le canal CAR dans version.json (main)
+        run: |
+          set -e
+          git config user.name  "PIPSILY Bot"
+          git config user.email "bot@pipsily.local"
+          git fetch origin main
+          git checkout -B _main_car origin/main
+          VER="${{ steps.ver.outputs.code }}" python3 - <<'PYEOF'
+          import json, os
+          ver = int(os.environ['VER'])
+          with open('version.json', encoding='utf-8') as f:
+              d = json.load(f)
+          d['car_version'] = ver
+          d['car_url'] = f'https://github.com/morpheus45/VOD/releases/download/car-v{ver}/PIPSILY-CAR.apk'
+          with open('version.json', 'w', encoding='utf-8') as f:
+              json.dump(d, f, indent=2, ensure_ascii=False)
+              f.write('\n')
+          print(f"version.json → car_version={ver}")
+          PYEOF
+          git add version.json
+          if git diff --staged --quiet; then
+            echo "Canal CAR déjà à jour — rien à commiter"
+          else
+            git commit -m "chore: PIPSILY CAR v${{ steps.ver.outputs.code }} publié [skip ci]"
+            git push origin _main_car:main
+            echo "✅ car_version publié sur main"
+          fi

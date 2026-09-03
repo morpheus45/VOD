@@ -11,14 +11,17 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.pipsiflix.app"
-        minSdk 21                // Android 5.0+ (TV inclus)
+        applicationId "com.pipsiflix.car"
+        minSdk 21                // Android 5.0+
         targetSdk 34
-        versionCode 57
-        versionName "57.0"
-        // ARM uniquement : TV et téléphones réels — x86 = émulateurs seulement.
-        // Allège l'APK (~1,5 Mo de libs FFmpeg en moins) → install plus fiable
-        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
+        // Canal CAR : numérotation propre, démarrée à 1000. Elle reste au-dessus
+        // du canal TV/téléphone (v57, +1 par release) pour que le site ne
+        // propose jamais d'installer PIPSILY.apk par-dessus PIPSILY CAR.
+        versionCode 1000
+        versionName "1.0-car"
+        // Le poste est un ARMv7 : les libs arm64 (FFmpeg) seraient du poids mort
+        // sur un appareil à 2 Go de RAM. On ne garde que armeabi-v7a.
+        ndk { abiFilters 'armeabi-v7a' }
     }
 
     // Signing config release (utilisé par GitHub Actions ou Android Studio)

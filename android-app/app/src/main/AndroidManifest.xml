@@ -1,4 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  PIPSILY CAR — variante autoradio (branche `car`)                ║
+  ╚══════════════════════════════════════════════════════════════════╝
+
+  Le poste est un Android 12 ARMv7 / 2 Go qui se comporte comme une
+  tablette tactile. Trois choses de la version TV sont volontairement
+  absentes ici, car elles sont dangereuses ou inutiles en voiture :
+
+   1. `category.HOME` sur TvActivity — l'appli se déclarait écran
+      d'accueil. Sur un autoradio, cela fait apparaître un sélecteur de
+      launcher au démarrage, voire remplace la façade radio/CarPlay.
+   2. BootReceiver — relançait l'appli 8 s après le boot, c'est-à-dire
+      à chaque mise du contact, par-dessus la radio.
+   3. Le lanceur Leanback — donnait une seconde icône inutile.
+
+  TvActivity n'est plus déclarée du tout : la classe reste compilée
+  (MainActivity et PlayerActivity utilisent ses helpers statiques
+  jsEsc() et reportProgress()), mais elle n'est plus lançable.
+-->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Permissions réseau -->
@@ -7,16 +27,12 @@
     <!-- Micro : recherche vocale (WebView Web Speech / reconnaissance) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <!-- Installation de mises à jour APK -->
+    <!-- Installation de mises à jour APK (sideload de PIPSILY-CAR.apk) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- Démarrage automatique de l'app au boot de la TV -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
 
-    <!-- Déclarer que l'app fonctionne sur TV (leanback) et sur phone -->
-    <uses-feature android:name="android.software.leanback"
-        android:required="false" />
+    <!-- Le poste a un écran tactile ; on n'exige rien pour rester installable -->
     <uses-feature android:name="android.hardware.touchscreen"
         android:required="false" />
 
@@ -27,43 +43,41 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-        </intent>
     </queries>
 
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
-        android:banner="@drawable/tv_banner"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Pipsiflix"
         android:usesCleartextTraffic="true"
-        android:networkSecurityConfig="@xml/network_security_config">
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:resizeableActivity="true"
+        android:largeHeap="true">
 
         <!--
           ╔══════════════════════════════════════════════════════╗
-          ║  Activité principale (phone + tablet)                ║
+          ║  Activité principale — interface tactile             ║
           ╚══════════════════════════════════════════════════════╝
+          Seul point d'entrée de PIPSILY CAR. Même comportement que
+          sur téléphone : le bridge JS annonce "android_phone".
         -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:launchMode="singleTask"
             android:screenOrientation="unspecified"
             android:windowSoftInputMode="adjustResize">
 
-            <!-- Lanceur principal sur phone -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep links : ouvrir des URLs vidéo dans PIPSIFLIX -->
+            <!-- Deep links : ouvrir des URLs vidéo dans PIPSILY CAR -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -78,57 +92,21 @@
           ╔══════════════════════════════════════════════════════╗
           ║  Lecteur natif ExoPlayer                             ║
           ╚══════════════════════════════════════════════════════╝
+          `landscape` et non `sensorLandscape` : un poste n'a pas de
+          capteur d'orientation, on fixe l'orientation explicitement.
         -->
         <activity
             android:name=".PlayerActivity"
             android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:launchMode="singleTop"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="landscape"
             android:theme="@style/Theme.Pipsiflix.TV" />
-
-        <!--
-          ╔══════════════════════════════════════════════════════╗
-          ║  Activité TV (Android TV / Google TV)                ║
-          ╚══════════════════════════════════════════════════════╝
-        -->
-        <activity
-            android:name=".TvActivity"
-            android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:launchMode="singleTask"
-            android:theme="@style/Theme.Pipsiflix.TV">
-
-            <!-- Lanceur Leanback (icône sur l'écran d'accueil Android TV) -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
-
-            <!-- PIPSILY comme launcher/écran d'accueil : la TV démarre dessus -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.HOME" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
-
-        <!-- Démarrage auto : lance TvActivity au boot de la TV -->
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true"
-            android:enabled="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
 
         <!-- FileProvider : partage l'APK téléchargé avec l'installeur système -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.pipsiflix.app.provider"
+            android:authorities="${applicationId}.provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
