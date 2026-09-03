@@ -1,0 +1,116 @@
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  legacy/ — build ES2017 pour les moteurs figés en Chrome 61       ║
+# ╚══════════════════════════════════════════════════════════════════╝
+#
+# Le WebView AOSP des autoradios (et de certaines TV bas de gamme) est figé en
+# Chrome 61 : il ne parse pas l'optional chaining « ?. », et une seule
+# occurrence fait échouer tout un fichier. index.html et player.html testent le
+# moteur et servent legacy/ à ces appareils.
+#
+# Ce workflow régénère legacy/ à chaque modification des sources, pour qu'il ne
+# dérive jamais. Il échoue si une source réintroduit une construction que
+# esbuild NE PEUT PAS corriger (voir l'étape « garde-fou »).
+
+name: 🕰️ Build legacy (Chrome 61)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app.js'
+      - 'auth.js'
+      - 'player.js'
+      - '.github/workflows/build-legacy.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: ⬢ Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ─── Garde-fou : ce que esbuild ne sait PAS transpiler ───────────
+      # esbuild convertit la SYNTAXE, pas les API ni les fonctionnalités regex.
+      # Ces constructions doivent donc être absentes des sources, sinon le
+      # fichier plantera sur le poste malgré la transpilation.
+      - name: 🛡️ Vérifier l'absence de constructions non transpilables
+        run: |
+          set -e
+          echec=0
+          verifier() {   # $1 = motif litteral, $2 = explication
+            if grep -Fn -- "$1" app.js auth.js player.js; then
+              echo "::error::\"$1\" trouvé — $2"
+              echec=1
+            fi
+          }
+          verifier '\p{'      "échappement Unicode dans une regex, demande Chrome 64+"
+          verifier '.matchAll('  "API String.matchAll, demande Chrome 73+"
+          verifier '(?<'      "lookbehind ou groupe nommé dans une regex, demande Chrome 62+"
+          verifier 'Object.fromEntries' "demande Chrome 73+"
+          verifier '.replaceAll('       "demande Chrome 85+"
+          verifier 'Promise.allSettled' "demande Chrome 76+"
+          verifier 'globalThis'         "demande Chrome 71+"
+          if [ "$echec" = "1" ]; then
+            echo "Corrigez la source : esbuild ne peut pas régler ces cas."
+            exit 1
+          fi
+          echo "✅ Aucune construction non transpilable"
+
+      # ─── Transpilation des sources du projet ────────────────────────
+      - name: 🔨 Transpiler app / auth / player
+        run: |
+          set -e
+          mkdir -p legacy
+          for f in auth.js app.js player.js; do
+            npx --yes esbuild@0.25.0 "$f" --target=chrome61 --charset=utf8 \
+              --outfile="legacy/$f" --log-level=warning
+          done
+
+      # ─── Vendorisation de supabase-js ───────────────────────────────
+      # Version PINÉE, identique à celle que index.html sert aux moteurs
+      # modernes : les deux chemins doivent exécuter le même code.
+      # hls.js et mpegts.js ne sont pas repris — déjà compatibles Chrome 61.
+      - name: 📦 Transpiler supabase-js
+        run: |
+          set -e
+          curl -sL "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/dist/umd/supabase.min.js" \
+            -o /tmp/supabase.src.js
+          test -s /tmp/supabase.src.js
+          npx --yes esbuild@0.25.0 /tmp/supabase.src.js --target=chrome61 --minify \
+            --charset=utf8 --outfile=legacy/supabase.js --log-level=warning
+
+      # ─── Validation : tout doit parser en ES2018 ────────────────────
+      # ES2018 = ce que Chrome 61 accepte (ES2017 + object spread, Chrome 60).
+      - name: ✅ Valider le parse
+        run: |
+          set -e
+          for f in legacy/*.js; do
+            if npx --yes acorn@8 --ecma2018 --silent "$f" > /dev/null; then
+              echo "OK      $f"
+            else
+              echo "::error::$f ne parse pas en ES2018 — incompatible Chrome 61"
+              exit 1
+            fi
+          done
+
+      - name: 📤 Commit legacy/
+        run: |
+          git config user.name  "PIPSILY Bot"
+          git config user.email "bot@pipsily.local"
+          git add legacy/
+          if git diff --staged --quiet; then
+            echo "legacy/ déjà à jour"
+          else
+            git commit -m "chore: régénère legacy/ (Chrome 61) [skip ci]"
+            git push
+            echo "✅ legacy/ mis à jour"
+          fi

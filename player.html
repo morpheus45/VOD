@@ -61,6 +61,27 @@
 
   </div>
 
-  <script src="player.js?v=51"></script>
+  <!--
+    Chargement adapté au moteur du navigateur.
+
+    Le WebView AOSP des autoradios (et de certaines TV bas de gamme) est figé en
+    Chrome 61, qui ne parse pas l'optional chaining « ?. ». Une seule occurrence
+    fait échouer tout un fichier : le site se réduit alors à sa coquille HTML,
+    sans contenu ni écran de connexion. On sert donc à ces moteurs les versions
+    transpilées de legacy/, régénérées par .github/workflows/build-legacy.yml.
+
+    document.write, et non un chargement dynamique : les scripts inline qui
+    suivent dépendent de app.js et doivent s'exécuter après lui, dans l'ordre.
+    hls.js et mpegts.js restent sur le CDN — déjà compatibles Chrome 61.
+  -->
+  <script>
+  (function(){
+    var moderne = false;
+    try { new Function("var o = {}; return o?.x;"); moderne = true; } catch (e) {}
+    document.write('<scr' + 'ipt src="'
+      + (moderne ? 'player.js?v=51' : 'legacy/player.js?v=51')
+      + '"></scr' + 'ipt>');
+  })();
+  </script>
 </body>
 </html>

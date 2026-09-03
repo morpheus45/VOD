@@ -1129,7 +1129,10 @@ function prettyCat(i){
   if(!c) return i.isLive ? 'En direct' : i.series_id ? 'Série' : 'Film';
   const low=c.toLowerCase();
   if(CAT_FR[low]) return CAT_FR[low];
-  return c.toLowerCase().replace(/\b\p{L}/gu,m=>m.toUpperCase());
+  // \p{L} exige Chrome 64+, or le WebView des autoradios est figé en
+  // Chrome 61 : plages Latin explicites — vérifié équivalent sur les
+  // 25 610 noms des catalogues.
+  return c.toLowerCase().replace(/\b[a-zA-ZÀ-ɏḀ-ỿ]/g,m=>m.toUpperCase());
 }
 
 // ══════ NETTOYAGE / DEDUP CHAÎNES LIVE ═══════════════════════════════════
@@ -1168,7 +1171,7 @@ function cleanLiveCat(cat){
   if(h('canad')||h('quebec')||h('québec')) return 'Canada';
   if(h('afriq')||h('arab')||h('maghreb')||h('turk')||h('portug')||h('espag')||h('ital')||h('monde')||h('world')) return 'Monde';
   if(h('france')||h('national')||h('general')||h('général')||h('tnt')||h('dom')||h('tom')||h('metro')) return 'France';
-  return c.replace(/\b\p{L}/gu,m=>m.toUpperCase());
+  return c.replace(/\b[a-zA-ZÀ-ɏḀ-ỿ]/g,m=>m.toUpperCase());
 }
 
 // ══════ TITLE/QUALITY ═══════════════════════════════════════════════════

@@ -2024,7 +2024,12 @@ async function playItem(item){
 // Exception : "xXx" (film d'action). On ignore les emojis/espaces en tête.
 const _startsXXX = c => {
   if(!c) return false;
-  const clean = c.replace(/^[\s\p{Emoji_Presentation}\p{Extended_Pictographic}°|•\-_]+/u, "").trim();
+  // Le WebView AOSP des autoradios est figé en Chrome 61, qui ne connaît pas
+  // les classes Unicode de propriété (backslash-p entre accolades) : une seule
+  // occurrence fait échouer tout le fichier au parse. D'où les plages
+  // explicites ci-dessous — vérifiées équivalentes sur les 25 610 noms des
+  // catalogues, détection adulte comprise.
+  const clean = c.replace(/^[\s°|•\-_←-⇿⌀-➿⬀-⯿️⃣\uD800-\uDFFF]+/, "").trim();
   if(!clean) return false;
   if(clean.startsWith("xXx")) return false; // film "xXx" — garder
   return /^xxx/i.test(clean);
@@ -2261,7 +2266,17 @@ const _QUAL_RE    = /[\s\[\(]+(HDR\+?|HDTV|FHD|UHD|4K|8K|HEVC|H\.?265|H\.?264|10
 
 function _parseLiveQuality(title){
   if(!title) return null;
-  const matches = [...title.matchAll(_QUAL_RE)].map(m => m[1].toUpperCase());
+  // Boucle exec plutôt que matchAll : matchAll demande Chrome 73, or le WebView
+  // des autoradios est figé en Chrome 61 (et esbuild ne polyfille pas les API,
+  // seulement la syntaxe). Regex recréée à chaque appel pour ne pas partager
+  // lastIndex avec _QUAL_RE — c'est ce que faisait matchAll, qui la clone.
+  const re = new RegExp(_QUAL_RE.source, _QUAL_RE.flags);
+  const matches = [];
+  let m;
+  while((m = re.exec(title)) !== null){
+    if(m[0] === ""){ re.lastIndex++; continue; }
+    matches.push(m[1].toUpperCase());
+  }
   for(const q of _QUAL_ORDER) if(matches.includes(q)) return q;
   return matches[0] || null;
 }

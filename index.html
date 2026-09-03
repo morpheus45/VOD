@@ -257,9 +257,36 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" onerror="console.warn('HLS.js indisponible')"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="./auth.js"></script>
-  <script src="app.js?v=182"></script>
+  <!--
+    Chargement adapté au moteur du navigateur.
+
+    Le WebView AOSP des autoradios (et de certaines TV bas de gamme) est figé en
+    Chrome 61, qui ne parse pas l'optional chaining « ?. ». Une seule occurrence
+    fait échouer tout un fichier : le site se réduit alors à sa coquille HTML,
+    sans contenu ni écran de connexion. On sert donc à ces moteurs les versions
+    transpilées de legacy/, régénérées par .github/workflows/build-legacy.yml.
+
+    document.write, et non un chargement dynamique : les scripts inline qui
+    suivent dépendent de app.js et doivent s'exécuter après lui, dans l'ordre.
+    hls.js et mpegts.js restent sur le CDN — déjà compatibles Chrome 61.
+  -->
+  <script>
+  (function(){
+    var moderne = false;
+    try { new Function("var o = {}; return o?.x;"); moderne = true; } catch (e) {}
+    var srcs = moderne
+      ? [// Version pinée : legacy/supabase.js est construit depuis la MEME version,
+         // les deux chemins doivent exécuter le même code.
+         "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/dist/umd/supabase.min.js",
+         "./auth.js",
+         "app.js?v=182"]
+      : ["legacy/supabase.js",
+         "legacy/auth.js",
+         "legacy/app.js?v=182"];
+    for (var i = 0; i < srcs.length; i++)
+      document.write('<scr' + 'ipt src="' + srcs[i] + '"></scr' + 'ipt>');
+  })();
+  </script>
   <script>
     if("serviceWorker" in navigator){
       window.addEventListener("load", () => {
