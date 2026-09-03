@@ -45,22 +45,30 @@ jobs:
       # Garde-fou : si la branche `car` est un jour rebasée sur main sans les
       # patchs, échouer ici plutôt que publier une version TV sous le nom CAR
       # (HOME + démarrage auto seraient réintroduits sur l'autoradio).
-      - name: 🛡️ Vérifier la variante CAR
+      #
+      # Le manifeste est analysé COMMENTAIRES RETIRÉS : ses commentaires citent
+      # justement les constructions interdites, pour expliquer leur absence.
+      - name: Verifier la variante CAR
         run: |
           set -e
           G=android-app/app/build.gradle
-          M=android-app/app/src/main/AndroidManifest.xml
-          grep -q 'applicationId "com.pipsiflix.car"' "$G" \
-            || { echo "::error::applicationId n'est pas com.pipsiflix.car"; exit 1; }
-          grep -q "abiFilters 'armeabi-v7a'" "$G" \
-            || { echo "::error::abiFilters ARMv7 absent"; exit 1; }
-          ! grep -q 'category.HOME' "$M" \
-            || { echo "::error::category.HOME present : l appli se declarerait launcher"; exit 1; }
-          ! grep -q 'LEANBACK_LAUNCHER' "$M" \
-            || { echo "::error::LEANBACK_LAUNCHER present"; exit 1; }
-          ! grep -q 'BootReceiver' "$M" \
-            || { echo "::error::BootReceiver present : demarrage auto au contact"; exit 1; }
-          echo "✅ Variante CAR conforme"
+          grep -q 'applicationId "com.pipsiflix.car"' "$G"             || { echo "::error::applicationId n est pas com.pipsiflix.car"; exit 1; }
+          grep -q "abiFilters 'armeabi-v7a'" "$G"             || { echo "::error::abiFilters ARMv7 absent"; exit 1; }
+          python3 - <<'PY'
+          import re, sys
+          xml = open("android-app/app/src/main/AndroidManifest.xml", encoding="utf-8").read()
+          code = re.sub(r"<!--.*?-->", "", xml, flags=re.S)
+          interdits = {
+              "category.HOME":     "l appli se declarerait ecran d accueil du poste",
+              "LEANBACK_LAUNCHER": "icone Leanback inutile sur un autoradio",
+              "BootReceiver":      "demarrage automatique a chaque mise du contact",
+          }
+          mauvais = [(t, r) for t, r in interdits.items() if t in code]
+          for t, r in mauvais:
+              print("::error::%s present dans le manifeste : %s" % (t, r))
+          sys.exit(1 if mauvais else 0)
+          PY
+          echo "Variante CAR conforme"
 
       - name: 📖 Lire versionCode depuis build.gradle
         id: ver
