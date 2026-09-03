@@ -4483,7 +4483,9 @@ async function checkApkInstallBanner(){
   // Depuis une page web on ne peut pas distinguer de façon fiable un poste de
   // voiture d'une tablette Android : leur user-agent est identique. On laisse
   // donc l'utilisateur choisir plutôt que de deviner.
-  const _rawCar   = vinfo?.car_url || "";
+  // Pas d'optional chaining ici : le WebView AOSP des autoradios est figé en
+  // Chrome 61, qui ne parse pas "?." — une seule occurrence casse tout le fichier.
+  const _rawCar   = (vinfo && vinfo.car_url) || "";
   const carUrl    = /^https:\/\/github\.com\//.test(_rawCar) ? _rawCar : "";
 
   // Si une nouvelle version est disponible → ignorer le timer de dismiss
