@@ -3158,14 +3158,25 @@ function startCosmosUpdate(){
 }
 // Vérification auto de mise à jour (comme PIPSILY Xstream) : compare version.json
 // à la version installée → propose la MAJ dans Cosmos aussi.
+// Canal de mise à jour : les builds PIPSILY CAR (paquet com.pipsiflix.car)
+// annoncent "car" et lisent car_version / car_url — leur proposer PIPSILY.apk
+// installerait une seconde appli à côté au lieu de les mettre à jour. Les
+// builds TV/téléphone n'exposent pas getUpdateChannel : l'appel lève, on
+// retombe sur le canal par défaut, comportement inchangé.
+function cosmosUpdateChannel(){
+  try{ const c=window.AndroidBridge.getUpdateChannel(); if(c) return String(c); }catch(e){}
+  return 'default';
+}
 async function cosmosCheckUpdate(){
   if(!window.AndroidBridge?.getApkVersion) return;
   try{
     const v=await fetch(GH+'version.json?cb='+Date.now()).then(r=>r.json());
-    if(!v||!v.apk_version||!v.apk_url) return;
-    const remote=parseInt(v.apk_version,10);
+    const car=cosmosUpdateChannel()==='car';
+    const vk=car?'car_version':'apk_version', uk=car?'car_url':'apk_url';
+    if(!v||!v[vk]||!v[uk]) return;
+    const remote=parseInt(v[vk],10);
     const local=parseInt(window.AndroidBridge.getApkVersion()||'0',10);
-    if(remote>local) showUpdateToast('v'+remote, v.apk_url);
+    if(remote>local) showUpdateToast('v'+remote, v[uk]);
   }catch(e){}
 }
 

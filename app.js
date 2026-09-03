@@ -4479,6 +4479,13 @@ async function checkApkInstallBanner(){
   const _rawUrl   = vinfo?.apk_url || "";
   const url       = /^https:\/\/github\.com\//.test(_rawUrl) ? _rawUrl : "https://github.com/morpheus45/VOD/releases/latest";
 
+  // Variante autoradio, proposée en second choix explicite.
+  // Depuis une page web on ne peut pas distinguer de façon fiable un poste de
+  // voiture d'une tablette Android : leur user-agent est identique. On laisse
+  // donc l'utilisateur choisir plutôt que de deviner.
+  const _rawCar   = vinfo?.car_url || "";
+  const carUrl    = /^https:\/\/github\.com\//.test(_rawCar) ? _rawCar : "";
+
   // Si une nouvelle version est disponible → ignorer le timer de dismiss
   const dismissedUntil = Number(localStorage.getItem("pf_apk_install_dismiss") || 0);
   const dismissedVer   = Number(localStorage.getItem("pf_apk_install_dismiss_ver") || 0);
@@ -4517,6 +4524,13 @@ async function checkApkInstallBanner(){
                  font-size:15px;font-weight:800;text-decoration:none;margin-bottom:10px">
           📥 Télécharger l'APK
         </a>
+        ${carUrl ? `
+        <a href="${carUrl}" target="_blank" rel="noopener"
+          style="display:block;width:100%;box-sizing:border-box;padding:12px;border-radius:12px;
+                 background:transparent;border:1px solid rgba(107,63,224,.6);color:#c9b8ff;
+                 font-size:13px;font-weight:700;text-decoration:none;margin-bottom:10px">
+          🚗 Version autoradio &middot; PIPSILY CAR
+        </a>` : ''}
         <button id="apkInstallDismiss"
           style="width:100%;padding:11px;border-radius:12px;border:1px solid rgba(255,255,255,.15);
                  background:transparent;color:#7a9cc0;font-size:13px;cursor:pointer">
@@ -4559,14 +4573,42 @@ async function checkApkInstallBanner(){
   };
 }
 
+/**
+ * Canal de mise à jour de la build installée.
+ *
+ * PIPSILY CAR est un paquet distinct (com.pipsiflix.car) : lui proposer
+ * PIPSILY.apk n'updaterait rien, cela installerait une seconde appli à côté.
+ * Les builds CAR annoncent "car" via le bridge natif et lisent alors
+ * car_version / car_url. Les builds TV/téléphone n'exposent pas la méthode :
+ * l'appel lève, on retombe sur le canal par défaut — comportement inchangé.
+ *
+ * Appel direct volontaire (pas de typeof) : sur certains WebView Android les
+ * méthodes Java ne sont pas de type "function" mais restent appelables.
+ */
+function apkUpdateChannel(){
+  try {
+    const c = window.AndroidBridge.getUpdateChannel();
+    if(c) return String(c);
+  } catch {}
+  return "default";
+}
+
+/** Champs de version.json à lire pour le canal courant. */
+function apkChannelFields(){
+  return apkUpdateChannel() === "car"
+    ? { ver:"car_version", url:"car_url", changes:"car_changes", label:"PIPSILY CAR" }
+    : { ver:"apk_version", url:"apk_url", changes:"changes",     label:"PIPSILY"     };
+}
+
 async function checkApkUpdate(){
   // Hors APK natif → rien à faire
   if(typeof window.AndroidBridge === "undefined") return;
 
   try {
     const vinfo = await fetchJson("version.json?cb=" + Date.now());
-    if(!vinfo || !vinfo.apk_version || !vinfo.apk_url) return;
-    const remoteVer = parseInt(vinfo.apk_version, 10);
+    const chan  = apkChannelFields();
+    if(!vinfo || !vinfo[chan.ver] || !vinfo[chan.url]) return;
+    const remoteVer = parseInt(vinfo[chan.ver], 10);
     if(!remoteVer) return;
 
     // ── Lire la version APK installée ──────────────────────────────
@@ -4599,12 +4641,14 @@ async function checkApkUpdate(){
     localStorage.removeItem("pf_apk_sv5");
     localStorage.removeItem("pf_apk_su5");
 
-    showApkUpdateBanner(vinfo, remoteVer);
+    showApkUpdateBanner(vinfo, remoteVer, chan);
   } catch {}
 }
 
-function showApkUpdateBanner(vinfo, remoteVer){
+function showApkUpdateBanner(vinfo, remoteVer, chan){
   if($("apkUpdateBanner")) return;
+  // Repli sur le canal par défaut si l'appelant n'en fournit pas.
+  chan = chan || { url:"apk_url", changes:"changes", label:"PIPSILY" };
 
   // Détection TV (user-agent ou flag injecté par TvActivity)
   const isTV = window.PIPSILY_NATIVE === "android_tv" ||
@@ -4617,8 +4661,8 @@ function showApkUpdateBanner(vinfo, remoteVer){
   banner.innerHTML =
     '<div class="apk-tv-modal">' +
       '<div class="apk-tv-icon">📦</div>' +
-      '<h2 class="apk-tv-title">PIPSILY v' + remoteVer + ' disponible</h2>' +
-      '<p class="apk-tv-changes">' + (vinfo.changes || "Améliorations & corrections") + '</p>' +
+      '<h2 class="apk-tv-title">' + chan.label + ' v' + remoteVer + ' disponible</h2>' +
+      '<p class="apk-tv-changes">' + (vinfo[chan.changes] || "Améliorations & corrections") + '</p>' +
       '<div id="apkProgWrap" style="display:none;margin:16px auto 6px;max-width:340px">' +
         '<div style="height:10px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden">' +
           '<div id="apkProgBar" style="height:100%;width:0%;border-radius:6px;' +
@@ -4664,7 +4708,7 @@ function showApkUpdateBanner(vinfo, remoteVer){
 
   // ── Lancer / relancer le téléchargement ──
   const startDownload = () => {
-    const url = vinfo.apk_url;
+    const url = vinfo[chan.url];
     const btn = $("apkDownloadBtn");
     if(btn){ btn.textContent = "📥 Téléchargement…"; btn.disabled = true; }
     setApkProg(0);

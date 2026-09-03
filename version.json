@@ -4,5 +4,8 @@
   "changes": "Reprise de lecture corrigée : sauvegarde régulière de la position (même si l'appli est coupée brutalement) pour films et séries, et reprise fiable du bon épisode au fil des saisons.",
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
-  "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"
+  "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct",
+  "car_version": 1000,
+  "car_url": "https://github.com/morpheus45/VOD/releases/download/car-v1000/PIPSILY-CAR.apk",
+  "car_changes": "Version initiale autoradio — interface tactile, sans écran d'accueil ni démarrage automatique."
 }
