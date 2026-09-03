@@ -160,8 +160,22 @@
     <div id="adminContent" class="loading">Vérification des droits…</div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="./auth.js"></script>
+  <!-- Chargement adapté au moteur — même principe que index.html : le WebView
+       AOSP des autoradios est figé en Chrome 61 et ne parse pas « ?. ». Une seule
+       occurrence casse tout le fichier, donc on sert à ces moteurs les versions
+       transpilées de legacy/. Les moteurs récents chargent les mêmes fichiers
+       qu'avant. Version supabase pinée : legacy/supabase.js vient de la même. -->
+  <script>
+  (function(){
+    var moderne = false;
+    try { new Function("var o = {}; return o?.x;"); moderne = true; } catch (e) {}
+    var srcs = moderne
+      ? ["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/dist/umd/supabase.min.js", "./auth.js"]
+      : ["legacy/supabase.js", "legacy/auth.js"];
+    for (var i = 0; i < srcs.length; i++)
+      document.write('<scr' + 'ipt src="' + srcs[i] + '"></scr' + 'ipt>');
+  })();
+  </script>
   <script>
     const A = window.PIPSILY_AUTH || {};
     const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
