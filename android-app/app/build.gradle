@@ -17,8 +17,8 @@ android {
         // Canal CAR : numérotation propre, démarrée à 1000. Elle reste au-dessus
         // du canal TV/téléphone (v57, +1 par release) pour que le site ne
         // propose jamais d'installer PIPSILY.apk par-dessus PIPSILY CAR.
-        versionCode 1000
-        versionName "1.0-car"
+        versionCode 1001
+        versionName "1.1-car"
         // Le poste est un ARMv7 : les libs arm64 (FFmpeg) seraient du poids mort
         // sur un appareil à 2 Go de RAM. On ne garde que armeabi-v7a.
         ndk { abiFilters 'armeabi-v7a' }
