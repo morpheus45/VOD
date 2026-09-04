@@ -16,6 +16,33 @@
   ✓ TV Samsung Smart TV (2016 ou plus récente, Tizen 3.0+)
   ✓ TV et PC sur le même réseau Wi-Fi
   ✓ Windows 10 ou 11
+  ✓ Un PIPSILY-TV-signed.wgt signé POUR CETTE TV  ← voir ci-dessous
+
+── IMPORTANT : LE PACKAGE DOIT ÊTRE SIGNÉ POUR TA TV ───────────
+
+  Une TV Samsung n'accepte que les applications dont le certificat
+  a été émis par Samsung, et ce certificat est lié au numéro
+  d'identification unique (DUID) de TA TV.
+
+  Autrement dit :
+    - il n'existe pas de .wgt qui s'installe sur n'importe quelle TV
+    - un certificat fabriqué localement est toujours refusé
+      (erreur "install failed[118019]")
+
+  Pour obtenir un package valide, il faut, une seule fois :
+
+    1. Installer Tizen Studio + l'extension Samsung TV
+       https://developer.samsung.com/smarttv
+    2. Tools → Certificate Manager → « + » → Samsung
+    3. Se connecter avec un compte Samsung Developer (gratuit)
+    4. Renseigner le DUID de la TV
+       (l'installateur te l'affiche à l'étape 2)
+    5. Signer le package avec ce profil
+
+  Procédure détaillée : tizen-tv/TIZEN-README.md dans le dépôt.
+
+  L'installateur vérifie le package AVANT de tenter l'installation
+  et te dit précisément ce qui manque.
 
 ── INSTALLATION EN 3 ÉTAPES ────────────────────────────────────
 
@@ -47,6 +74,10 @@
   Une fois installée, PIPSILY TV se met à jour automatiquement
   à chaque lancement — aucune action requise.
 
+  Réserve : la mise à jour télécharge le .wgt publié en release,
+  qui est signé pour une TV donnée. Sur une autre TV, elle sera
+  refusée et l'app proposera le lien de téléchargement à la place.
+
 ── DÉSINSTALLATION ─────────────────────────────────────────────
 
   TV : Applications → ⚙ (paramètres) → PIPSILY → Supprimer
@@ -57,8 +88,10 @@
   → Mode développeur non activé ou TV non redémarrée
   → Vérifier que TV et PC sont sur le même Wi-Fi
 
-  "Certificat invalide"
-  → Redémarrer la TV en mode développeur et réessayer
+  "install failed[118019]" / "Certificat invalide"
+  → Le package n'est pas signé avec un certificat Samsung émis
+    pour le DUID de CETTE TV. Redémarrer la TV n'y changera rien :
+    voir la section "LE PACKAGE DOIT ÊTRE SIGNÉ POUR TA TV".
 
   L'app ne se trouve pas dans le menu
   → Chercher dans Applications → Mes applications

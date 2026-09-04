@@ -257,7 +257,20 @@
   <div class="hero">
     <img class="logo" src="./icons/icon-192.png" alt="PIPSILY" />
     <h1>PIPSILY TV</h1>
-    <p>Installe l'application sur ta Samsung Smart TV en 3 étapes simples — aucun compte requis.</p>
+    <p>Installe l'application sur ta Samsung Smart TV. Compte Samsung Developer requis
+       (gratuit) : Samsung n'autorise que les applications signées avec un certificat
+       émis pour ta TV.</p>
+  </div>
+
+  <!-- ── Avertissement certificat ───────────────────────────────── -->
+  <div class="req-section">
+    <h2>⚠ À lire avant de télécharger</h2>
+    <div class="req-grid">
+      <div class="req-item"><span>🔐</span><span>Une TV Samsung refuse toute application dont le certificat n'a pas été émis par Samsung — erreur <span class="code">install failed[118019]</span>.</span></div>
+      <div class="req-item"><span>🆔</span><span>Ce certificat est lié au <b>DUID</b> de ta TV : un package signé pour une TV ne s'installe pas sur une autre.</span></div>
+      <div class="req-item"><span>🧰</span><span>Il faut donc, une fois : <b>Tizen Studio</b> + <b>Certificate Manager → Samsung</b> + un compte Samsung Developer gratuit, puis signer le package.</span></div>
+      <div class="req-item"><span>📖</span><span>Procédure complète : <a href="https://github.com/morpheus45/VOD/blob/main/tizen-tv/TIZEN-README.md">TIZEN-README.md</a></span></div>
+    </div>
   </div>
 
   <!-- ── Téléchargements ────────────────────────────────────────── -->
@@ -272,7 +285,7 @@
           <svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5v-2z"/></svg>
           Télécharger pour Windows
         </a>
-        <div class="dl-size">ZIP · 2 Mo · sdb Samsung inclus · aucun logiciel requis</div>
+        <div class="dl-size">ZIP · 20 Mo · sdb Samsung inclus · package à signer pour ta TV</div>
       </div>
     </div>
 
@@ -285,7 +298,7 @@
           <svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5v-2z"/></svg>
           Télécharger pour Mac
         </a>
-        <div class="dl-size">ZIP · 0.8 Mo · sdb Samsung inclus · aucun logiciel requis</div>
+        <div class="dl-size">ZIP · 0.8 Mo · sdb Samsung inclus · package à signer pour ta TV</div>
       </div>
     </div>
 
@@ -298,7 +311,8 @@
       <div class="req-item"><span>📺</span><span>Samsung Smart TV 2016 ou plus récente (Tizen)</span></div>
       <div class="req-item"><span>📶</span><span>TV et ordinateur sur le même réseau Wi-Fi</span></div>
       <div class="req-item"><span>🪟</span><span>Windows 10 / 11 ou macOS 12+</span></div>
-      <div class="req-item"><span>⏱</span><span>Environ 5 minutes pour l'installation</span></div>
+      <div class="req-item"><span>👤</span><span>Un compte Samsung Developer (gratuit) + Tizen Studio, pour signer le package</span></div>
+      <div class="req-item"><span>⏱</span><span>Environ 5 minutes une fois le package signé</span></div>
     </div>
   </div>
 
@@ -363,6 +377,19 @@
     <h2>Questions fréquentes</h2>
 
     <details>
+      <summary>L'installation échoue avec « install failed[118019] »</summary>
+      <div class="faq-body">
+        C'est <strong>toujours</strong> un problème de certificat, jamais de réseau ni de mode développeur.<br>
+        La TV valide la <strong>chaîne de certification</strong> du package contre l'autorité racine Samsung :
+        un certificat fabriqué localement, même contenant le DUID de la TV, est rejeté.<br>
+        Il faut signer le <span class="code">.wgt</span> avec un profil créé dans
+        <strong>Tizen Studio → Tools → Certificate Manager → « + » → Samsung</strong>,
+        en renseignant le DUID de la TV (l'installateur l'affiche).<br>
+        Détail : <a href="https://github.com/morpheus45/VOD/blob/main/tizen-tv/TIZEN-README.md">TIZEN-README.md</a>
+      </div>
+    </details>
+
+    <details>
       <summary>La TV ne se connecte pas</summary>
       <div class="faq-body">
         Vérifie que :<br>
@@ -394,7 +421,10 @@
       <summary>L'app se met-elle à jour automatiquement ?</summary>
       <div class="faq-body">
         Oui. À chaque lancement, PIPSILY TV vérifie si une mise à jour est disponible.<br>
-        Si c'est le cas, une notification apparaît et l'installation se fait en un clic, sans refaire la procédure d'installation.
+        Si c'est le cas, une notification apparaît et l'installation se fait en un clic, sans refaire la procédure d'installation.<br><br>
+        Réserve : la mise à jour télécharge le package publié en release, signé pour une TV précise.
+        Sur une autre TV, elle est refusée et l'app affiche le lien de téléchargement à la place —
+        il faut alors re-signer le package pour cette TV.
       </div>
     </details>
 
