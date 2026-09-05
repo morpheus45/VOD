@@ -1,4 +1,4 @@
-# build.ps1 — PIPSILY TV — Prépare le dossier tizen-tv/ pour Tizen Studio
+﻿# build.ps1 — PIPSILY TV — Prépare le dossier tizen-tv/ pour Tizen Studio
 # Lance depuis le dossier tizen-tv/ : .\build.ps1
 # Ou depuis VOD-push/ : .\tizen-tv\build.ps1
 

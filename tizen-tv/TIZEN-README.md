@@ -250,7 +250,13 @@ du tableau *Erreurs d'installation* ci-dessus.
 
 - **Pas de Service Worker** : les apps `.wgt` Tizen packagées ne supportent pas les Service Workers. La mise à jour est gérée par `tizen-update.js` à la place.
 - **HLS.js** est épinglé à `1.5.15` (version fixe) pour éviter des régressions sur le moteur WebKit de Tizen.
-- **`$TIZEN_SCRIPT`** dans `index.html` est un placeholder remplacé automatiquement par Tizen Studio lors du build — ne pas modifier.
+- **Pas de `$TIZEN_SCRIPT`** dans `index.html` : ce placeholder n'est substitué que par le
+  builder de l'IDE Tizen Studio. En build CLI (`tizen build-web`, utilisé par `sign-tv.ps1`)
+  il reste littéral et produit `<script src="$TIZEN_SCRIPT">` → 404. La balise a été retirée :
+  l'app n'utilise que des API `tizen.*` (application, tvinputdevice, filesystem, package),
+  injectées automatiquement par le Web Runtime. Aucun template TV du SDK Samsung n'inclut
+  ce script ; `webapis.js` ne serait nécessaire que pour des API `webapis.*` (avplay,
+  productinfo...), non utilisées ici.
 - **`updateBar`** de PIPSILY est conservé dans le DOM mais masqué (`display:none`) pour éviter les erreurs JavaScript dans `app.js`.
 - Le profil `tv-samsung-public-7.0` cible Tizen 3.0+ (TV depuis 2016). Pour les TV plus anciennes, changer en `tv-samsung-public-5.0`.
 - **`packagemanager.install`** nécessite une signature Samsung Partner (au-delà du certificat développeur standard). Si l'API n'est pas disponible, `tizen-update.js` affiche un message de fallback avec le lien de téléchargement. À noter : ce privilège n'est **pas** la cause de l'erreur `118019` — le retirer de `config.xml` ne change rien, seul le certificat compte.
