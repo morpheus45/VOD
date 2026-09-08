@@ -7,6 +7,12 @@
     android:keepScreenOn="true">
 
     <!-- Lecteur vidéo ExoPlayer plein écran — contrôles intégrés Media3 -->
+    <!--
+      On garde une SurfaceView (défaut) : elle préserve le HDR et le décodage
+      matériel 4K, contrairement au TextureView. Le problème de coupures venait
+      des appels Surface.setFrameRate() d'ExoPlayer, désactivés côté lecteur via
+      setVideoChangeFrameRateStrategy(OFF) dans PlayerActivity (voir la note là-bas).
+    -->
     <androidx.media3.ui.PlayerView
         android:id="@+id/playerView"
         android:layout_width="match_parent"

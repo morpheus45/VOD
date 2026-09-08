@@ -245,7 +245,17 @@ public class PlayerActivity extends FragmentActivity {
                 new androidx.media3.exoplayer.DefaultRenderersFactory(this)
                     .setExtensionRendererMode(
                         androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
-            player = new ExoPlayer.Builder(this, rf).setTrackSelector(ts).build();
+            // Ne PAS laisser ExoPlayer changer la fréquence d'image de l'écran.
+            // Sur les TV 4K MediaTek bas de gamme (ex : SWTV-24AE-4K), chaque appel
+            // Surface.setFrameRate() pose puis retire un frameRateOverride, ce qui
+            // fait renégocier l'affichage en boucle et gèle le décodeur vidéo
+            // (C2BqBuffer dequeue failures) → coupure toutes les ~20 s, surtout sur
+            // les films 24 im/s. STRATEGY_OFF supprime ces appels tout en gardant
+            // la SurfaceView (donc le HDR et le décodage matériel 4K).
+            player = new ExoPlayer.Builder(this, rf)
+                    .setTrackSelector(ts)
+                    .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
+                    .build();
             playerView.setPlayer(player);
             playerView.setKeepScreenOn(true);
 
