@@ -277,8 +277,22 @@ public class PlayerActivity extends FragmentActivity {
             // (C2BqBuffer dequeue failures) → coupure toutes les ~20 s, surtout sur
             // les films 24 im/s. STRATEGY_OFF supprime ces appels tout en gardant
             // la SurfaceView (donc le HDR et le décodage matériel 4K).
+            // Réserve de lecture élargie mais bornée en RAM (TV ~1,8 Go) : encaisse
+            // les creux de débit du VPN/IPTV sans multiplier les « cercles » de
+            // rebuffering. Le plafond en octets (48 Mo) protège de l'OOM.
+            androidx.media3.exoplayer.LoadControl loadControl =
+                new androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(
+                        30_000,   // min : 30 s d'avance visée
+                        90_000,   // max : jusqu'à 90 s si la RAM/plafond le permet
+                        2_500,    // démarrer la lecture après 2,5 s bufferisées
+                        12_000)   // après un blocage : attendre 12 s avant de repartir
+                    .setTargetBufferBytes(48 * 1024 * 1024)      // plafond RAM ~48 Mo
+                    .setPrioritizeTimeOverSizeThresholds(false)  // le plafond octets prime
+                    .build();
             player = new ExoPlayer.Builder(this, rf)
                     .setTrackSelector(ts)
+                    .setLoadControl(loadControl)
                     .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
                     .build();
             playerView.setPlayer(player);
