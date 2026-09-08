@@ -241,8 +241,33 @@ public class PlayerActivity extends FragmentActivity {
             // Renderers + décodeur FFmpeg logiciel (E-AC3/AC3/DTS) en repli :
             // décodage matériel d'abord, FFmpeg quand la plateforme ne sait pas
             // (TV sans licence Dolby → la VF E-AC3 redevient lisible)
+            // Forcer le décodage audio en PCM (ni offload DSP, ni passthrough).
+            // Sur les TV MediaTek, l'audio Dolby E-AC3 part en offload matériel
+            // (offload_pipe_start/pause sur « Decoder_85 ») : ce pipeline se met en
+            // pause puis redémarre toutes les ~9 s, ce qui déclenche un
+            // AudioFlinger.moveEffectChain et gèle 2 à 7 s TOUT le pipeline A/V
+            // (le fameux « cercle » de rebuffering). En limitant les capacités du
+            // sink au PCM stéréo par défaut, ExoPlayer décode l'audio lui-même
+            // (décodeur plateforme, sinon FFmpeg) et écrit dans un AudioTrack PCM
+            // stable → plus d'offload instable, plus de gels. Le son sort en stéréo
+            // (parfait pour les HP de la TV ; un ampli Dolby ne recevra plus le
+            // bitstream 5.1, compromis acceptable vu l'instabilité).
             androidx.media3.exoplayer.DefaultRenderersFactory rf =
-                new androidx.media3.exoplayer.DefaultRenderersFactory(this)
+                new androidx.media3.exoplayer.DefaultRenderersFactory(this) {
+                    @Override
+                    protected androidx.media3.exoplayer.audio.AudioSink buildAudioSink(
+                            android.content.Context context,
+                            boolean enableFloatOutput,
+                            boolean enableAudioTrackPlaybackParams) {
+                        return new androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                            .setAudioCapabilities(
+                                androidx.media3.exoplayer.audio.AudioCapabilities
+                                    .DEFAULT_AUDIO_CAPABILITIES)
+                            .setEnableFloatOutput(enableFloatOutput)
+                            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                            .build();
+                    }
+                }
                     .setExtensionRendererMode(
                         androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
             // Ne PAS laisser ExoPlayer changer la fréquence d'image de l'écran.
