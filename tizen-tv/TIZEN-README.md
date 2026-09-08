@@ -23,6 +23,67 @@ un package signé pour une TV ne s'installe pas sur une autre.
 > un certificat auto-signé généré à la volée. Ces `.wgt` n'ont jamais pu s'installer sur
 > aucune TV. Voir la section *Erreurs d'installation* pour le détail.
 
+### Pistes déjà testées et écartées — ne pas les refaire
+
+Testé sur une **UE55NU7305 (Tizen 4.0, mode développeur actif, DUID `BDCJ72JNWV264`)**.
+Toutes ces tentatives échouent avec le même `install failed[118019]` :
+
+| Tentative | Résultat |
+|---|---|
+| Certificat auto-signé, DUID dans le `CN` | 118019 |
+| Retrait du privilège `packagemanager.install` **avec certificat auto-signé** | 118019 — test non concluant : le certificat était rejeté en amont (voir plus bas) |
+| Chaîne auto-signée complète à 3 certificats (racine → intermédiaire → feuille), signatures RSA valides | 118019 — une chaîne bien formée ne suffit pas |
+| `tizen-distributor-signer.p12` du SDK (public) | 118019 |
+| `sdk-public/tizen-distributor-signer-new.p12` (Tizen Studio Public) | 118019 |
+| `sdk-partner/tizen-distributor-signer.p12` | 118019 |
+| `sdk-partner/tizen-distributor-signer-new.p12` (Tizen Studio Partner) | 118019 |
+| `sdk-platform/tizen-distributor-signer-new.p12` (Tizen Studio Platform) | 118019 |
+
+Conclusion : les certificats distributeur livrés avec le SDK Tizen — pourtant adossés à
+de vraies CA (Tizen Association / Tizen Test CA) — **ne sont pas reconnus par une TV
+Samsung**, quel que soit leur niveau de privilège. Le magasin de confiance de la TV
+n'accepte que la racine **Samsung**. Il n'existe donc pas de chemin sans compte
+Samsung Developer.
+
+### Le certificat n'est pas la seule cause de `118019`
+
+Une fois le vrai certificat Samsung obtenu (release `tv-v1`, asset ré-uploadé le
+2026-09-05), l'installation échouait **toujours** en `118019` alors que le paquet
+était irréprochable — vérifié le 2026-09-08 sur la TV cible :
+
+```
+29 / 29 empreintes SHA-512 correctes
+signatures RSA-SHA512 valides (auteur ET distributeur)
+chaîne Samsung VD, dates valides
+SubjectAltName : URN:tizen:deviceid=BDCJ72JNWV264  ← la bonne TV
+```
+
+La cause réelle était le privilège **`packagemanager.install`**, de niveau
+**plateforme**, demandé avec un certificat distributeur *VD DEVELOPER **Public***.
+La TV renvoie le même code `118019` pour « certificat invalide » et pour
+« privilège hors du niveau du certificat » — d'où des heures perdues à
+soupçonner le certificat. Le privilège a été retiré de `config.xml`.
+
+**À retenir :** devant un `118019`, vérifier *deux* choses — la chaîne de
+certificats **et** le niveau de privilège demandé dans `config.xml`.
+
+### Deux pièges d'outillage rencontrés
+
+- **Git Bash corrompt les chemins Tizen.** `sdb push … /home/owner/share/…`
+  devient `C:/Program Files/Git/home/owner/share/…` (conversion MSYS) et la
+  commande d'installation répond juste `closed`, sans erreur explicite.
+  Lancer `sdb` depuis **PowerShell**, ou préfixer `MSYS_NO_PATHCONV=1`.
+- **Tizen signe en SHA-512 et C14N exclusive**, pas en SHA-256 inclusive.
+  Un vérificateur maison qui suppose SHA-256 déclare toutes les empreintes
+  fausses sur un paquet parfaitement valide. Attention aussi aux retours à la
+  ligne dans les `<DigestValue>` base64 : les retirer avant comparaison.
+
+À noter aussi : l'installeur Tizen Studio exige une **élévation UAC** sous Windows.
+Le paquet `certificate-generator` du dépôt SDK s'obtient en revanche sans installation :
+`http://download.tizen.org/sdk/tizenstudio/official/binary/certificate-generator_<ver>_windows-64.zip`
+(les `.p12` s'ouvrent avec le mot de passe `tizenpkcs12passfordsigner`, et la CA
+développeur avec celui indiqué dans `certificates/developer/conf.ini`).
+
 ---
 
 ## Prérequis
