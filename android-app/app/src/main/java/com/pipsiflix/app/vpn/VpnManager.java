@@ -26,6 +26,7 @@ public final class VpnManager {
     }
 
     public void addListener(Listener l) { listeners.add(l); }
+    public void removeListener(Listener l) { listeners.remove(l); }
     public State getState() { return state; }
     public VpnServer getCurrent() { return current; }
     public void setServers(List<VpnServer> s) { this.servers = new ArrayList<>(s); }

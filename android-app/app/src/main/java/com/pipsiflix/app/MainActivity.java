@@ -60,6 +60,10 @@ public class MainActivity extends AppCompatActivity {
     // mais si jamais il renotifiait le même état deux fois de suite, cette garde
     // évite de relancer un thread de reconnexion en double (voir onVpnState).
     private com.pipsiflix.app.vpn.VpnManager.State lastNotifiedVpnState = null;
+    // Listener VPN de l'instance courante — retiré à onDestroy() / avant ré-enregistrement,
+    // pour ne jamais laisser deux listeners actifs ou un listener référençant une
+    // Activity détruite (fuite après recreate() sur renderer mort).
+    private com.pipsiflix.app.vpn.VpnManager.Listener vpnListener;
 
     // Garde anti-boucle : si le renderer meurt en boucle (OOM appareil bas de gamme),
     // on ne recrée pas indéfiniment l'activité.
@@ -118,6 +122,10 @@ public class MainActivity extends AppCompatActivity {
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
+            // Après recreate (renderer mort) : sVpn existe déjà (statique) → ré-enregistrer
+            // le listener sur la nouvelle instance et considérer la porte ouverte
+            // (la WebView est restaurée).
+            if (sVpn != null) { vpnGateOpen = true; registerVpnListener(); }
         } else {
             // Vider le cache WebView au premier lancement de cette version
             android.content.SharedPreferences prefs =
@@ -144,7 +152,7 @@ public class MainActivity extends AppCompatActivity {
         // Listener d'état : marshale vers le thread UI. C'est lui qui pilote
         // désormais l'overlay et la reconnexion (voir onVpnState) — le tick de
         // santé ne fait plus que détecter la staleness (Task 8/9).
-        sVpn.addListener((st, cur) -> runOnUiThread(() -> onVpnState(st, cur)));
+        registerVpnListener();
         sVpn.setServers(com.pipsiflix.app.vpn.VpnServers.loadFromAssets(this));
 
         // Kill-switch distant : lu depuis pipsily_prefs/vpn_enabled_remote, stocké
@@ -166,6 +174,21 @@ public class MainActivity extends AppCompatActivity {
         android.content.Intent prep = android.net.VpnService.prepare(this);
         if (prep != null) startActivityForResult(prep, REQ_VPN_CONSENT);
         else connectThenLoad();
+    }
+
+    /**
+     * (Ré)enregistre le listener d'état VPN sur l'instance courante de l'Activity.
+     * Retire d'abord tout listener précédemment enregistré par CETTE instance
+     * (idempotent), puis en crée un nouveau qui marshale vers le thread UI.
+     * Nécessaire après recreate() (renderer mort) : sVpn est statique et survit,
+     * mais son ancien listener référence encore l'Activity détruite — sans ce
+     * ré-enregistrement, la nouvelle instance ne reçoit plus aucun état VPN.
+     */
+    private void registerVpnListener() {
+        if (sVpn == null) return;
+        if (vpnListener != null) sVpn.removeListener(vpnListener);
+        vpnListener = (st, cur) -> runOnUiThread(() -> onVpnState(st, cur));
+        sVpn.addListener(vpnListener);
     }
 
     @Override protected void onActivityResult(int req, int res, android.content.Intent data) {
@@ -242,8 +265,14 @@ public class MainActivity extends AppCompatActivity {
                         sVpn.connect(sVpn.getCurrent());
                 }).start();
                 break;
+            case IDLE:
+                hideVpnOverlay();
+                if (!vpnGateOpen) loadWebApp();  // ex: "Continuer sans VPN" depuis VpnActivity
+                break;
             case ERROR:
-                if (!vpnGateOpen) showVpnFailoverChoices(); // échec avant 1er chargement → failover
+                // échec (connexion ou reconnexion) : TOUJOURS proposer une issue,
+                // en session comme au démarrage → jamais de gel.
+                showVpnFailoverChoices();
                 break;
             default:
                 break;
@@ -271,13 +300,28 @@ public class MainActivity extends AppCompatActivity {
         new android.app.AlertDialog.Builder(this)
             .setTitle("VPN indisponible")
             .setMessage("Aucun serveur n'a répondu.")
-            .setPositiveButton("Réessayer", (d,w) -> connectThenLoad())
+            .setPositiveButton("Réessayer", (d,w) -> {
+                if (!vpnGateOpen) { connectThenLoad(); }
+                else {
+                    showVpnOverlay("Reconnexion VPN…");
+                    new Thread(() -> {
+                        if (sVpnPrefs.autoFastest())
+                            sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+                        else if (sVpn.getCurrent() != null)
+                            sVpn.connect(sVpn.getCurrent());
+                    }).start();
+                }
+            })
             .setNeutralButton("Choisir un serveur", (d,w) -> {
                 hideVpnOverlay();
                 startActivity(new android.content.Intent(this, com.pipsiflix.app.vpn.VpnActivity.class));
             })
             .setNegativeButton("Continuer sans VPN", (d,w) -> {
-                sVpnPrefs.setSessionOverride(true); hideVpnOverlay(); loadWebApp();
+                sVpnPrefs.setSessionOverride(true);
+                hideVpnOverlay();
+                sVpn.disconnect();               // → IDLE → onVpnState(IDLE) ouvre la porte si besoin
+                if (vpnGateOpen) webView.evaluateJavascript(
+                    "try{document.querySelectorAll('video').forEach(v=>v.play());}catch(e){}", null);
             })
             .setCancelable(false).show();
     }
@@ -789,6 +833,7 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
         unregisterApkReceiver();
         vpnHealth.removeCallbacks(vpnHealthTick);
+        if (sVpn != null && vpnListener != null) sVpn.removeListener(vpnListener);
         sInstance = null;
     }
 
