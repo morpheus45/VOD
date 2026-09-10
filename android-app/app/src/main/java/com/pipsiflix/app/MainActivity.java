@@ -56,6 +56,14 @@ public class MainActivity extends AppCompatActivity {
     public static com.pipsiflix.app.vpn.VpnManager vpn() { return sVpn; }
     public static com.pipsiflix.app.vpn.VpnPrefs vpnPrefs() { return sVpnPrefs; }
     private boolean vpnGateOpen = false; // true quand on peut charger la WebView
+    // Porte VPN effectivement franchie au moins une fois (loadWebApp() appelé) — statique,
+    // survit donc à recreate() (même process, après un crash renderer). Sert à distinguer,
+    // sur recreate, "une page avait bien été chargée avant le crash" (on peut rouvrir
+    // vpnGateOpen sans risque) de "le crash a eu lieu PENDANT la connexion VPN initiale,
+    // avant tout chargement" (rouvrir la porte inconditionnellement ferait prendre aux
+    // transitions VPN suivantes la branche "reprise JS" sur une page inexistante → écran
+    // blanc définitif). Voir onCreate() et loadWebApp().
+    private static boolean sVpnGateOpened = false;
     // Garde anti-double-déclenchement : set() ne notifie qu'aux changements d'état,
     // mais si jamais il renotifiait le même état deux fois de suite, cette garde
     // évite de relancer un thread de reconnexion en double (voir onVpnState).
@@ -123,9 +131,19 @@ public class MainActivity extends AppCompatActivity {
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
             // Après recreate (renderer mort) : sVpn existe déjà (statique) → ré-enregistrer
-            // le listener sur la nouvelle instance et considérer la porte ouverte
-            // (la WebView est restaurée).
-            if (sVpn != null) { vpnGateOpen = true; registerVpnListener(); }
+            // le listener sur la nouvelle instance dans tous les cas.
+            if (sVpn != null) registerVpnListener();
+            if (sVpnGateOpened) {
+                // une page avait bien été chargée avant le crash → porte déjà ouverte
+                vpnGateOpen = true;
+            } else if (sVpn != null) {
+                // crash pendant la phase de connexion VPN (avant tout chargement) →
+                // refaire connexion + chargement (le consentement Android persiste)
+                connectThenLoad();
+            } else {
+                // VPN non initialisé (ne devrait pas arriver ici) → chargement normal
+                loadWebApp();
+            }
         } else {
             // Vider le cache WebView au premier lancement de cette version
             android.content.SharedPreferences prefs =
@@ -223,7 +241,11 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    private void loadWebApp() { vpnGateOpen = true; webView.loadUrl(APP_URL); }
+    private void loadWebApp() {
+        vpnGateOpen = true;
+        sVpnGateOpened = true;
+        webView.loadUrl(APP_URL);
+    }
 
     /**
      * Réagit à CHAQUE transition d'état du VPN (appelé sur le thread UI via le
@@ -309,6 +331,8 @@ public class MainActivity extends AppCompatActivity {
                             sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
                         else if (sVpn.getCurrent() != null)
                             sVpn.connect(sVpn.getCurrent());
+                        else
+                            sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
                     }).start();
                 }
             })
