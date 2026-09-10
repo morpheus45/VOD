@@ -15,7 +15,10 @@ public final class VpnManager {
     private final String selfPackage;
     private final List<Listener> listeners = new ArrayList<>();
     private List<VpnServer> servers = new ArrayList<>();
-    private State state = State.IDLE;
+    // volatile : l'état est lu par le thread UI (tick de santé) et écrit par les
+    // threads de (re)connexion en arrière-plan — sans ça, le tick peut lire une
+    // valeur périmée et manquer la transition RECONNECTING→CONNECTED.
+    private volatile State state = State.IDLE;
     private VpnServer current = null;
 
     public VpnManager(WgBackend backend, String selfPackage) {

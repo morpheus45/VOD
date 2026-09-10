@@ -56,6 +56,10 @@ public class MainActivity extends AppCompatActivity {
     public static com.pipsiflix.app.vpn.VpnManager vpn() { return sVpn; }
     public static com.pipsiflix.app.vpn.VpnPrefs vpnPrefs() { return sVpnPrefs; }
     private boolean vpnGateOpen = false; // true quand on peut charger la WebView
+    // Garde anti-double-déclenchement : set() ne notifie qu'aux changements d'état,
+    // mais si jamais il renotifiait le même état deux fois de suite, cette garde
+    // évite de relancer un thread de reconnexion en double (voir onVpnState).
+    private com.pipsiflix.app.vpn.VpnManager.State lastNotifiedVpnState = null;
 
     // Garde anti-boucle : si le renderer meurt en boucle (OOM appareil bas de gamme),
     // on ne recrée pas indéfiniment l'activité.
@@ -137,6 +141,10 @@ public class MainActivity extends AppCompatActivity {
         sVpnPrefs = new com.pipsiflix.app.vpn.VpnPrefs(this);
         sVpn = new com.pipsiflix.app.vpn.VpnManager(
             new com.pipsiflix.app.vpn.GoWgBackend(this), getPackageName());
+        // Listener d'état : marshale vers le thread UI. C'est lui qui pilote
+        // désormais l'overlay et la reconnexion (voir onVpnState) — le tick de
+        // santé ne fait plus que détecter la staleness (Task 8/9).
+        sVpn.addListener((st, cur) -> runOnUiThread(() -> onVpnState(st, cur)));
         sVpn.setServers(com.pipsiflix.app.vpn.VpnServers.loadFromAssets(this));
 
         // Kill-switch distant : lu depuis pipsily_prefs/vpn_enabled_remote, stocké
@@ -173,6 +181,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void connectThenLoad() {
         showVpnOverlay("Connexion VPN…");
+        // La réaction à l'issue de CETTE connexion (CONNECTED → ferme l'overlay
+        // + charge l'appli ; ERROR → failover) n'est PLUS gérée ici : le listener
+        // global (sVpn.addListener, voir startWithVpnThenLoad) est déjà enregistré
+        // à ce stade et reçoit exactement les mêmes transitions d'état via
+        // set(). Réagir aussi ici doublerait l'action (double loadWebApp() /
+        // double AlertDialog de failover) — c'est onVpnState() qui décide seul.
         new Thread(() -> {
             if (sVpnPrefs.autoFastest() || sVpnPrefs.lastServerId() == null) {
                 sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
@@ -183,17 +197,58 @@ public class MainActivity extends AppCompatActivity {
                 if (last != null) sVpn.connect(last);
                 else sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
             }
-            runOnUiThread(() -> {
-                if (sVpn.getState() == com.pipsiflix.app.vpn.VpnManager.State.CONNECTED) {
-                    hideVpnOverlay(); loadWebApp();
-                } else {
-                    showVpnFailoverChoices(); // Réessayer / Auto / Continuer sans VPN
-                }
-            });
         }).start();
     }
 
     private void loadWebApp() { vpnGateOpen = true; webView.loadUrl(APP_URL); }
+
+    /**
+     * Réagit à CHAQUE transition d'état du VPN (appelé sur le thread UI via le
+     * listener enregistré dans startWithVpnThenLoad). Remplace la logique
+     * before/after synchrone de l'ancien tick de santé, qui ratait les
+     * reconnexions asynchrones (Task 8/9 — corrige l'overlay figé + l'impasse
+     * du failover « Choisir un serveur »).
+     */
+    private void onVpnState(com.pipsiflix.app.vpn.VpnManager.State st,
+                            com.pipsiflix.app.vpn.VpnServer cur) {
+        // Garde anti-boucle : set() ne notifie qu'aux changements, mais on se
+        // protège si jamais il renotifiait deux fois le même état de suite
+        // (éviterait de relancer un 2e thread de reconnexion en RECONNECTING).
+        if (st == lastNotifiedVpnState) return;
+        lastNotifiedVpnState = st;
+
+        switch (st) {
+            case CONNECTED:
+                hideVpnOverlay();
+                if (!vpnGateOpen) {
+                    loadWebApp();                 // 1er passage ou après failover → ouvre la porte
+                } else {
+                    // reprise de lecture après une reconnexion
+                    webView.evaluateJavascript(
+                        "try{document.querySelectorAll('video').forEach(v=>v.play());}catch(e){}", null);
+                }
+                break;
+            case RECONNECTING:
+                showVpnOverlay("Reconnexion VPN…");
+                if (vpnGateOpen) {
+                    webView.evaluateJavascript(
+                        "try{document.querySelectorAll('video').forEach(v=>v.pause());}catch(e){}", null);
+                }
+                // déclenche la reconnexion réelle (async) — une seule fois par bascule
+                new Thread(() -> {
+                    if (sVpnPrefs.autoFastest())
+                        sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+                    else if (sVpn.getCurrent() != null)
+                        sVpn.connect(sVpn.getCurrent());
+                }).start();
+                break;
+            case ERROR:
+                if (!vpnGateOpen) showVpnFailoverChoices(); // échec avant 1er chargement → failover
+                break;
+            default:
+                break;
+        }
+    }
 
     // ── Overlay natif anti-blocage (pas de vidéo affichée avant l'ouverture du tunnel) ──
     private android.widget.FrameLayout vpnOverlay;
@@ -232,29 +287,7 @@ public class MainActivity extends AppCompatActivity {
     private final Runnable vpnHealthTick = new Runnable() {
         @Override public void run() {
             if (sVpn != null && vpnGateOpen) {
-                com.pipsiflix.app.vpn.VpnManager.State before = sVpn.getState();
-                sVpn.onHealthTick();
-                com.pipsiflix.app.vpn.VpnManager.State after = sVpn.getState();
-                if (after == com.pipsiflix.app.vpn.VpnManager.State.RECONNECTING) {
-                    // pause la lecture web + affiche l'overlay
-                    webView.evaluateJavascript(
-                        "try{document.querySelectorAll('video').forEach(v=>v.pause());}catch(e){}", null);
-                    showVpnOverlay("Reconnexion VPN…");
-                    // onHealthTick() ne fait QUE flip RECONNECTING (décision Task 5) :
-                    // c'est ICI qu'on déclenche la reconnexion réelle, une seule fois,
-                    // en tâche de fond (sinon jamais de reprise).
-                    if (before != com.pipsiflix.app.vpn.VpnManager.State.RECONNECTING) {
-                        new Thread(() -> {
-                            if (sVpnPrefs.autoFastest())
-                                sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
-                            else if (sVpn.getCurrent() != null)
-                                sVpn.connect(sVpn.getCurrent());
-                        }).start();
-                    }
-                } else if (after == com.pipsiflix.app.vpn.VpnManager.State.CONNECTED
-                           && before != com.pipsiflix.app.vpn.VpnManager.State.CONNECTED) {
-                    hideVpnOverlay();
-                }
+                sVpn.onHealthTick();   // détecte staleness → passe RECONNECTING → le listener réagit
             }
             vpnHealth.postDelayed(this, 5000);
         }
