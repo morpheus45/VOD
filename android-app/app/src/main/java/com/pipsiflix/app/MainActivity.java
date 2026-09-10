@@ -171,7 +171,9 @@ public class MainActivity extends AppCompatActivity {
         // désormais l'overlay et la reconnexion (voir onVpnState) — le tick de
         // santé ne fait plus que détecter la staleness (Task 8/9).
         registerVpnListener();
-        sVpn.setServers(com.pipsiflix.app.vpn.VpnServers.loadFromAssets(this));
+        // Les serveurs (WARP généré PAR APPAREIL au 1er lancement + configs assets
+        // optionnelles) sont assemblés dans connectThenLoad(), sur un thread de fond,
+        // car l'enregistrement WARP est un appel réseau bloquant — jamais sur l'UI.
 
         // Kill-switch distant : lu depuis pipsily_prefs/vpn_enabled_remote, stocké
         // par le parseur de version.json (si présent) — défaut true (fail-open),
@@ -183,7 +185,7 @@ public class MainActivity extends AppCompatActivity {
         boolean enforce = com.pipsiflix.app.vpn.VpnGate.shouldEnforce(
             sVpnPrefs.isEnabled(), remoteEnabled, sVpnPrefs.sessionOverride());
 
-        if (!enforce || sVpn.getServers().isEmpty()) {
+        if (!enforce) {
             // Porte de retour : pas de VPN → comportement v60 exact.
             loadWebApp();
             return;
@@ -229,6 +231,21 @@ public class MainActivity extends AppCompatActivity {
         // set(). Réagir aussi ici doublerait l'action (double loadWebApp() /
         // double AlertDialog de failover) — c'est onVpnState() qui décide seul.
         new Thread(() -> {
+            // Assembler les serveurs sur ce thread de fond : WARP propre à l'appareil
+            // (généré au 1er lancement puis mis en cache) + configs assets optionnelles
+            // (multi-pays éventuel). Aucune clé n'est embarquée dans l'APK.
+            java.util.List<com.pipsiflix.app.vpn.VpnServer> servers = new java.util.ArrayList<>();
+            com.pipsiflix.app.vpn.VpnServer warp =
+                com.pipsiflix.app.vpn.WarpProvisioner.getOrCreate(this);
+            if (warp != null) servers.add(warp);
+            servers.addAll(com.pipsiflix.app.vpn.VpnServers.loadFromAssets(this));
+            sVpn.setServers(servers);
+
+            if (servers.isEmpty()) {
+                // Échec réseau WARP + aucune config assets → failover (jamais de gel).
+                runOnUiThread(() -> { hideVpnOverlay(); showVpnFailoverChoices(); });
+                return;
+            }
             if (sVpnPrefs.autoFastest() || sVpnPrefs.lastServerId() == null) {
                 sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
             } else {

@@ -13,5 +13,3 @@ debug.keystore
 # Configs VPN WireGuard — secrets, jamais dans le dépôt public
 app/src/main/assets/vpn/*.conf
 
-# Config WARP embarquée volontairement pour la release publique VPN-active (clé anonyme)
-!app/src/main/assets/vpn/cloudflare-warp.conf
