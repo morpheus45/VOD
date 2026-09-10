@@ -50,6 +50,13 @@ public class MainActivity extends AppCompatActivity {
     // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
     static WeakReference<MainActivity> sInstance;
 
+    // ── VPN (WireGuard) — instance unique partagée avec VpnActivity/PipsilyBridge ──
+    private static com.pipsiflix.app.vpn.VpnManager sVpn;
+    private static com.pipsiflix.app.vpn.VpnPrefs sVpnPrefs;
+    public static com.pipsiflix.app.vpn.VpnManager vpn() { return sVpn; }
+    public static com.pipsiflix.app.vpn.VpnPrefs vpnPrefs() { return sVpnPrefs; }
+    private boolean vpnGateOpen = false; // true quand on peut charger la WebView
+
     // Garde anti-boucle : si le renderer meurt en boucle (OOM appareil bas de gamme),
     // on ne recrée pas indéfiniment l'activité.
     private static long sLastRecreate  = 0;
@@ -117,9 +124,141 @@ public class MainActivity extends AppCompatActivity {
                 webView.clearHistory();
                 prefs.edit().putString("apk_version", APK_VERSION).apply();
             }
-            webView.loadUrl(APP_URL);
+            startWithVpnThenLoad();   // ← remplace webView.loadUrl(APP_URL)
         }
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  VPN (WireGuard) — gating démarrage, consentement, reconnexion (Task 9)
+    // ══════════════════════════════════════════════════════════════════════
+    private static final int REQ_VPN_CONSENT = 8931;
+
+    private void startWithVpnThenLoad() {
+        sVpnPrefs = new com.pipsiflix.app.vpn.VpnPrefs(this);
+        sVpn = new com.pipsiflix.app.vpn.VpnManager(
+            new com.pipsiflix.app.vpn.GoWgBackend(this), getPackageName());
+        sVpn.setServers(com.pipsiflix.app.vpn.VpnServers.loadFromAssets(this));
+
+        // Kill-switch distant : lu depuis pipsily_prefs/vpn_enabled_remote, stocké
+        // par le parseur de version.json (si présent) — défaut true (fail-open),
+        // voir Step 5 du brief Task 9 : aucun point de parsing JSON existant de
+        // version.json n'a été trouvé côté Java (l'updater vit côté JS), donc ce
+        // flag reste à sa valeur par défaut tant qu'aucun code ne l'écrit.
+        boolean remoteEnabled = getSharedPreferences("pipsily_prefs", MODE_PRIVATE)
+            .getBoolean("vpn_enabled_remote", true);
+        boolean enforce = com.pipsiflix.app.vpn.VpnGate.shouldEnforce(
+            sVpnPrefs.isEnabled(), remoteEnabled, sVpnPrefs.sessionOverride());
+
+        if (!enforce || sVpn.getServers().isEmpty()) {
+            // Porte de retour : pas de VPN → comportement v60 exact.
+            loadWebApp();
+            return;
+        }
+        // Consentement Android (une fois), puis connexion, puis chargement.
+        android.content.Intent prep = android.net.VpnService.prepare(this);
+        if (prep != null) startActivityForResult(prep, REQ_VPN_CONSENT);
+        else connectThenLoad();
+    }
+
+    @Override protected void onActivityResult(int req, int res, android.content.Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req == REQ_VPN_CONSENT) {
+            if (res == RESULT_OK) connectThenLoad();
+            else { // refus → on ne bloque pas l'appli
+                android.widget.Toast.makeText(this, "VPN refusé — lecture sans VPN", android.widget.Toast.LENGTH_LONG).show();
+                sVpnPrefs.setSessionOverride(true); loadWebApp();
+            }
+        }
+    }
+
+    private void connectThenLoad() {
+        showVpnOverlay("Connexion VPN…");
+        new Thread(() -> {
+            if (sVpnPrefs.autoFastest() || sVpnPrefs.lastServerId() == null) {
+                sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+            } else {
+                com.pipsiflix.app.vpn.VpnServer last = null;
+                for (com.pipsiflix.app.vpn.VpnServer s : sVpn.getServers())
+                    if (s.id.equals(sVpnPrefs.lastServerId())) last = s;
+                if (last != null) sVpn.connect(last);
+                else sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+            }
+            runOnUiThread(() -> {
+                if (sVpn.getState() == com.pipsiflix.app.vpn.VpnManager.State.CONNECTED) {
+                    hideVpnOverlay(); loadWebApp();
+                } else {
+                    showVpnFailoverChoices(); // Réessayer / Auto / Continuer sans VPN
+                }
+            });
+        }).start();
+    }
+
+    private void loadWebApp() { vpnGateOpen = true; webView.loadUrl(APP_URL); }
+
+    // ── Overlay natif anti-blocage (pas de vidéo affichée avant l'ouverture du tunnel) ──
+    private android.widget.FrameLayout vpnOverlay;
+    private void showVpnOverlay(String msg) {
+        if (vpnOverlay == null) {
+            vpnOverlay = new android.widget.FrameLayout(this);
+            vpnOverlay.setBackgroundColor(0xEE0A0A0F);
+            android.widget.TextView tv = new android.widget.TextView(this);
+            tv.setId(android.R.id.text1); tv.setTextColor(0xFFFFFFFF); tv.setTextSize(18);
+            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(-2, -2);
+            lp.gravity = android.view.Gravity.CENTER; vpnOverlay.addView(tv, lp);
+            addContentView(vpnOverlay, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        }
+        ((android.widget.TextView) vpnOverlay.findViewById(android.R.id.text1)).setText(msg);
+        vpnOverlay.setVisibility(android.view.View.VISIBLE);
+    }
+    private void hideVpnOverlay() { if (vpnOverlay != null) vpnOverlay.setVisibility(android.view.View.GONE); }
+
+    private void showVpnFailoverChoices() {
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("VPN indisponible")
+            .setMessage("Aucun serveur n'a répondu.")
+            .setPositiveButton("Réessayer", (d,w) -> connectThenLoad())
+            .setNeutralButton("Choisir un serveur", (d,w) -> {
+                hideVpnOverlay();
+                startActivity(new android.content.Intent(this, com.pipsiflix.app.vpn.VpnActivity.class));
+            })
+            .setNegativeButton("Continuer sans VPN", (d,w) -> {
+                sVpnPrefs.setSessionOverride(true); hideVpnOverlay(); loadWebApp();
+            })
+            .setCancelable(false).show();
+    }
+
+    // ── Surveillance du tunnel (spec §6) : pause lecture si le tunnel tombe, reprend au retour ──
+    private final android.os.Handler vpnHealth = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable vpnHealthTick = new Runnable() {
+        @Override public void run() {
+            if (sVpn != null && vpnGateOpen) {
+                com.pipsiflix.app.vpn.VpnManager.State before = sVpn.getState();
+                sVpn.onHealthTick();
+                com.pipsiflix.app.vpn.VpnManager.State after = sVpn.getState();
+                if (after == com.pipsiflix.app.vpn.VpnManager.State.RECONNECTING) {
+                    // pause la lecture web + affiche l'overlay
+                    webView.evaluateJavascript(
+                        "try{document.querySelectorAll('video').forEach(v=>v.pause());}catch(e){}", null);
+                    showVpnOverlay("Reconnexion VPN…");
+                    // onHealthTick() ne fait QUE flip RECONNECTING (décision Task 5) :
+                    // c'est ICI qu'on déclenche la reconnexion réelle, une seule fois,
+                    // en tâche de fond (sinon jamais de reprise).
+                    if (before != com.pipsiflix.app.vpn.VpnManager.State.RECONNECTING) {
+                        new Thread(() -> {
+                            if (sVpnPrefs.autoFastest())
+                                sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+                            else if (sVpn.getCurrent() != null)
+                                sVpn.connect(sVpn.getCurrent());
+                        }).start();
+                    }
+                } else if (after == com.pipsiflix.app.vpn.VpnManager.State.CONNECTED
+                           && before != com.pipsiflix.app.vpn.VpnManager.State.CONNECTED) {
+                    hideVpnOverlay();
+                }
+            }
+            vpnHealth.postDelayed(this, 5000);
+        }
+    };
 
     /**
      * Purge les caches WebView volumineux (CacheStorage du Service Worker, cache
@@ -600,9 +739,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        vpnHealth.removeCallbacks(vpnHealthTick);
+        vpnHealth.postDelayed(vpnHealthTick, 5000);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        vpnHealth.removeCallbacks(vpnHealthTick);
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         unregisterApkReceiver();
+        vpnHealth.removeCallbacks(vpnHealthTick);
         sInstance = null;
     }
 
@@ -668,6 +821,20 @@ public class MainActivity extends AppCompatActivity {
     //  Bridge JavaScript ↔ Java  (window.AndroidBridge)
     // ══════════════════════════════════════════════════════════════════════
     class PipsilyBridge {
+
+        /** Ouvre l'écran natif de sélection VPN (pastille / accès rapide côté JS). */
+        @JavascriptInterface
+        public void openVpn() {
+            runOnUiThread(() -> startActivity(
+                new android.content.Intent(MainActivity.this, com.pipsiflix.app.vpn.VpnActivity.class)));
+        }
+
+        /** État courant du VPN pour l'UI web : "ETAT|libellé". */
+        @JavascriptInterface
+        public String getVpnState() {
+            return sVpn == null ? "OFF" : sVpn.getState().name()
+                + "|" + (sVpn.getCurrent() != null ? sVpn.getCurrent().label : "");
+        }
 
         /** Lecteur natif ExoPlayer — appelé par app.js PipPlayer */
         @JavascriptInterface
