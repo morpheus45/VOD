@@ -13,7 +13,11 @@ public final class VpnManager {
 
     private final WgBackend backend;
     private final String selfPackage;
-    private final List<Listener> listeners = new ArrayList<>();
+    // CopyOnWriteArrayList : la liste est mutée depuis le thread UI
+    // (register/removeListener) et itérée depuis les threads de connexion
+    // (set()) → un ArrayList nu risquerait une ConcurrentModificationException
+    // (thread de connexion tué → gel). COW rend l'itération sûre sans verrou.
+    private final List<Listener> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private List<VpnServer> servers = new ArrayList<>();
     // volatile : l'état est lu par le thread UI (tick de santé) et écrit par les
     // threads de (re)connexion en arrière-plan — sans ça, le tick peut lire une
