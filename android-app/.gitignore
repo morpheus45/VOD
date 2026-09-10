@@ -9,3 +9,6 @@ captures/
 *.apk
 *.aab
 debug.keystore
+
+# Configs VPN WireGuard — secrets, jamais dans le dépôt public
+app/src/main/assets/vpn/*.conf

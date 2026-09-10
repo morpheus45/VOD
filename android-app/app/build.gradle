@@ -102,4 +102,9 @@ dependencies {
     // vocal système (Fire TV : ni Google, ni RecognitionService). Le modèle
     // français n'est PAS embarqué : il est téléchargé au 1er usage vocal.
     implementation 'com.alphacephei:vosk-android:0.3.47'
+
+    // ── VPN WireGuard embarqué (backend WireGuard-Go) ──
+    implementation 'com.wireguard.android:tunnel:1.0.20230706'
+    // Tests JVM
+    testImplementation 'junit:junit:4.13.2'
 }
