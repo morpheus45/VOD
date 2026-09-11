@@ -1742,6 +1742,8 @@ function applyGrid(){
   if(S.gridFilter)items=items.filter(i=>i.category===S.gridFilter);
   if(S.gridQuality)items=items.filter(i=>i.quality===S.gridQuality);
   if(S.gridFavOnly){const favKeys=new Set(getFavs().map(f=>(f.key||f.k)));items=items.filter(i=>favKeys.has(itemKey(i)));}
+  // Une grille ne doit jamais afficher deux fois le meme titre.
+  items=dedupeByTitle(items);
   if(S.gridSort==='recent')items=[...items].sort((a,b)=>Number(b.added)-Number(a.added));
   // Locale explicite : sans elle, « Été » passait après « Zoo » sur les WebView
   // dont la locale par défaut n'est pas le français.
@@ -2384,6 +2386,26 @@ function shelfGridType(list){
   let s=0; for(let k=0;k<list.length;k++){ if(list[k].series_id) s++; }
   return s*2>list.length?'shows':'movies';
 }
+// Deux entrées du même titre dans UNE MÊME liste = doublon visible à l'écran.
+// Le fournisseur réimporte régulièrement un film sous un nouvel identifiant :
+// 267 cas mesurés côté films (dont 101 dans le seul rayon « LATEST MOVIES »)
+// et 56 côté séries, avec souvent la même affiche. On garde l'entrée la plus
+// récemment ajoutée, qui pointe en général sur la source encore valide.
+// La déduplication est LOCALE à la liste affichée : un film légitimement
+// présent dans « Netflix » ET dans « Derniers ajouts » reste dans les deux.
+function dedupeByTitle(list){
+  const key=it=>String(it&&it.title||'').toLowerCase().replace(/\s+/g,' ').trim();
+  const best={};
+  for(let i=0;i<list.length;i++){
+    const k=key(list[i]); if(!k) continue;
+    const b=best[k];
+    if(b===undefined||Number(list[i].added||0)>Number(list[b].added||0)) best[k]=i;
+  }
+  const keep={};
+  for(const k in best) keep[best[k]]=true;
+  return list.filter((it,i)=>!key(it)||keep[i]);
+}
+
 // items : liste DÉJÀ filtrée par isClean. gridType : 'movies' | 'shows' | null
 // (null = déduit par catégorie, pour l'accueil qui mélange films et séries).
 function buildCatRows(items,gridType){
@@ -2402,7 +2424,9 @@ function buildCatRows(items,gridType){
     const pa=shelfPrio(a[0]), pb=shelfPrio(b[0]);
     return pa!==pb ? pa-pb : b[1].length-a[1].length;
   }).map(function(e){
-    const cat=e[0], list=e[1], gt=gridType||shelfGridType(list);
+    // Dédup PAR RAYON : supprime les doublons visibles dans une même étagère
+    // sans retirer un titre légitimement présent dans deux rayons différents.
+    const cat=e[0], list=dedupeByTitle(e[1]), gt=gridType||shelfGridType(list);
     const label=shelfLabel(cat);
     const head=list.slice(0,SHELF_MAX);
     return {
@@ -2433,9 +2457,9 @@ function renderTabHome(){
   // d'entree vers la grille complete (tous rayons confondus), donc vers les
   // titres qui n'ont pas d'etagere dediee sur cet ecran.
   const _vodC=S.allVod.filter(isClean), _serC=S.allSeries.filter(isClean);
-  const newFilms=_vodC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
+  const newFilms=dedupeByTitle(_vodC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0))).slice(0,20);
   if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms.concat([shelfSeeAllCard('movies','Tous les films',_vodC.length)])});
-  const newSeries=_serC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
+  const newSeries=dedupeByTitle(_serC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0))).slice(0,20);
   if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries.concat([shelfSeeAllCard('shows','Toutes les series',_serC.length)])});
   if(S.heroPool.length)rows.push({title:'Recommande pour vous',items:S.heroPool.slice(0,25)});
   // Categories mixtes — l'accueil reste une vitrine : on limite le NOMBRE
@@ -2456,7 +2480,7 @@ function renderTabMovies(){
   const p=poursuivreItems('vod');                       // Films : que les films
   if(p.length)rows.push({title:'Poursuivre',items:p});
   const _vodC=S.allVod.filter(isClean);
-  const newFilms=_vodC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
+  const newFilms=dedupeByTitle(_vodC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0))).slice(0,25);
   if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms.concat([shelfSeeAllCard('movies','Tous les films',_vodC.length)])});
   // TOUTES les categories de films, sans coupe au rang ni exclusion LATEST.
   buildCatRows(S.allVod.filter(isClean),'movies').forEach(r=>rows.push(r));
@@ -2470,7 +2494,7 @@ function renderTabShows(){
   const p=poursuivreItems('series');                    // Séries : que les séries
   if(p.length)rows.push({title:'Poursuivre',items:p});
   const _serC=S.allSeries.filter(isClean);
-  const newSeries=_serC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
+  const newSeries=dedupeByTitle(_serC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0))).slice(0,25);
   if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries.concat([shelfSeeAllCard('shows','Toutes les series',_serC.length)])});
   // TOUTES les categories de series, sans coupe au rang ni exclusion LATEST.
   buildCatRows(S.allSeries.filter(isClean),'shows').forEach(r=>rows.push(r));

@@ -103,6 +103,21 @@ for (const [label, file, isSerie, gridType] of [
   const adult = rows.filter(r => ADULT_RE.test(r.title)).map(r => r.title);
   adult.length ? bad('categorie adulte affichee : ' + adult.join(', ')) : ok('aucune categorie adulte');
 
+  // e. aucun doublon de titre A L'INTERIEUR d'une meme etagere
+  const dupRows = [];
+  rows.forEach(r => {
+    const seen = new Set(), dups = [];
+    r.items.filter(it => !it.seeAll).forEach(it => {
+      const k = String(it.title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!k) return;
+      if (seen.has(k)) dups.push(it.title); else seen.add(k);
+    });
+    if (dups.length) dupRows.push(r.title + ' (' + dups.length + ')');
+  });
+  dupRows.length
+    ? bad('doublons dans une etagere : ' + dupRows.join(', '))
+    : ok('aucun doublon a l interieur d une etagere');
+
   console.log('  -> ' + rows.length + ' etageres, ' + items.length + ' titres couverts');
   rows.forEach(r => console.log('     ' + String(r.items.filter(i => !i.seeAll).length).padStart(3) +
     (r.items.some(i => i.seeAll) ? ' +tout ' : '       ') + r.title));
@@ -130,6 +145,7 @@ const captured = {};
 const box = {
   console,
   ADULT_RE, isClean, buildCatRows: sandbox._api.buildCatRows,
+  dedupeByTitle: vm.runInContext('dedupeByTitle', sandbox),
   shelfSeeAllCard: vm.runInContext('shelfSeeAllCard', sandbox),
   HOME_MAX_SHELVES: vm.runInContext('HOME_MAX_SHELVES', sandbox),
   S: { appItems: [], heroPool: [], liveItems: [], rows: [],
