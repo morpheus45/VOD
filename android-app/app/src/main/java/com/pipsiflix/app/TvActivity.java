@@ -148,6 +148,8 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
             }
             webView.loadUrl(APP_URL);
         }
+        // Le WebView charge deja : le VPN demarre a cote, sans rien bloquer.
+        startVpnWatch();
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -562,6 +564,7 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     protected void onDestroy() {
         super.onDestroy();
         unregisterApkReceiver();
+        vpnHealth.removeCallbacks(vpnHealthTick);
         sInstance = null;
         if (previewPlayer != null) { previewPlayer.release(); previewPlayer = null; }
         if (previewSurface != null) { previewSurface.release(); previewSurface = null; }
@@ -782,6 +785,12 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_TV_VPN_CONSENT) {
+            com.pipsiflix.app.vpn.VpnManager m = com.pipsiflix.app.MainActivity.vpn();
+            if (resultCode == RESULT_OK && m != null) new Thread(() -> connectVpn(m)).start();
+            else Log.i(TAG, "Consentement VPN refuse — la TV continue sans VPN");
+            return;
+        }
         if (requestCode == VOICE_REQUEST_CODE) {
             String text = null;
             if (resultCode == RESULT_OK && data != null) {
@@ -1098,4 +1107,105 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
             }).start();
         }
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  VPN sur Android TV — montage et surveillance
+    //
+    //  Tout le cycle de vie du VPN vivait dans MainActivity, qui est le lanceur
+    //  TÉLÉPHONE. Sur TV c'est TvActivity qui démarre (LEANBACK_LAUNCHER, HOME
+    //  et BootReceiver) et elle ne touchait pas au VPN : le tunnel n'était
+    //  jamais monté ni surveillé. Comme ConfigAugmenter ne route QUE notre
+    //  paquet (per-app), un tunnel à moitié mort envoyait le flux vidéo dans un
+    //  trou noir — coupure en pleine lecture, et rien ne la réparait, même en
+    //  relançant PIPSILY.
+    //
+    //  Choix volontaire : ce démarrage est NON BLOQUANT. Le WebView est déjà en
+    //  train de charger quand on arrive ici, et rien n'attend le VPN. Une
+    //  panne de tunnel ne peut donc pas figer l'écran d'accueil de la TV.
+    // ══════════════════════════════════════════════════════════════════════
+    private static final int  REQ_TV_VPN_CONSENT = 8932;
+    private static final long VPN_TICK_MS        = 5000L;
+    private static final int  VPN_MAX_RETRIES    = 4;
+    private int vpnRetries = 0;
+    private final android.os.Handler vpnHealth =
+        new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable vpnHealthTick = new Runnable() {
+        @Override public void run() {
+            com.pipsiflix.app.vpn.VpnManager m = com.pipsiflix.app.MainActivity.vpn();
+            if (m != null) m.onHealthTick();
+            vpnHealth.postDelayed(this, VPN_TICK_MS);
+        }
+    };
+
+    private void startVpnWatch() {
+        com.pipsiflix.app.vpn.VpnPrefs prefs;
+        final com.pipsiflix.app.vpn.VpnManager m;
+        try {
+            m = com.pipsiflix.app.MainActivity.ensureVpn(this);
+            prefs = com.pipsiflix.app.MainActivity.vpnPrefs();
+        } catch (Throwable t) {
+            Log.w(TAG, "VPN indisponible : " + t);
+            return;                                  // jamais bloquant
+        }
+        if (m == null || prefs == null) return;
+
+        boolean remoteEnabled = getSharedPreferences("pipsily_prefs", MODE_PRIVATE)
+            .getBoolean("vpn_enabled_remote", true);
+        if (!com.pipsiflix.app.vpn.VpnGate.shouldEnforce(
+                prefs.isEnabled(), remoteEnabled, prefs.sessionOverride())) {
+            Log.i(TAG, "VPN désactivé par préférence — surveillance non démarrée");
+            return;
+        }
+
+        // Reconnexion réellement pilotée (le tick ne faisait que changer d'état).
+        m.setReconnector(() -> {
+            if (vpnRetries >= VPN_MAX_RETRIES) {
+                // Repli assumé : plutôt que de laisser le trafic de l'application
+                // dans un tunnel mort (vidéo qui ne repart jamais), on coupe le
+                // tunnel et on repasse en clair. L'utilisateur garde une image.
+                Log.w(TAG, "VPN irrécupérable après " + vpnRetries
+                         + " essais — bascule en clair pour ne pas bloquer la lecture");
+                new Thread(m::disconnect).start();
+                return;
+            }
+            vpnRetries++;
+            Log.i(TAG, "VPN : reconnexion " + vpnRetries + "/" + VPN_MAX_RETRIES);
+            new Thread(() -> connectVpn(m)).start();
+        });
+        m.addListener((st, cur) -> {
+            if (st == com.pipsiflix.app.vpn.VpnManager.State.CONNECTED) vpnRetries = 0;
+        });
+
+        // Consentement Android : demandé sans rien bloquer. S'il est refusé ou
+        // ignoré, la TV continue de fonctionner sans VPN.
+        android.content.Intent prep = android.net.VpnService.prepare(this);
+        if (prep != null) {
+            try { startActivityForResult(prep, REQ_TV_VPN_CONSENT); }
+            catch (Throwable t) { Log.w(TAG, "Consentement VPN impossible : " + t); }
+        } else {
+            new Thread(() -> connectVpn(m)).start();
+        }
+        vpnHealth.removeCallbacks(vpnHealthTick);
+        vpnHealth.postDelayed(vpnHealthTick, VPN_TICK_MS);
+    }
+
+    /** Assemble les serveurs puis connecte. À APPELER SUR UN THREAD DE FOND. */
+    private void connectVpn(com.pipsiflix.app.vpn.VpnManager m) {
+        try {
+            if (m.getServers().isEmpty()) {
+                java.util.List<com.pipsiflix.app.vpn.VpnServer> servers =
+                    new java.util.ArrayList<>();
+                com.pipsiflix.app.vpn.VpnServer warp =
+                    com.pipsiflix.app.vpn.WarpProvisioner.getOrCreate(this);
+                if (warp != null) servers.add(warp);
+                servers.addAll(com.pipsiflix.app.vpn.VpnServers.loadFromAssets(this));
+                if (servers.isEmpty()) { Log.w(TAG, "Aucun serveur VPN disponible"); return; }
+                m.setServers(servers);
+            }
+            m.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+        } catch (Throwable t) {
+            Log.w(TAG, "Connexion VPN échouée : " + t);
+        }
+    }
+
 }

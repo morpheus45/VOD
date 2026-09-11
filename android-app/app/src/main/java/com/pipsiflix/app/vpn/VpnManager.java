@@ -9,6 +9,19 @@ public final class VpnManager {
     public enum State { IDLE, CONNECTING, CONNECTED, RECONNECTING, DISABLED, ERROR }
     public interface Listener { void onState(State s, VpnServer current); }
 
+    /**
+     * Relance demandée par le tick de santé quand le tunnel est mort.
+     *
+     * onHealthTick() se contentait de passer en RECONNECTING en comptant sur un
+     * « appelant explicite » pour relancer la connexion. Personne ne le faisait
+     * côté TV : le tunnel restait mort jusqu'au prochain lancement manuel, et
+     * comme la config ne route QUE notre application (per-app), le trafic vidéo
+     * partait dans un trou noir — d'où des coupures en pleine lecture qui ne se
+     * réparaient jamais. L'implémentation est fournie par l'appelant Android,
+     * ce qui garde cette classe testable en JVM pure.
+     */
+    public interface Reconnector { void reconnect(); }
+
     private static final long STALE_HANDSHAKE_SEC = 180;
 
     private final WgBackend backend;
@@ -24,6 +37,8 @@ public final class VpnManager {
     // valeur périmée et manquer la transition RECONNECTING→CONNECTED.
     private volatile State state = State.IDLE;
     private VpnServer current = null;
+    // volatile : posé depuis le thread UI, lu depuis le tick de santé.
+    private volatile Reconnector reconnector = null;
 
     public VpnManager(WgBackend backend, String selfPackage) {
         this.backend = backend; this.selfPackage = selfPackage;
@@ -34,6 +49,7 @@ public final class VpnManager {
     public State getState() { return state; }
     public VpnServer getCurrent() { return current; }
     public void setServers(List<VpnServer> s) { this.servers = new ArrayList<>(s); }
+    public void setReconnector(Reconnector r) { this.reconnector = r; }
     public List<VpnServer> getServers() { return new ArrayList<>(servers); }
 
     private void set(State s) { state = s; for (Listener l : listeners) l.onState(s, current); }
@@ -61,9 +77,11 @@ public final class VpnManager {
         if (state != State.CONNECTED) return;
         if (!backend.isUp() || backend.lastHandshakeAgeSec() > STALE_HANDSHAKE_SEC) {
             set(State.RECONNECTING);
-            // Pas de relance synchrone ici : un backend réel restaure la connexion en
-            // arrière-plan (retry WireGuard) ; un appelant explicite (UI/Auto) déclenchera
-            // connect()/connectFastest() pour repasser en CONNECTED.
+            // Puis on DEMANDE réellement la relance. La reconnexion elle-même est
+            // faite par l'appelant sur un thread de fond (elle fait du réseau) ;
+            // ce tick, lui, tourne sur le thread UI.
+            Reconnector r = reconnector;
+            if (r != null) r.reconnect();
         }
     }
 }

@@ -55,6 +55,24 @@ public class MainActivity extends AppCompatActivity {
     private static com.pipsiflix.app.vpn.VpnPrefs sVpnPrefs;
     public static com.pipsiflix.app.vpn.VpnManager vpn() { return sVpn; }
     public static com.pipsiflix.app.vpn.VpnPrefs vpnPrefs() { return sVpnPrefs; }
+
+    /**
+     * Instancie une fois pour toutes le duo VpnPrefs/VpnManager partagé.
+     *
+     * Il n'existait qu'un point de création, dans startWithVpnThenLoad(), donc
+     * uniquement sur le chemin TÉLÉPHONE. Sur Android TV le lanceur est
+     * TvActivity, qui ne touchait pas au VPN : le tunnel n'était jamais monté
+     * ni surveillé, et une fois tombé il ne revenait pas, même en relançant
+     * l'application. Ce point d'entrée permet à TvActivity d'utiliser
+     * exactement la même instance que MainActivity et VpnActivity.
+     */
+    public static synchronized com.pipsiflix.app.vpn.VpnManager ensureVpn(android.content.Context ctx) {
+        android.content.Context app = ctx.getApplicationContext();
+        if (sVpnPrefs == null) sVpnPrefs = new com.pipsiflix.app.vpn.VpnPrefs(app);
+        if (sVpn == null) sVpn = new com.pipsiflix.app.vpn.VpnManager(
+            new com.pipsiflix.app.vpn.GoWgBackend(app), ctx.getPackageName());
+        return sVpn;
+    }
     private boolean vpnGateOpen = false; // true quand on peut charger la WebView
     // Porte VPN effectivement franchie au moins une fois (loadWebApp() appelé) — statique,
     // survit donc à recreate() (même process, après un crash renderer). Sert à distinguer,
@@ -164,9 +182,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQ_VPN_CONSENT = 8931;
 
     private void startWithVpnThenLoad() {
-        sVpnPrefs = new com.pipsiflix.app.vpn.VpnPrefs(this);
-        sVpn = new com.pipsiflix.app.vpn.VpnManager(
-            new com.pipsiflix.app.vpn.GoWgBackend(this), getPackageName());
+        ensureVpn(this);       // instance partagée avec TvActivity / VpnActivity
         // Listener d'état : marshale vers le thread UI. C'est lui qui pilote
         // désormais l'overlay et la reconnexion (voir onVpnState) — le tick de
         // santé ne fait plus que détecter la staleness (Task 8/9).

@@ -55,4 +55,45 @@ public class VpnManagerTest {
         assertEquals(VpnManager.State.IDLE, m.getState());
         assertFalse(b.isUp());
     }
+
+    // ── Reconnexion automatique après chute du tunnel ─────────────────────
+    // onHealthTick() se contentait de passer en RECONNECTING sans que RIEN ne
+    // relance la connexion : sur TV le tunnel restait mort jusqu'au prochain
+    // lancement manuel. Il doit maintenant notifier un Reconnector.
+    @Test public void healthTick_tunnelMort_declencheReconnexion() throws Exception {
+        FakeBackend b = new FakeBackend();
+        VpnManager m = new VpnManager(b, "com.pipsiflix.app");
+        final int[] appels = {0};
+        m.setReconnector(() -> appels[0]++);
+        m.connect(srv("a"));
+        assertEquals(VpnManager.State.CONNECTED, m.getState());
+        b.hsAge = 999;                       // poignée de main périmée
+        m.onHealthTick();
+        assertEquals(VpnManager.State.RECONNECTING, m.getState());
+        assertEquals("le tick doit demander une reconnexion", 1, appels[0]);
+    }
+
+    @Test public void healthTick_tunnelSain_neReconnectePas() throws Exception {
+        FakeBackend b = new FakeBackend();
+        VpnManager m = new VpnManager(b, "com.pipsiflix.app");
+        final int[] appels = {0};
+        m.setReconnector(() -> appels[0]++);
+        m.connect(srv("a"));
+        b.hsAge = 5;                         // tunnel frais
+        m.onHealthTick();
+        assertEquals(VpnManager.State.CONNECTED, m.getState());
+        assertEquals(0, appels[0]);
+    }
+
+    @Test public void healthTick_backendTombe_declencheReconnexion() throws Exception {
+        FakeBackend b = new FakeBackend();
+        VpnManager m = new VpnManager(b, "com.pipsiflix.app");
+        final int[] appels = {0};
+        m.setReconnector(() -> appels[0]++);
+        m.connect(srv("a"));
+        b.up = false;                        // service VPN tué par le système
+        m.onHealthTick();
+        assertEquals(VpnManager.State.RECONNECTING, m.getState());
+        assertEquals(1, appels[0]);
+    }
 }
