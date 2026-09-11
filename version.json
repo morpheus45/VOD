@@ -1,7 +1,7 @@
 {
   "apk_version": 63,
   "apk_url": "https://github.com/morpheus45/VOD/releases/download/v63/PIPSILY.apk",
-  "changes": "Reprise de lecture corrigée : sauvegarde régulière de la position (même si l'appli est coupée brutalement) pour films et séries, et reprise fiable du bon épisode au fil des saisons.",
+  "changes": "Rangement des films et séries entièrement revu : plus aucune catégorie masquée (Famille & Enfants, Marvel, DC, Classiques et les derniers ajouts étaient invisibles), doublons supprimés dans les étagères, et navigation bien plus fluide dans les grandes listes. Coupures de lecture corrigées : le lecteur se reconnecte tout seul après une perte de réseau, et le VPN est désormais monté et surveillé sur TV, il ne se remettait jamais après une chute.",
   "vpn_enabled": true,
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
