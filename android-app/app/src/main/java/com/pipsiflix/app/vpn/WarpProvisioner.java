@@ -84,7 +84,11 @@ public final class WarpProvisioner {
              + "[Peer]\n"
              + "PublicKey = " + peerPub + "\n"
              + "AllowedIPs = 0.0.0.0/0, ::/0\n"
-             + "Endpoint = " + endpoint + "\n";
+             + "Endpoint = " + endpoint + "\n"
+             // Sans keepalive, le mapping UDP du CGNAT expire pendant les
+             // silences du lecteur (tampon video plein) et le tunnel meurt
+             // en pleine lecture. Meme valeur que le client WARP officiel.
+             + "PersistentKeepalive = " + ConfigAugmenter.DEFAULT_KEEPALIVE_SEC + "\n";
     }
 
     /**

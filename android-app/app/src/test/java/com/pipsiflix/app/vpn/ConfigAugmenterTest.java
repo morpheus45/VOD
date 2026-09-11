@@ -37,4 +37,26 @@ public class ConfigAugmenterTest {
         Config out = ConfigAugmenter.augment(base("0.0.0.0/0"), "com.pipsiflix.app");
         assertFalse(out.getInterface().getDnsServers().isEmpty());
     }
+
+    @Test public void appliesDefaultPersistentKeepalive() throws Exception {
+        // Une config WARP generee sans PersistentKeepalive doit recevoir la
+        // valeur par defaut : sans elle, le mapping UDP du CGNAT expire pendant
+        // les periodes de silence (buffer video plein = plus aucune requete
+        // pendant ~1 min) et le tunnel meurt en pleine lecture.
+        Config out = ConfigAugmenter.augment(base("0.0.0.0/0"), "com.pipsiflix.app");
+        assertTrue("keepalive doit etre pose par defaut",
+            out.getPeers().get(0).getPersistentKeepalive().isPresent());
+        assertEquals(Integer.valueOf(ConfigAugmenter.DEFAULT_KEEPALIVE_SEC),
+            out.getPeers().get(0).getPersistentKeepalive().get());
+    }
+
+    @Test public void keepsExplicitPersistentKeepalive() throws Exception {
+        String c = "[Interface]\nPrivateKey = aGVsbG8gd29ybGQgcHJpdmF0ZSBrZXkgMzJieXRlcyE=\n" +
+            "Address = 10.64.0.2/32\nDNS = 10.64.0.1\n[Peer]\n" +
+            "PublicKey = eHl6enkgc2VydmVyIHB1YmxpYyBrZXkgMzJieXRlcyE=\n" +
+            "Endpoint = 1.2.3.4:51820\nAllowedIPs = 0.0.0.0/0\nPersistentKeepalive = 15\n";
+        Config out = ConfigAugmenter.augment(
+            Config.parse(new BufferedReader(new StringReader(c))), "com.pipsiflix.app");
+        assertEquals(Integer.valueOf(15), out.getPeers().get(0).getPersistentKeepalive().get());
+    }
 }

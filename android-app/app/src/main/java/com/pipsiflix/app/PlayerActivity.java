@@ -74,6 +74,19 @@ public class PlayerActivity extends FragmentActivity {
     private String   seriesTitle     = "";
     private int      currentIdx      = 0;
     private boolean  hlsRetried      = false;
+
+    // ── Reprise automatique après coupure réseau ──────────────────────────
+    // Un flux IPTV lu sur plusieurs dizaines de minutes voit forcément sa
+    // connexion HTTP tomber (rotation côté serveur, renégociation du tunnel
+    // VPN, micro-coupure Wi-Fi). Jusqu'ici la lecture s'arrêtait DÉFINITIVEMENT
+    // sur un simple message : il fallait ressortir et relancer le film, qui
+    // recoupait peu après. On retente désormais à la position courante.
+    private static final int  MAX_NET_RETRIES     = 6;
+    // Au-delà de ce temps de lecture saine, l'incident suivant est considéré
+    // comme un NOUVEL incident : le compteur repart à zéro.
+    private static final long RETRY_RESET_AFTER_MS = 60_000L;
+    private int  netRetries      = 0;
+    private long lastRetryAtMs   = 0L;
     private boolean  controllerShown = false; // état controller pour toggle TV
     private String   currentUrl      = "";    // URL en cours (pour rapport de progression)
     private long     startPositionMs = 0L;   // position de reprise (0 = depuis le début)
@@ -229,6 +242,7 @@ public class PlayerActivity extends FragmentActivity {
         }
 
         hlsRetried = false;
+        netRetries = 0;          // nouveau titre → quota de reprises remis à neuf
 
         if (player == null) {
             // Préférer la piste audio française PRINCIPALE (pas l'audiodescription).
@@ -301,6 +315,12 @@ public class PlayerActivity extends FragmentActivity {
             player.addListener(new Player.Listener() {
                 @Override
                 public void onPlaybackStateChanged(int state) {
+                    // La lecture est repartie et tient depuis assez longtemps :
+                    // on rend ses essais au compteur pour la prochaine coupure.
+                    if (state == Player.STATE_READY && netRetries > 0
+                            && System.currentTimeMillis() - lastRetryAtMs > RETRY_RESET_AFTER_MS) {
+                        netRetries = 0;
+                    }
                     if (state == Player.STATE_ENDED && currentIdx < epUrls.length - 1) {
                         goEp(currentIdx + 1);
                     }
@@ -336,9 +356,40 @@ public class PlayerActivity extends FragmentActivity {
                 @Override
                 public void onPlayerError(PlaybackException error) {
                     Log.e(TAG, "ExoPlayer error [" + error.errorCode + "]", error);
+                    String curUrl = epUrls[currentIdx];
+
+                    // ── Reprise à la position courante après coupure réseau ──
+                    // C'est le cas de loin le plus fréquent en cours de film.
+                    // On rouvre le MÊME flux et on repart où on en était, avec
+                    // une attente croissante pour laisser le réseau (ou le
+                    // tunnel VPN) se rétablir.
+                    if (isRecoverable(error) && netRetries < MAX_NET_RETRIES) {
+                        netRetries++;
+                        lastRetryAtMs = System.currentTimeMillis();
+                        final long resumeAt = Math.max(0L, player.getCurrentPosition());
+                        final long backoffMs = 1000L * netRetries;   // 1 s, 2 s, 3 s…
+                        final int attempt = netRetries;
+                        Log.i(TAG, "Reprise " + attempt + "/" + MAX_NET_RETRIES
+                                 + " a " + resumeAt + " ms dans " + backoffMs + " ms");
+                        runOnUiThread(() -> {
+                            Toast.makeText(PlayerActivity.this,
+                                "Connexion interrompue — reprise en cours ("
+                                + attempt + "/" + MAX_NET_RETRIES + ")…",
+                                Toast.LENGTH_SHORT).show();
+                            progHandler.postDelayed(() -> {
+                                if (player == null) return;
+                                player.stop();
+                                player.clearMediaItems();
+                                player.setMediaSource(buildSourceFor(curUrl));
+                                player.setPlayWhenReady(true);
+                                player.prepare();
+                                if (resumeAt > 0) player.seekTo(resumeAt);
+                            }, backoffMs);
+                        });
+                        return;
+                    }
 
                     // ── Retry automatique : ProgressiveMedia → HLS ──
-                    String curUrl = epUrls[currentIdx];
                     String lo     = curUrl.toLowerCase();
                     boolean wasProgressive = !lo.contains(".m3u8")
                             && !lo.contains("/live/")
@@ -371,20 +422,7 @@ public class PlayerActivity extends FragmentActivity {
             player.clearMediaItems();
         }
 
-        String lUrl = url.toLowerCase();
-        MediaSource source;
-
-        if (lUrl.contains(".m3u8") || lUrl.contains("/live/") || lUrl.contains("get_series_info")) {
-            // ── HLS : TV Live, séries, playlists Xtream ──
-            source = new HlsMediaSource.Factory(buildDsFactory())
-                    .createMediaSource(MediaItem.fromUri(url));
-        } else {
-            // ── Progressive : VOD mp4/mkv/ts Xtream ──
-            source = new ProgressiveMediaSource.Factory(buildDsFactory())
-                    .createMediaSource(MediaItem.fromUri(url));
-        }
-
-        player.setMediaSource(source);
+        player.setMediaSource(buildSourceFor(url));
         player.setPlayWhenReady(true);
         // Reprise à la position sauvegardée (0 = depuis le début)
         if (startPositionMs > 0) {
@@ -401,6 +439,46 @@ public class PlayerActivity extends FragmentActivity {
                 playerView.hideController();
             }
         }, 3000);
+    }
+
+    /** Vrai si l'URL doit être lue en HLS (TV live, séries, playlists Xtream). */
+    private static boolean isHlsUrl(String url) {
+        String lo = (url == null) ? "" : url.toLowerCase();
+        return lo.contains(".m3u8") || lo.contains("/live/") || lo.contains("get_series_info");
+    }
+
+    /** Source média correspondant au type d'URL — partagée par la lecture et la reprise. */
+    private MediaSource buildSourceFor(String url) {
+        return isHlsUrl(url)
+            ? new HlsMediaSource.Factory(buildDsFactory())
+                    .createMediaSource(MediaItem.fromUri(url))
+            : new ProgressiveMediaSource.Factory(buildDsFactory())
+                    .createMediaSource(MediaItem.fromUri(url));
+    }
+
+    /**
+     * Erreur dont on peut espérer se remettre en retentant la même URL.
+     *
+     * Toute la famille ERROR_CODE_IO_* (2000-2999) correspond à un incident de
+     * transport : connexion coupée, délai dépassé, réseau perdu — exactement ce
+     * que produit une renégociation du tunnel VPN ou un hoquet du serveur IPTV.
+     * Un statut HTTP 4xx, lui, est définitif (abonnement, flux supprimé) : le
+     * retenter ne ferait que marteler le serveur.
+     */
+    private static boolean isRecoverable(PlaybackException error) {
+        int code = error.errorCode;
+        if (code == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS) {
+            Throwable cause = error.getCause();
+            while (cause != null) {
+                if (cause instanceof HttpDataSource.InvalidResponseCodeException) {
+                    int http = ((HttpDataSource.InvalidResponseCodeException) cause).responseCode;
+                    return http >= 500;            // 5xx = transitoire, 4xx = définitif
+                }
+                cause = cause.getCause();
+            }
+            return false;
+        }
+        return code >= 2000 && code < 3000;        // famille ERROR_CODE_IO_*
     }
 
     /**
@@ -618,6 +696,14 @@ public class PlayerActivity extends FragmentActivity {
             reportCurrentProgress();   // getDuration()=TIME_UNSET géré (durMs=0) côté JS
             player.release();
             player = null;
+        }
+        // Fermer les sockets encore ouvertes vers le serveur IPTV. Sans cela,
+        // le pool OkHttp les gardait actives jusqu'à 5 minutes : en relançant
+        // aussitôt une lecture, le compte dépassait sa limite de connexions
+        // simultanées et le fournisseur coupait le nouveau flux très vite.
+        if (okClient != null) {
+            try { okClient.connectionPool().evictAll(); } catch (Exception ignored) {}
+            try { okClient.dispatcher().cancelAll(); }   catch (Exception ignored) {}
         }
     }
 
