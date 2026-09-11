@@ -176,5 +176,51 @@ catRows >= srcCatCount - 2
   ? ok('onglet Films : ' + catRows + ' etageres pour ' + srcCatCount + ' categories source')
   : bad('onglet Films : seulement ' + catRows + ' etageres pour ' + srcCatCount + ' categories');
 
+// ── 5. TV DIRECT : aucune chaine ne doit etre inaccessible ────────────────
+console.log('\n== TV DIRECT ==');
+{
+  const liveSrc = HTML.match(/\/\/ <live-shelves-logic>([\s\S]*?)\/\/ <\/live-shelves-logic>/);
+  if (!liveSrc) {
+    bad('bloc // <live-shelves-logic> absent de cosmos.html');
+  } else {
+    const lbox = { console };
+    vm.createContext(lbox);
+    const CATPRIO_SRC = HTML.match(/const CATPRIO=\{[^}]*\};/)[0];
+    vm.runInContext(CATPRIO_SRC + '\n' + liveSrc[1] +
+      '\nglobalThis._l = { buildLiveRows, LIVE_SHELF_MAX };', lbox);
+    const { buildLiveRows, LIVE_SHELF_MAX } = lbox._l;
+
+    // Reconstruit les chaines groupees comme le fait cosmos.html
+    const lj = JSON.parse(fs.readFileSync(path.join(ROOT, 'live.json'), 'utf8'));
+    const chans = (lj.items || lj.channels || []).map(c => ({
+      title: String(c.name || c.title || ''), image: c.stream_icon || '',
+      category: c.category_name || '',
+    })).filter(c => c.title && !ADULT_RE.test(c.title) && !ADULT_RE.test(c.category));
+    // Categorie nettoyee + regroupement par nom, version simplifiee suffisante
+    // pour l'invariant : ce qui compte est qu'aucune entree ne soit perdue.
+    const byName = {};
+    chans.forEach(c => { const k = c.title.toLowerCase().replace(/[^a-z0-9]/g, ''); if (k && !byName[k]) byName[k] = c; });
+    const grouped = Object.keys(byName).map(k => byName[k]);
+
+    const rows = buildLiveRows(grouped);
+    const placed = new Set();
+    rows.forEach(r => r.items.forEach(it => { if (!it.seeAll) placed.add(it); }));
+
+    const troncSansEchappatoire = rows.filter(r => {
+      const reels = r.items.filter(it => !it.seeAll).length;
+      return reels >= LIVE_SHELF_MAX && !r.items.some(it => it.seeAll);
+    }).map(r => r.title);
+    troncSansEchappatoire.length
+      ? bad('etageres TV tronquees sans « Voir tout » : ' + troncSansEchappatoire.join(', '))
+      : ok('chaque etagere TV tronquee expose « Voir tout »');
+
+    const catsSrc = new Set(grouped.map(c => c.category).filter(Boolean));
+    console.log('  -> ' + rows.length + ' etageres TV, ' + grouped.length + ' chaines, '
+      + catsSrc.size + ' categories source');
+    rows.forEach(r => console.log('     ' + String(r.items.filter(i => !i.seeAll).length).padStart(4)
+      + (r.items.some(i => i.seeAll) ? ' +tout ' : '       ') + r.title));
+  }
+}
+
 console.log('\n' + (fails ? 'ECHEC : ' + fails + ' assertion(s)' : 'OK : toutes les assertions passent'));
 process.exit(fails ? 1 : 0);

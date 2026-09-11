@@ -1185,7 +1185,16 @@ function cleanLiveCat(cat){
   if(h('canad')||h('quebec')||h('québec')) return 'Canada';
   if(h('afriq')||h('arab')||h('maghreb')||h('turk')||h('portug')||h('espag')||h('ital')||h('monde')||h('world')) return 'Monde';
   if(h('france')||h('national')||h('general')||h('général')||h('tnt')||h('dom')||h('tom')||h('metro')) return 'France';
-  return c.replace(/\b[a-zA-ZÀ-ɏḀ-ỿ]/g,m=>m.toUpperCase());
+  // Capitalisation par MOT. L'ancienne version utilisait \b dans une classe de
+  // caracteres, or \b est ASCII : chaque lettre accentuee creait une fausse
+  // frontiere de mot, d'ou les libelles bancals vus dans l'interface
+  // (Reunion et Caraibes s'affichaient avec une majuscule au milieu du mot).
+  const ACRO={'ppv':'PPV','tv':'TV','tnt':'TNT'};
+  return c.split(' ').map(function(w){
+    if(!w) return w;
+    if(ACRO[w]) return ACRO[w];
+    return w.charAt(0).toUpperCase()+w.slice(1);
+  }).join(' ');
 }
 
 // ══════ TITLE/QUALITY ═══════════════════════════════════════════════════
@@ -1700,8 +1709,11 @@ function openGrid(type,cat){
   showOnlyView('grid-view');
   // shelfLabel : un rayon nommé « LATEST MOVIES » côté fournisseur doit
   // s'afficher « Derniers ajouts » ici aussi, pas seulement sur l'étagère.
-  $('grid-title').textContent=cat?shelfLabel(cat):(type==='movies'?'Films':'Séries');
-  S.gridAll=(type==='movies'?S.allVod:S.allSeries).filter(isClean);
+  $('grid-title').textContent=cat?shelfLabel(cat):(type==='live'?'TV Direct':type==='movies'?'Films':'Séries');
+  // Le type 'live' ouvre la grille des chaines : c'est l'echappatoire des
+  // etageres TV tronquees (227 chaines etaient inaccessibles sans lui).
+  S.gridAll = type==='live' ? liveVisible()
+            : (type==='movies'?S.allVod:S.allSeries).filter(isClean);
   S.gridFilter=cat||'';S.gridQuality='';S.gridFavOnly=false;S.gridSort='recent';
   S.sec='grid';
   buildFilters();applyGrid();
@@ -2331,6 +2343,82 @@ function showOnlyView(id){
   const el=$(id);if(el){el.hidden=false;el.classList.add('view-active');}
 }
 
+// ══════ ÉTAGÈRES TV DIRECT ══════════════════════════════════════════════
+// Chaînes réellement affichables : on masque celles au logo « drapeau tricolore »
+// générique (frlog.png), qui ne diffusent rien. ROLLBACK : passer HIDE_FLAG_LIVE
+// à false pour toutes les réafficher.
+const HIDE_FLAG_LIVE = true;
+function _isFlagLive(i){ return /frlog\.png(\?|$)/i.test(i.image || ''); }
+function liveVisible(){
+  return HIDE_FLAG_LIVE ? S.liveItems.filter(function(i){return !_isFlagLive(i);}) : S.liveItems;
+}
+// <live-shelves-logic>
+// Même défaut que les rayons films/séries, resté ici : l'onglet TV coupait
+// chaque catégorie à 40 chaînes SANS carte « Voir tout ». Mesuré sur le
+// catalogue : 227 chaînes sur 747 n'avaient aucun point d'entrée, dont
+// AUTO MOTO (rang 44 de « Sport »), MY TV CARAÏBES (rang 78), ANTENNE RÉUNION
+// (rang 79) et RÉUNION 1ERE (rang 80). Les catégories Réunion et Caraïbes sont
+// surtout remplies de reprises régionales des chaînes nationales (préfixes
+// REU- / CAR-, volontairement distinctes — cf. liveBase), qui repoussaient les
+// vraies chaînes locales au-delà de la coupe.
+const LIVE_REGION_PREFIX=/^\s*(?:REU|CAR|GUA|MAR|GUY|MAY|DOM|TOM)\s*[:\-|]\s*/i;
+// Nom de base d'une chaine, prefixe regional retire : « REU - TF1 » et « TF1 »
+// partagent la meme cle, donc la premiere est reconnue comme une reprise.
+function liveDedupKey(t){
+  return String(t||'').replace(LIVE_REGION_PREFIX,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+// Fait remonter les chaines PROPRES a l'etagere. Les categories regionales
+// (Reunion, Caraibes) sont surtout remplies de reprises des chaines nationales
+// (REU - TF1, CAR - M6...) : elles enterraient ANTENNE REUNION au rang 79 et
+// REUNION 1ERE au rang 80 sur 86. Rien n'est supprime, seulement reordonne :
+// ce qui n'existe nulle part ailleurs passe devant, le reste suit dans l'ordre
+// d'origine. Fusionner ces chaines serait faux : « REU - TF1 » ne diffuse pas
+// le meme programme que « TF1 » (cf. liveBase).
+function liveSortLocalFirst(list,globalCount){
+  const propres=[], reprises=[];
+  for(let i=0;i<list.length;i++){
+    const t=list[i].title||'';
+    // Une chaine SANS prefixe regional n'est jamais une reprise : « AUTO MOTO »
+    // est l'originale, « REU - AUTOMOTO » et « CAR - AUTOMOTO » sont les copies.
+    const estReprise = LIVE_REGION_PREFIX.test(t) && (globalCount[liveDedupKey(t)]||0)>1;
+    (estReprise ? reprises : propres).push(list[i]);
+  }
+  return propres.concat(reprises);
+}
+const LIVE_SHELF_MAX = 60;   // chaînes par étagère avant la carte « Voir tout »
+// 60 et non 40 : à 40, « Sport » (53 chaînes) perdait AUTO MOTO au rang 44 et
+// AUTOMOTO LA CHAINE au rang 45. Les vignettes se chargent à la demande
+// (IntersectionObserver), donc une étagère plus longue ne coûte rien au rendu.
+function buildLiveRows(liveItems){
+  // Combien de fois chaque nom de base apparait dans TOUT le catalogue live.
+  const globalCount={};
+  liveItems.forEach(i=>{const k=liveDedupKey(i.title); if(k) globalCount[k]=(globalCount[k]||0)+1;});
+  const byCat={};
+  liveItems.forEach(i=>{const c=i.category||'Général';(byCat[c]=byCat[c]||[]).push(i);});
+  // Petites catégories regroupées dans « Autres », jamais supprimées.
+  Object.keys(byCat).forEach(c=>{
+    if(byCat[c].length<3 && c!=='Autres'){
+      (byCat['Autres']=byCat['Autres']||[]).push.apply(byCat['Autres'],byCat[c]);
+      delete byCat[c];
+    }
+  });
+  // Priorité (France, Cinéma, Sport…) puis taille.
+  return Object.entries(byCat).sort(function(a,b){
+    const pa=CATPRIO[a[0]]!==undefined?CATPRIO[a[0]]:80;
+    const pb=CATPRIO[b[0]]!==undefined?CATPRIO[b[0]]:80;
+    return pa!==pb ? pa-pb : b[1].length-a[1].length;
+  }).map(function(e){
+    const cat=e[0], list=liveSortLocalFirst(e[1],globalCount), head=list.slice(0,LIVE_SHELF_MAX);
+    return {
+      title:cat, isLive:true,
+      items:list.length>LIVE_SHELF_MAX
+        ? head.concat([{seeAll:true,gridType:'live',gridCat:cat,catLabel:cat,title:'Voir tout',count:list.length}])
+        : head
+    };
+  });
+}
+// </live-shelves-logic>
+
 // ══════ ÉTAGÈRES PAR CATÉGORIE ═══════════════════════════════════════════
 // <shelves-logic>
 // Règle d'or : AUCUN titre ne doit devenir inaccessible à la navigation.
@@ -2510,25 +2598,11 @@ function renderTabLive(){
   // Masquer TOUTES les chaînes au logo "drapeau tricolore" générique (frlog.png)
   // — elles ne diffusent rien. ROLLBACK : passer HIDE_FLAG_LIVE à false pour
   // toutes les réafficher (ou revert le commit).
-  const HIDE_FLAG_LIVE = true;
-  const _isFlagLive = i => /frlog\.png(\?|$)/i.test(i.image || '');
-  const liveItems = HIDE_FLAG_LIVE ? S.liveItems.filter(i => !_isFlagLive(i)) : S.liveItems;
-  const byLiveCat={};
-  liveItems.forEach(i=>{const c=i.category||'Général';(byLiveCat[c]=byLiveCat[c]||[]).push(i);});
-  // Regrouper les toutes petites catégories dans "Autres"
-  Object.keys(byLiveCat).forEach(c=>{
-    if(byLiveCat[c].length<3 && c!=='Autres'){
-      (byLiveCat['Autres']=byLiveCat['Autres']||[]).push(...byLiveCat[c]);
-      delete byLiveCat[c];
-    }
-  });
-  // Ordonner par priorité (France, Cinéma, Sport...) puis par taille
-  const cats=Object.entries(byLiveCat).sort((a,b)=>{
-    const pa=CATPRIO[a[0]]??80, pb=CATPRIO[b[0]]??80;
-    return pa!==pb ? pa-pb : b[1].length-a[1].length;
-  });
-  if(cats.length===0)rows.push({title:'TV Direct',items:S.liveItems.slice(0,40),isLive:true});
-  else cats.forEach(([cat,items])=>rows.push({title:cat,items:items.slice(0,40),isLive:true}));
+  const liveItems = liveVisible();
+  // Toutes les categories, chacune avec « Voir tout » si elle depasse la coupe.
+  const liveRows=buildLiveRows(liveItems);
+  if(liveRows.length===0)rows.push({title:'TV Direct',items:S.liveItems.slice(0,LIVE_SHELF_MAX),isLive:true});
+  else liveRows.forEach(r=>rows.push(r));
   S.rows=rows;
   // Hero = premiere chaine dispo
   if(liveItems.length)setHero({...liveItems[0],plot:'Regardez vos chaines en direct'});
