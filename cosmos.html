@@ -977,7 +977,7 @@ const S = {
   rows:[], rowIdx:0, cardIdx:0,
   gridItems:[], gridAll:[],
   gridFilter:'', gridQuality:'', gridFavOnly:false, gridSort:'title',
-  gridIdx:0, filterIdx:0, filterPills:[],
+  gridIdx:0, gridShown:0, filterIdx:0, filterPills:[],
   allItems:[], allVod:[], allSeries:[], liveItems:[], appItems:[],
   panelItem:null, panelIsVod:false,
   panelSmap:{}, panelSmeta:[], panelSelSeason:null,
@@ -1600,6 +1600,28 @@ function renderRows(rows){
   });
 }
 
+// ══════ IMAGES PARESSEUSES ══════════════════════════════════════════════
+// loading="lazy" n'existe qu'à partir de Chrome 76 ; ce WebView peut être figé
+// en Chrome 61 (cf. en-tête du fichier), où TOUTES les vignettes se seraient
+// téléchargées d'un coup. IntersectionObserver existe depuis Chrome 51 : il
+// couvre donc tous les appareils cibles, y compris les plus anciens.
+const _imgIO = (typeof IntersectionObserver!=='undefined')
+  ? new IntersectionObserver(function(entries,obs){
+      entries.forEach(function(e){
+        if(!e.isIntersecting)return;
+        const img=e.target; obs.unobserve(img);
+        const src=img.getAttribute('data-src');
+        if(src){ img.removeAttribute('data-src'); img.src=src; }
+      });
+    },{rootMargin:'600px'})
+  : null;
+function lazyImg(img,src){
+  img.loading='lazy';                       // pris en compte si dispo
+  if(!src){ img.src=BLANK; img.classList.add('loaded'); return; }
+  if(_imgIO){ img.src=BLANK; img.setAttribute('data-src',src); _imgIO.observe(img); }
+  else { img.src=src; if(img.complete)img.classList.add('loaded'); }
+}
+
 // ══════ CARD ════════════════════════════════════════════════════════════
 function mkCard(item,ri,ci,isLive){
   if(item.seeAll){
@@ -1611,7 +1633,7 @@ function mkCard(item,ri,ci,isLive){
     iw.innerHTML='<div class="seeall-inner"><div class="seeall-pill">&rarr;</div><div class="seeall-txt">Voir tout</div><div class="seeall-sub">'+(_n?_n+' titres':'tout afficher')+'</div></div>';
     el.appendChild(iw);
     const info=document.createElement('div');info.className='cinfo';
-    const title=document.createElement('div');title.className='ctitle';title.textContent=item.gridCat||'';
+    const title=document.createElement('div');title.className='ctitle';title.textContent=item.catLabel||item.gridCat||'';
     info.appendChild(title);el.appendChild(info);
     return el;
   }
@@ -1643,8 +1665,7 @@ function mkCard(item,ri,ci,isLive){
   img.loading='lazy';
   img.onload=()=>img.classList.add('loaded');
   img.onerror=()=>{img.src=BLANK;img.onerror=null;img.classList.add('loaded');};
-  img.src=item.image||item.stream_icon||item.cover||item.poster||item.logo||BLANK;
-  if(img.complete)img.classList.add('loaded');
+  lazyImg(img,item.image||item.stream_icon||item.cover||item.poster||item.logo||'');
   iw.appendChild(img);
   // Progress bar — films (stream_id) ET séries (series_id : progPct lit seriesPctMap)
   if(!live&&(item.stream_id||item.series_id)){
@@ -1677,7 +1698,9 @@ function openGrid(type,cat){
   // Back de la grille repartait toujours à l'accueil).
   S.gridRet={sec:S.sec,rowIdx:S.rowIdx,cardIdx:S.cardIdx};
   showOnlyView('grid-view');
-  $('grid-title').textContent=cat||(type==='movies'?'Films':'Séries');
+  // shelfLabel : un rayon nommé « LATEST MOVIES » côté fournisseur doit
+  // s'afficher « Derniers ajouts » ici aussi, pas seulement sur l'étagère.
+  $('grid-title').textContent=cat?shelfLabel(cat):(type==='movies'?'Films':'Séries');
   S.gridAll=(type==='movies'?S.allVod:S.allSeries).filter(isClean);
   S.gridFilter=cat||'';S.gridQuality='';S.gridFavOnly=false;S.gridSort='recent';
   S.sec='grid';
@@ -1685,11 +1708,15 @@ function openGrid(type,cat){
   S.zone=S.gridItems.length?'grid':'filter';S.filterIdx=0;S.gridIdx=0;focus();
 }
 function buildFilters(){
-  const cats=[...new Set(S.gridAll.map(i=>i.category).filter(Boolean))].sort();
-  const quals=[...new Set(S.gridAll.map(i=>i.quality).filter(Boolean))].sort();
+  // Tri alphabétique localisé : avec .sort() par défaut (comparaison de codes
+  // UTF-16), « ÉPOUVANTE » ou « QUÉBEC » atterrissaient APRÈS « Z ».
+  const _alpha=(a,b)=>String(a).localeCompare(String(b),'fr',{sensitivity:'base',numeric:true});
+  const cats=[...new Set(S.gridAll.map(i=>i.category).filter(Boolean))]
+    .sort((a,b)=>_alpha(shelfLabel(a),shelfLabel(b)));
+  const quals=[...new Set(S.gridAll.map(i=>i.quality).filter(Boolean))].sort(_alpha);
   const pills=[
     {label:'Tout',val:'',type:'cat'},
-    ...cats.map(c=>({label:c,val:c,type:'cat'})),
+    ...cats.map(c=>({label:shelfLabel(c),val:c,type:'cat'})),
     {sep:true},
     {label:'Toute qualite',val:'',type:'qual'},
     ...quals.map(q=>({label:q,val:q,type:'qual'})),
@@ -1716,14 +1743,38 @@ function applyGrid(){
   if(S.gridQuality)items=items.filter(i=>i.quality===S.gridQuality);
   if(S.gridFavOnly){const favKeys=new Set(getFavs().map(f=>(f.key||f.k)));items=items.filter(i=>favKeys.has(itemKey(i)));}
   if(S.gridSort==='recent')items=[...items].sort((a,b)=>Number(b.added)-Number(a.added));
-  else items=[...items].sort((a,b)=>(a.title||'').localeCompare(b.title||''));
+  // Locale explicite : sans elle, « Été » passait après « Zoo » sur les WebView
+  // dont la locale par défaut n'est pas le français.
+  else items=[...items].sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''),'fr',{sensitivity:'base',numeric:true}));
   S.gridItems=items;renderGrid();
 }
+// Rendu PAR PALIERS. Avant, la grille créait une carte par titre : « Voir tout »
+// sur un gros rayon fabriquait jusqu'à 16 000 cartes (~115 000 nœuds DOM, 3 s
+// sur un PC de bureau, donc inutilisable sur une box TV). On n'insère plus que
+// GRID_CHUNK cartes à la fois ; gridEnsure() complète à la demande quand la
+// navigation descend. S.gridItems reste complet : rien n'est retiré du
+// catalogue, seule la matérialisation DOM est étalée.
+const GRID_CHUNK=180;
 function renderGrid(){
   const wrap=$('grid-wrap');wrap.innerHTML='';
-  S.gridItems.forEach((item,i)=>{
-    const c=mkCard(item,-1,i,false);c.dataset.gi=i;wrap.appendChild(c);
-  });
+  S.gridShown=0;
+  gridAppend();
+}
+function gridAppend(){
+  const wrap=$('grid-wrap');
+  const end=Math.min(S.gridItems.length,S.gridShown+GRID_CHUNK);
+  const frag=document.createDocumentFragment();
+  for(let i=S.gridShown;i<end;i++){
+    const c=mkCard(S.gridItems[i],-1,i,false);c.dataset.gi=i;frag.appendChild(c);
+  }
+  wrap.appendChild(frag);
+  S.gridShown=end;
+  return S.gridShown;
+}
+// Garantit que la carte d'indice idx est présente dans le DOM.
+function gridEnsure(idx){
+  let guard=0;
+  while(S.gridShown<=idx && S.gridShown<S.gridItems.length && guard++<500) gridAppend();
 }
 function activateFilterPill(idx){
   const nonSep=S.filterPills.filter(p=>!p.sep);
@@ -2278,6 +2329,98 @@ function showOnlyView(id){
   const el=$(id);if(el){el.hidden=false;el.classList.add('view-active');}
 }
 
+// ══════ ÉTAGÈRES PAR CATÉGORIE ═══════════════════════════════════════════
+// <shelves-logic>
+// Règle d'or : AUCUN titre ne doit devenir inaccessible à la navigation.
+// Avant, les onglets Films/Séries coupaient les catégories à slice(0,16),
+// jetaient celles de moins de 3 titres et écartaient les catégories « LATEST »
+// via LATEST_RE. Résultat mesuré sur le catalogue : ~6 300 films et ~870
+// séries n'avaient plus AUCUN point d'entrée (seule la recherche les trouvait),
+// dont FAMILLE & ENFANTS, MARVEL, DC, CLASSIQUES et les 6 151 films présents
+// uniquement dans « LATEST MOVIES ».
+// On applique désormais la logique déjà éprouvée de l'onglet TV Direct : on
+// REGROUPE les petites catégories dans « Autres » au lieu de les supprimer, et
+// chaque étagère tronquée expose une carte « Voir tout » vers la grille.
+// Invariant vérifié par scripts/test-shelves.js.
+const SHELF_MIN = 3;    // en dessous de ce seuil → regroupé dans « Autres »
+const SHELF_MAX = 25;   // cartes par étagère avant la carte « Voir tout »
+const HOME_MAX_SHELVES = 14; // l'accueil reste une vitrine ; la liste complète
+                             // des rayons vit dans les onglets Films / Séries.
+// Ordre d'affichage : les genres grand public d'abord (sinon le classement par
+// taille seule enterrait « Famille & Enfants » derrière les rayons fourre-tout),
+// puis, à priorité égale, la catégorie la plus fournie en premier.
+const SHELF_PRIO = [
+  [/enfant|famille|kids|jeunesse|junior/i, 10],
+  [/action|aventure|guerre|\bwar\b/i,      20],
+  [/com[ée]die/i,                          25],
+  [/drame|drama|romance/i,                 30],
+  [/horreur|thriller|[ée]pouvante|horror/i,35],
+  [/sci-?fi|fantast|fantasy/i,             40],
+  [/anim[ée]|manga/i,                      45],
+  [/crime|mafia|policier/i,                50],
+  [/document|histoire|biograph/i,          55],
+  [/\b4k\b|uhd/i,                          60],
+  [/netflix|disney|amazon|prime|hbo|paramount|apple|canal/i, 65],
+  [/latest|nouveau/i,                      85],  // « Derniers ajouts » en fin
+];
+function shelfPrio(cat){
+  if(cat==='Autres') return 95;                  // fourre-tout toujours dernier
+  for(let k=0;k<SHELF_PRIO.length;k++){ if(SHELF_PRIO[k][0].test(cat)) return SHELF_PRIO[k][1]; }
+  return 80;
+}
+// « LATEST MOVIES » / « LATEST SERIES » sont des noms de flux fournisseur, pas
+// des rayons : on les renomme au lieu de les cacher.
+function shelfLabel(cat){
+  if(!/latest|nouveau/i.test(cat)) return cat;
+  // On retire les mots de flux (LATEST / MOVIES / SERIES) ; ce qui reste sert
+  // de qualificatif, sinon deux rayons « LATEST » porteraient le même nom.
+  const rest=String(cat).replace(/\b(latest|nouveaut[ée]s?|nouveau|movies?|films?|s[ée]ries?|tv|vod)\b/gi,' ')
+    .replace(/[-_|]+/g,' ').replace(/\s+/g,' ').trim();
+  return rest ? 'Derniers ajouts — '+rest.charAt(0).toUpperCase()+rest.slice(1).toLowerCase()
+              : 'Derniers ajouts';
+}
+// Type de grille d'une catégorie mixte (accueil) : le type majoritaire.
+function shelfGridType(list){
+  let s=0; for(let k=0;k<list.length;k++){ if(list[k].series_id) s++; }
+  return s*2>list.length?'shows':'movies';
+}
+// items : liste DÉJÀ filtrée par isClean. gridType : 'movies' | 'shows' | null
+// (null = déduit par catégorie, pour l'accueil qui mélange films et séries).
+function buildCatRows(items,gridType){
+  const byCat={};
+  items.forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
+  // Seul filtre destructif conservé : l'adulte.
+  Object.keys(byCat).forEach(c=>{ if(ADULT_RE.test(c)) delete byCat[c]; });
+  // Petites catégories regroupées, jamais supprimées (cf. onglet TV Direct).
+  Object.keys(byCat).forEach(c=>{
+    if(byCat[c].length<SHELF_MIN && c!=='Autres'){
+      (byCat['Autres']=byCat['Autres']||[]).push.apply(byCat['Autres'],byCat[c]);
+      delete byCat[c];
+    }
+  });
+  return Object.entries(byCat).sort(function(a,b){
+    const pa=shelfPrio(a[0]), pb=shelfPrio(b[0]);
+    return pa!==pb ? pa-pb : b[1].length-a[1].length;
+  }).map(function(e){
+    const cat=e[0], list=e[1], gt=gridType||shelfGridType(list);
+    const label=shelfLabel(cat);
+    const head=list.slice(0,SHELF_MAX);
+    return {
+      title:label,
+      items:list.length>SHELF_MAX
+        ? head.concat([{seeAll:true,gridType:gt,gridCat:cat,catLabel:label,title:'Voir tout',count:list.length}])
+        : head
+    };
+  });
+}
+// Carte « Voir tout » d'une étagère éditoriale (Nouveautés) : ouvre la grille
+// complète, sans filtre de catégorie — c'est le point d'entrée vers l'intégralité
+// du catalogue, y compris les rayons qui n'ont pas d'étagère dédiée.
+function shelfSeeAllCard(gridType,label,count){
+  return {seeAll:true,gridType:gridType,gridCat:'',catLabel:label,title:'Voir tout',count:count};
+}
+// </shelves-logic>
+
 // ── Rendus par tab ───────────────────────────────────────────────────────
 function renderTabHome(){
   const rows=[];
@@ -2286,15 +2429,21 @@ function renderTabHome(){
   // Poursuivre = en cours + favoris, TOUS types confondus
   const poursuivre=poursuivreItems(null);
   if(poursuivre.length)rows.push({title:'Poursuivre',items:poursuivre});
-  const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
-  if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms});
-  const newSeries=[...S.allSeries].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
-  if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries});
+  // Les rangees Nouveautes recoivent une carte « Voir tout » : c'est le point
+  // d'entree vers la grille complete (tous rayons confondus), donc vers les
+  // titres qui n'ont pas d'etagere dediee sur cet ecran.
+  const _vodC=S.allVod.filter(isClean), _serC=S.allSeries.filter(isClean);
+  const newFilms=_vodC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
+  if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms.concat([shelfSeeAllCard('movies','Tous les films',_vodC.length)])});
+  const newSeries=_serC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
+  if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries.concat([shelfSeeAllCard('shows','Toutes les series',_serC.length)])});
   if(S.heroPool.length)rows.push({title:'Recommande pour vous',items:S.heroPool.slice(0,25)});
-  // Categories mixtes
-  const byCat={};
-  S.allItems.forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
-  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=4).slice(0,12).forEach(([cat,items])=>rows.push({title:cat,items:items.filter(isClean).slice(0,20)}));
+  // Categories mixtes — l'accueil reste une vitrine : on limite le NOMBRE
+  // d'etageres, mais plus le contenu (les onglets Films/Series, eux, montrent
+  // desormais TOUTES les categories). Le filtrage isClean se fait AVANT le
+  // regroupement, sinon une categorie pouvait passer le seuil puis s'afficher
+  // vide une fois nettoyee.
+  buildCatRows(S.allItems.filter(isClean),null).slice(0,HOME_MAX_SHELVES).forEach(r=>rows.push(r));
   if(S.liveItems.length)rows.push({title:'TV Direct',items:S.liveItems.slice(0,25),isLive:true});
   S.rows=rows;
   if(S.heroPool.length)setHero(S.heroPool[Math.floor(Math.random()*Math.min(S.heroPool.length,30))]);
@@ -2306,11 +2455,11 @@ function renderTabMovies(){
   const rows=[];
   const p=poursuivreItems('vod');                       // Films : que les films
   if(p.length)rows.push({title:'Poursuivre',items:p});
-  const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
-  if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms});
-  const byCat={};
-  S.allVod.filter(isClean).forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
-  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=3).slice(0,16).forEach(([cat,items])=>rows.push({title:cat,items:items.length>25?[...items.slice(0,25),{seeAll:true,gridType:(items[0]&&items[0].series_id?'shows':'movies'),gridCat:cat,title:'Voir tout',count:items.length}]:items.slice(0,25)}));
+  const _vodC=S.allVod.filter(isClean);
+  const newFilms=_vodC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
+  if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms.concat([shelfSeeAllCard('movies','Tous les films',_vodC.length)])});
+  // TOUTES les categories de films, sans coupe au rang ni exclusion LATEST.
+  buildCatRows(S.allVod.filter(isClean),'movies').forEach(r=>rows.push(r));
   S.rows=rows;
   if(S.allVod.length){const pool=S.allVod.filter(i=>isClean(i)&&i.image);setHero(pool[Math.floor(Math.random()*Math.min(pool.length,30))]);}
   renderRows(rows);S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();
@@ -2320,11 +2469,11 @@ function renderTabShows(){
   const rows=[];
   const p=poursuivreItems('series');                    // Séries : que les séries
   if(p.length)rows.push({title:'Poursuivre',items:p});
-  const newSeries=[...S.allSeries].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
-  if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries});
-  const byCat={};
-  S.allSeries.filter(isClean).forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
-  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=3).slice(0,16).forEach(([cat,items])=>rows.push({title:cat,items:items.length>25?[...items.slice(0,25),{seeAll:true,gridType:(items[0]&&items[0].series_id?'shows':'movies'),gridCat:cat,title:'Voir tout',count:items.length}]:items.slice(0,25)}));
+  const _serC=S.allSeries.filter(isClean);
+  const newSeries=_serC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
+  if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries.concat([shelfSeeAllCard('shows','Toutes les series',_serC.length)])});
+  // TOUTES les categories de series, sans coupe au rang ni exclusion LATEST.
+  buildCatRows(S.allSeries.filter(isClean),'shows').forEach(r=>rows.push(r));
   S.rows=rows;
   if(S.allSeries.length){const pool=S.allSeries.filter(i=>isClean(i)&&i.image);setHero(pool[Math.floor(Math.random()*Math.min(pool.length,30))]);}
   renderRows(rows);S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();
@@ -3005,16 +3154,21 @@ function onKey(type){
       while(cols<items.length && Math.abs(items[cols].offsetTop-top0)<4) cols++;
     }
     cols=Math.max(1,cols);
+    // Grille paginée : la borne est le NOMBRE DE TITRES (S.gridItems), pas le
+    // nombre de cartes déjà insérées — sinon la navigation butait sur la fin du
+    // palier courant et le reste du rayon paraissait absent. gridEnsure()
+    // matérialise le palier suivant avant de déplacer le focus.
+    const _last=(z==='grid'?S.gridItems.length:items.length)-1;
     if(type==='U'){
       if(S.gridIdx<cols){S.zone=z==='grid'?'filter':'nav';focus();}
       else{S.gridIdx=Math.max(0,S.gridIdx-cols);focus();}
     }
-    else if(type==='D'){S.gridIdx=Math.min(items.length-1,S.gridIdx+cols);focus();}
+    else if(type==='D'){const _w=Math.min(_last,S.gridIdx+cols);if(z==='grid')gridEnsure(_w);S.gridIdx=_w;focus();}
     else if(type==='L'){
       if(S.gridIdx%cols!==0){S.gridIdx--;focus();}
       else if(z==='search'){S.zone='search-kb';focus();} // bord gauche → clavier
     }
-    else if(type==='R'){if(S.gridIdx%cols!==cols-1&&S.gridIdx<items.length-1){S.gridIdx++;focus();}}
+    else if(type==='R'){if(S.gridIdx%cols!==cols-1&&S.gridIdx<_last){S.gridIdx=S.gridIdx+1;if(z==='grid')gridEnsure(S.gridIdx);focus();}}
     else if(type==='E'){
       if(S.gridItems[S.gridIdx])openItem(S.gridItems[S.gridIdx]);
     }
