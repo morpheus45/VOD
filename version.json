@@ -1,6 +1,6 @@
 {
-  "apk_version": 64,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v64/PIPSILY.apk",
+  "apk_version": 65,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v65/PIPSILY.apk",
   "changes": "Anti-coupure : quand un flux se fige sans rien signaler, le lecteur le détecte et le relance tout seul, au bon endroit pour un film et au bord du direct pour une chaîne. Une chaîne peut enchaîner jusqu'à 40 reprises, de quoi tenir une soirée entière. Les micro-incidents réseau sont désormais absorbés sans couper l'image. Côté TV en direct, plus aucune chaîne masquée : 227 chaines sur 747 étaient inaccessibles, dont Auto Moto, My TV Caraïbes, Antenne Réunion et Réunion 1ere, et les vraies chaînes locales remontent devant les reprises.",
   "vpn_enabled": true,
   "tizen_version": 1,
