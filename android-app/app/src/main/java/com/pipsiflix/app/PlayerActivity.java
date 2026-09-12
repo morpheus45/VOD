@@ -82,6 +82,9 @@ public class PlayerActivity extends FragmentActivity {
     // sur un simple message : il fallait ressortir et relancer le film, qui
     // recoupait peu après. On retente désormais à la position courante.
     private static final int  MAX_NET_RETRIES     = 6;
+    // Une chaine en direct doit pouvoir encaisser bien plus d'incidents qu'un
+    // film : elle est faite pour rester allumee des heures.
+    private static final int  MAX_LIVE_RETRIES    = 40;
     // Au-delà de ce temps de lecture saine, l'incident suivant est considéré
     // comme un NOUVEL incident : le compteur repart à zéro.
     private static final long RETRY_RESET_AFTER_MS = 60_000L;
@@ -103,6 +106,100 @@ public class PlayerActivity extends FragmentActivity {
             progHandler.postDelayed(this, PROGRESS_SAVE_INTERVAL_MS);
         }
     };
+
+    // ── Surveillance anti-blocage (chien de garde) ────────────────────────
+    // ExoPlayer n'émet PAS toujours onPlayerError quand un flux IPTV meurt en
+    // cours de route : la socket reste ouverte, plus aucun octet n'arrive, et le
+    // lecteur tourne indéfiniment sur son cercle de chargement. Aucune erreur →
+    // la reprise automatique ne se déclenchait jamais. C'est le motif exact
+    // d'une « coupure aléatoire » qui ne repart pas toute seule.
+    // On surveille donc la POSITION : si elle n'avance plus alors que la lecture
+    // est demandée, on relance le flux nous-mêmes.
+    private static final long STALL_CHECK_MS   = 2_000L;   // fréquence du contrôle
+    private static final long STALL_TIMEOUT_MS = 15_000L;  // gel toléré avant relance
+    private long lastPosMs        = -1L;
+    private long lastPosChangeAt  = 0L;
+    private boolean reconnecting  = false;
+    private final android.os.Handler stallHandler =
+        new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable stallRunnable = new Runnable() {
+        @Override public void run() {
+            stallHandler.postDelayed(this, STALL_CHECK_MS);
+            if (player == null || reconnecting) return;
+            // La liste peut ne pas etre encore prete : le minuteur est arme
+            // dans onResume, qui peut passer avant la construction du player.
+            if (epUrls == null || currentIdx < 0 || currentIdx >= epUrls.length) return;
+            // Lecture non demandée (pause utilisateur, fin) → rien à surveiller.
+            if (!player.getPlayWhenReady()) { lastPosMs = -1L; return; }
+            int st = player.getPlaybackState();
+            if (st == Player.STATE_IDLE || st == Player.STATE_ENDED) return;
+
+            long pos = player.getCurrentPosition();
+            long now = System.currentTimeMillis();
+            if (pos != lastPosMs) { lastPosMs = pos; lastPosChangeAt = now; return; }
+            if (lastPosChangeAt == 0L) { lastPosChangeAt = now; return; }
+            if (now - lastPosChangeAt < STALL_TIMEOUT_MS) return;
+
+            // Position figée trop longtemps alors que la lecture est demandée.
+            Log.w(TAG, "Flux gele depuis " + (now - lastPosChangeAt) + " ms — relance");
+            lastPosChangeAt = now;
+            restartStream(epUrls[currentIdx], "flux fige");
+        }
+    };
+
+    /** Vrai si le flux courant est une chaîne en direct (pas de fin, pas de reprise). */
+    private boolean isLiveStream() {
+        try { if (player != null && player.isCurrentMediaItemLive()) return true; } catch (Throwable ignored) {}
+        // Repli sur l'URL : chez Xtream, seules les chaines passent par /live/.
+        // Surtout PAS « .m3u8 » : beaucoup de films sont servis en HLS et
+        // perdraient leur reprise a la position courante.
+        return currentUrl.toLowerCase().contains("/live/");
+    }
+
+    /** Budget de reprises : une chaîne en direct est faite pour tourner des heures. */
+    private int maxRetries() { return isLiveStream() ? MAX_LIVE_RETRIES : MAX_NET_RETRIES; }
+
+    /**
+     * Relance le flux courant, en repartant là où on en était pour un film et au
+     * bord du direct pour une chaîne — y chercher une position absolue n'aurait
+     * pas de sens et ferait échouer la reprise.
+     */
+    private void restartStream(final String url, final String raison) {
+        if (player == null || reconnecting) return;
+        if (netRetries >= maxRetries()) {
+            Log.w(TAG, "Reprise abandonnee apres " + netRetries + " essais (" + raison + ")");
+            runOnUiThread(() -> Toast.makeText(PlayerActivity.this,
+                "Flux indisponible — reessayez plus tard", Toast.LENGTH_LONG).show());
+            return;
+        }
+        reconnecting = true;
+        netRetries++;
+        lastRetryAtMs = System.currentTimeMillis();
+        final boolean live = isLiveStream();
+        final long resumeAt = live ? -1L : Math.max(0L, player.getCurrentPosition());
+        final long backoffMs = Math.min(8_000L, 1000L * netRetries);   // 1 s… plafonné à 8 s
+        final int attempt = netRetries, budget = maxRetries();
+        Log.i(TAG, "Reprise " + attempt + "/" + budget + " (" + raison + ") "
+                 + (live ? "au bord du direct" : "a " + resumeAt + " ms")
+                 + " dans " + backoffMs + " ms");
+        runOnUiThread(() -> {
+            Toast.makeText(PlayerActivity.this,
+                "Flux interrompu — reprise (" + attempt + "/" + budget + ")…",
+                Toast.LENGTH_SHORT).show();
+            progHandler.postDelayed(() -> {
+                reconnecting = false;
+                if (player == null) return;
+                player.stop();
+                player.clearMediaItems();
+                player.setMediaSource(buildSourceFor(url));
+                player.setPlayWhenReady(true);
+                player.prepare();
+                if (resumeAt > 0) player.seekTo(resumeAt);
+                else if (live) { try { player.seekToDefaultPosition(); } catch (Throwable ignored) {} }
+                lastPosMs = -1L; lastPosChangeAt = 0L;
+            }, backoffMs);
+        });
+    }
 
     /** Remonte la position actuelle au WebView (sauvegarde) sans libérer le player. */
     private void reportCurrentProgress() {
@@ -363,29 +460,8 @@ public class PlayerActivity extends FragmentActivity {
                     // On rouvre le MÊME flux et on repart où on en était, avec
                     // une attente croissante pour laisser le réseau (ou le
                     // tunnel VPN) se rétablir.
-                    if (isRecoverable(error) && netRetries < MAX_NET_RETRIES) {
-                        netRetries++;
-                        lastRetryAtMs = System.currentTimeMillis();
-                        final long resumeAt = Math.max(0L, player.getCurrentPosition());
-                        final long backoffMs = 1000L * netRetries;   // 1 s, 2 s, 3 s…
-                        final int attempt = netRetries;
-                        Log.i(TAG, "Reprise " + attempt + "/" + MAX_NET_RETRIES
-                                 + " a " + resumeAt + " ms dans " + backoffMs + " ms");
-                        runOnUiThread(() -> {
-                            Toast.makeText(PlayerActivity.this,
-                                "Connexion interrompue — reprise en cours ("
-                                + attempt + "/" + MAX_NET_RETRIES + ")…",
-                                Toast.LENGTH_SHORT).show();
-                            progHandler.postDelayed(() -> {
-                                if (player == null) return;
-                                player.stop();
-                                player.clearMediaItems();
-                                player.setMediaSource(buildSourceFor(curUrl));
-                                player.setPlayWhenReady(true);
-                                player.prepare();
-                                if (resumeAt > 0) player.seekTo(resumeAt);
-                            }, backoffMs);
-                        });
+                    if (isRecoverable(error) && netRetries < maxRetries()) {
+                        restartStream(curUrl, "erreur " + error.errorCode);
                         return;
                     }
 
@@ -448,11 +524,21 @@ public class PlayerActivity extends FragmentActivity {
     }
 
     /** Source média correspondant au type d'URL — partagée par la lecture et la reprise. */
+    // Nombre de reprises SILENCIEUSES tentees par ExoPlayer sur un segment ou une
+    // plage avant de remonter une erreur. Le defaut (3) laisse passer trop vite
+    // les hoquets d'un serveur IPTV : on absorbe davantage avant d'aller jusqu'a
+    // la relance visible du flux, qui elle coupe l'image.
+    private static final int LOAD_RETRY_COUNT = 8;
+    private androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy loadErrorPolicy() {
+        return new androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(LOAD_RETRY_COUNT);
+    }
     private MediaSource buildSourceFor(String url) {
         return isHlsUrl(url)
             ? new HlsMediaSource.Factory(buildDsFactory())
+                    .setLoadErrorHandlingPolicy(loadErrorPolicy())
                     .createMediaSource(MediaItem.fromUri(url))
             : new ProgressiveMediaSource.Factory(buildDsFactory())
+                    .setLoadErrorHandlingPolicy(loadErrorPolicy())
                     .createMediaSource(MediaItem.fromUri(url));
     }
 
@@ -674,6 +760,7 @@ public class PlayerActivity extends FragmentActivity {
         // Sauver la position dès le passage en arrière-plan (appelé de façon fiable,
         // contrairement à onDestroy lors d'un kill brutal) + stopper le minuteur.
         progHandler.removeCallbacks(progRunnable);
+        stallHandler.removeCallbacks(stallRunnable);
         reportCurrentProgress();
         if (player != null) player.pause();
     }
@@ -685,12 +772,17 @@ public class PlayerActivity extends FragmentActivity {
         // (Re)démarrer la sauvegarde périodique pendant la lecture au premier plan.
         progHandler.removeCallbacks(progRunnable);
         progHandler.postDelayed(progRunnable, PROGRESS_SAVE_INTERVAL_MS);
+        // (Re)armer la surveillance anti-blocage.
+        lastPosMs = -1L; lastPosChangeAt = 0L;
+        stallHandler.removeCallbacks(stallRunnable);
+        stallHandler.postDelayed(stallRunnable, STALL_CHECK_MS);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         progHandler.removeCallbacks(progRunnable);
+        stallHandler.removeCallbacks(stallRunnable);
         // ── Remonter la progression au WebView avant de libérer le player ──
         if (player != null && !currentUrl.isEmpty()) {
             reportCurrentProgress();   // getDuration()=TIME_UNSET géré (durMs=0) côté JS
