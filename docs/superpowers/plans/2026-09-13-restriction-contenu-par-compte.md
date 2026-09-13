@@ -14,7 +14,8 @@
 - Valeur par défaut en cas d'absence, d'erreur réseau ou de valeur inconnue : `'all'`. Une restriction ne doit jamais s'appliquer par accident à un compte adulte.
 - Le motif jeunesse s'applique à la CATÉGORIE, jamais au titre.
 - Le filtrage adulte existant (`ADULT_RE` dans Cosmos, `_isAdultCat` dans `app.js`) reste en place et inchangé.
-- Motif jeunesse, identique dans les deux fichiers, mot pour mot :
+- Motif jeunesse et fonction de filtrage : **une seule définition, dans `auth.js`**, exposée via `window.PIPSILY_AUTH`. Les deux interfaces l'appellent, aucune ne la recopie. `auth.js` est déjà chargé par les deux et déjà transpilé vers `legacy/` par le workflow `build-legacy.yml`, qui ne surveille que `app.js`, `auth.js` et `player.js` : un fichier partagé neuf ne serait PAS transpilé et casserait les moteurs Chrome 61.
+- Motif jeunesse, mot pour mot :
   `/enfant|famille|kids|jeunesse|junior|dessin|cartoon|anim[ée]|manga|disney/i`
 - Aucun nouvel APK : tous les fichiers touchés sont servis par GitHub Pages.
 - Messages de commit en français, terminés par `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
@@ -111,7 +112,11 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: la colonne de la Task 1.
-- Produces: `normalizeContentPolicy(value)` exporté sur `window.PIPSILY_AUTH`, et la garantie que l'objet rendu par `checkSubscription()` porte toujours un champ `content_policy` valant `'all'` ou `'kids'`.
+- Produces, tous exposés sur `window.PIPSILY_AUTH` :
+  - `normalizeContentPolicy(value)` → `'all'` | `'kids'`
+  - `KID_CAT_RE` — le motif jeunesse, défini ICI et nulle part ailleurs
+  - `contentFilter(list, field, policy)` → liste filtrée. `field` vaut `'category'` pour Cosmos et `'category_name'` pour Xstream, les deux interfaces ne nommant pas la catégorie pareil.
+  - la garantie que l'objet rendu par `checkSubscription()` porte toujours `content_policy`.
 
 `checkSubscription` diffuse déjà le profil entier (`...prof`), donc la colonne arrive d'elle-même dans le cas nominal. Mais trois chemins de repli rendent des objets sans profil : mode dev, profil introuvable, exception. Sans normalisation, `sub.content_policy` y vaut `undefined` et le code appelant doit s'en méfier partout. On normalise donc à la source.
 
@@ -145,8 +150,8 @@ console.log('\n== auth.js : normalisation ==');
   } else {
     const box = { console };
     vm.createContext(box);
-    vm.runInContext(m[1] + '\nglobalThis._f = normalizeContentPolicy;', box);
-    const f = box._f;
+    vm.runInContext(m[1] + '\nglobalThis._api = { normalizeContentPolicy, contentFilter, KID_CAT_RE };', box);
+    const f = box._api.normalizeContentPolicy;
     const cas = [
       ['kids', 'kids', 'la valeur kids est conservee'],
       ['all', 'all', 'la valeur all est conservee'],
@@ -161,8 +166,56 @@ console.log('\n== auth.js : normalisation ==');
       const got = f(c[0]);
       got === c[1] ? ok(c[2]) : bad(c[2] + ' (obtenu: ' + JSON.stringify(got) + ')');
     });
+
+    // contentFilter : la meme fonction sert les deux interfaces, qui ne
+    // nomment pas la categorie pareil.
+    const cf = box._api.contentFilter;
+    const cosItems = [
+      { title: 'Asterix', category: 'FAMILLE & ENFANTS' },
+      { title: 'Soul',    category: 'DISNEY+' },
+      { title: 'Kubo',    category: 'ANIME & MANGA' },
+      { title: 'Heat',    category: 'CRIME & MAFIA' },
+      { title: 'Rien',    category: '' },
+    ];
+    const appItems = [
+      { title: 'Asterix', category_name: 'FR - FAMILLE & ENFANTS' },
+      { title: 'Heat',    category_name: 'FR - CRIME & MAFIA' },
+    ];
+
+    cf(cosItems, 'category', 'all').length === 5
+      ? ok('politique all : catalogue inchange')
+      : bad('politique all : le catalogue a ete modifie');
+    cf(cosItems, 'category', undefined).length === 5
+      ? ok('politique absente : catalogue inchange')
+      : bad('politique absente : le catalogue a ete modifie');
+    cf(null, 'category', 'kids').length === 0
+      ? ok('liste absente : renvoie une liste vide sans lever')
+      : bad('liste absente : comportement inattendu');
+
+    const cosKids = cf(cosItems, 'category', 'kids').map(i => i.title).sort().join(',');
+    cosKids === 'Asterix,Kubo,Soul'
+      ? ok('champ category : ne garde que les rayons jeunesse')
+      : bad('champ category : obtenu ' + cosKids);
+
+    const appKids = cf(appItems, 'category_name', 'kids').map(i => i.title).join(',');
+    appKids === 'Asterix'
+      ? ok('champ category_name : ne garde que les rayons jeunesse')
+      : bad('champ category_name : obtenu ' + appKids);
+
+    cf(cosItems, 'category', 'kids').every(i => i.category !== '')
+      ? ok('un item sans categorie est ecarte en politique kids')
+      : bad('un item sans categorie a ete garde');
   }
 }
+
+// -- 1bis. Aucune copie du motif ailleurs ---------------------------------
+console.log('\n== definition unique ==');
+['cosmos.html', 'app.js'].forEach(f => {
+  const src = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  /const\s+KID_CAT_RE/.test(src)
+    ? bad(f + ' redefinit KID_CAT_RE - la definition doit rester unique, dans auth.js')
+    : ok(f + ' ne redefinit pas le motif');
+});
 
 console.log('\n' + (fails ? 'ECHEC : ' + fails + ' assertion(s)' : 'OK : toutes les assertions passent'));
 process.exit(fails ? 1 : 0);
@@ -179,11 +232,33 @@ Insérer ce bloc dans `auth.js`, juste au-dessus de `async function checkSubscri
 
 ```js
 // <content-policy-normalize>
-// Restriction de contenu par compte. Toute valeur absente, inconnue ou d'un
-// type inattendu retombe sur 'all' : une restriction ne doit jamais
-// s'appliquer par accident a un compte adulte a cause d'une erreur reseau.
+// Restriction de contenu par compte, DEFINITION UNIQUE.
+// Voir docs/superpowers/specs/2026-09-13-restriction-contenu-par-compte-design.md
+//
+// Ce bloc vit dans auth.js parce que c'est le seul module charge par les DEUX
+// interfaces (cosmos.html et index.html/app.js) et deja transpile vers legacy/
+// par build-legacy.yml. Un fichier partage neuf ne serait pas transpile et
+// casserait les moteurs figes en Chrome 61.
+//
+// Toute valeur absente, inconnue ou d'un type inattendu retombe sur 'all' :
+// une restriction ne doit jamais s'appliquer par accident a un compte adulte
+// a cause d'une erreur reseau.
 function normalizeContentPolicy(value){
   return (typeof value === 'string' && value.toLowerCase() === 'kids') ? 'kids' : 'all';
+}
+
+// Rayons consideres comme jeunesse. Applique a la CATEGORIE, jamais au titre :
+// le titre d'un film pour adultes peut contenir « famille » par hasard.
+const KID_CAT_RE = /enfant|famille|kids|jeunesse|junior|dessin|cartoon|anim[ée]|manga|disney/i;
+
+// Filtre une liste d'items selon la politique du compte.
+// field : nom du champ portant la categorie. Cosmos utilise 'category',
+// l'interface Xstream utilise 'category_name'.
+function contentFilter(list, field, policy){
+  if(!list) return [];
+  if(normalizeContentPolicy(policy) !== 'kids') return list;
+  const f = field || 'category';
+  return list.filter(function(i){ return !!i && KID_CAT_RE.test(i[f] || ''); });
 }
 // </content-policy-normalize>
 ```
@@ -240,7 +315,13 @@ par :
            content_policy: normalizeContentPolicy(prof.content_policy) };
 ```
 
-Enfin, exposer la fonction sur l'objet global. Trouver l'objet assigné à `window.PIPSILY_AUTH` et y ajouter l'entrée `normalizeContentPolicy,` à côté des autres fonctions exportées.
+Enfin, exposer les trois symboles sur l'objet global. Trouver l'objet assigné à `window.PIPSILY_AUTH` et y ajouter, à côté des autres fonctions exportées :
+
+```js
+    normalizeContentPolicy,
+    contentFilter,
+    KID_CAT_RE,
+```
 
 - [ ] **Step 4 : Lancer le test pour le voir passer**
 
@@ -270,7 +351,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `window._cosUser.sub.content_policy` posé par `auth.js` (Task 2).
-- Produces: `cosContentPolicy()` renvoyant `'all'` ou `'kids'`, et `policyFilter(list)` renvoyant la liste filtrée. Les items de Cosmos portent leur catégorie dans le champ `category`.
+- Produces: `cosPolicy()` renvoyant la valeur brute du profil, et `policyFilter(list)` renvoyant la liste filtrée via `PIPSILY_AUTH.contentFilter`. Les items de Cosmos portent leur catégorie dans le champ `category`.
 
 - [ ] **Step 1 : Écrire le test qui échoue**
 
@@ -285,9 +366,17 @@ console.log('\n== cosmos.html : filtrage du catalogue ==');
   if (!m) {
     bad('bloc // <content-policy> absent de cosmos.html');
   } else {
-    const box = { console, window: {} };
+    // Le bloc appelle window.PIPSILY_AUTH : on lui fournit le vrai filtre
+    // extrait d'auth.js, pour tester les deux ensemble comme en production.
+    const authSrc = fs.readFileSync(path.join(ROOT, 'auth.js'), 'utf8');
+    const am = authSrc.match(/\/\/ <content-policy-normalize>([\s\S]*?)\/\/ <\/content-policy-normalize>/);
+    const abox = { console };
+    vm.createContext(abox);
+    vm.runInContext(am[1] + '\nglobalThis._cf = contentFilter;', abox);
+
+    const box = { console, window: { PIPSILY_AUTH: { contentFilter: abox._cf } } };
     vm.createContext(box);
-    vm.runInContext(m[1] + '\nglobalThis._api = { policyFilter, KID_CAT_RE };', box);
+    vm.runInContext(m[1] + '\nglobalThis._api = { policyFilter };', box);
     const { policyFilter } = box._api;
 
     const items = [
@@ -362,13 +451,14 @@ Expected: FAIL, `bloc // <content-policy> absent de cosmos.html`
 
 - [ ] **Step 3 : Insérer le bloc dans cosmos.html**
 
-Insérer juste au-dessus de la ligne `function isClean(i){return !ADULT_RE.test(...)}` :
+Ce bloc ne redéfinit RIEN : il appelle le filtre partagé d'`auth.js`. Insérer juste au-dessus de la ligne `function isClean(i){return !ADULT_RE.test(...)}` :
 
 ```js
-// ══════ RESTRICTION DE CONTENU PAR COMPTE ═══════════════════════════════
+// ══════ RESTRICTION DE CONTENU PAR COMPTE ═══════════════════════
 // <content-policy>
-// Un compte peut etre limite aux rayons jeunesse. La valeur vient du profil
-// Supabase et suit le compte, pas l'appareil. Voir
+// Restriction de contenu du compte. Le motif et la logique vivent dans
+// auth.js, seul module charge par les DEUX interfaces : ici on ne fait
+// qu'appeler. Voir
 // docs/superpowers/specs/2026-09-13-restriction-contenu-par-compte-design.md
 //
 // Le filtre est applique AU CHARGEMENT du catalogue, pas a l'affichage :
@@ -376,19 +466,20 @@ Insérer juste au-dessus de la ligne `function isClean(i){return !ADULT_RE.test(
 // grille, recherche, hero, favoris, reprise et direct sont couverts d'office,
 // y compris les vues ajoutees plus tard.
 //
-// Le meme bloc existe dans app.js pour l'interface Xstream. Les deux doivent
-// filtrer a l'identique ; scripts/test-content-policy.js le verifie.
-const KID_CAT_RE = /enfant|famille|kids|jeunesse|junior|dessin|cartoon|anim[ée]|manga|disney/i;
-function cosContentPolicy(){
+// Les items de Cosmos portent leur categorie dans le champ 'category'.
+function cosPolicy(){
   try{
     var u = window._cosUser;
-    var p = u && u.sub ? u.sub.content_policy : null;
-    return (typeof p === 'string' && p.toLowerCase() === 'kids') ? 'kids' : 'all';
-  }catch(e){ return 'all'; }
+    return (u && u.sub) ? u.sub.content_policy : null;
+  }catch(e){ return null; }
 }
 function policyFilter(list){
-  if(!list || cosContentPolicy() !== 'kids') return list || [];
-  return list.filter(function(i){ return !!i && KID_CAT_RE.test(i.category || ''); });
+  var A = window.PIPSILY_AUTH;
+  // auth.js absent : on ne restreint pas. Le portail d'authentification de
+  // cosmos.html redirige deja vers login.html dans ce cas, donc ce repli ne
+  // sert qu'a ne jamais lever d'exception ici.
+  if(!A || !A.contentFilter) return list || [];
+  return A.contentFilter(list, 'category', cosPolicy());
 }
 // </content-policy>
 ```
@@ -474,7 +565,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `auth.sub.content_policy` rendu par `authGate()` dans `boot()`.
-- Produces: `S._contentPolicy`, `appContentPolicy()`, `appPolicyFilter(list)`. Les items de `app.js` portent leur catégorie dans le champ `category_name`, pas `category`.
+- Produces: `S._contentPolicy` et `appPolicyFilter(list)`. Les items de `app.js` portent leur catégorie dans le champ `category_name`, pas `category`. Le motif et la logique viennent d'`auth.js`.
 
 - [ ] **Step 1 : Écrire le test qui échoue**
 
@@ -489,10 +580,16 @@ console.log('\n== app.js : filtrage du catalogue ==');
   if (!m) {
     bad('bloc // <content-policy> absent de app.js');
   } else {
-    const box = { console, S: {} };
+    const authSrc = fs.readFileSync(path.join(ROOT, 'auth.js'), 'utf8');
+    const am = authSrc.match(/\/\/<content-policy-normalize>([\s\S]*?)\/\/<\/content-policy-normalize>/);
+    const abox = { console };
+    vm.createContext(abox);
+    vm.runInContext(am[1] + '\nglobalThis._cf = contentFilter;', abox);
+
+    const box = { console, S: {}, window: { PIPSILY_AUTH: { contentFilter: abox._cf } } };
     vm.createContext(box);
-    vm.runInContext(m[1] + '\nglobalThis._api = { appPolicyFilter, KID_CAT_RE };', box);
-    const { appPolicyFilter, KID_CAT_RE } = box._api;
+    vm.runInContext(m[1] + '\nglobalThis._api = { appPolicyFilter };', box);
+    const { appPolicyFilter } = box._api;
 
     const items = [
       { title: 'Asterix', category_name: 'FR - FAMILLE & ENFANTS' },
@@ -516,12 +613,9 @@ console.log('\n== app.js : filtrage du catalogue ==');
       ? ok('politique kids : ne garde que les rayons jeunesse')
       : bad('politique kids : obtenu ' + kids);
 
-    // Les deux interfaces doivent utiliser EXACTEMENT le meme motif.
-    const cosSrc = fs.readFileSync(path.join(ROOT, 'cosmos.html'), 'utf8');
-    const cosM = cosSrc.match(/const KID_CAT_RE = (\/.*\/i);/);
-    cosM && cosM[1] === String(KID_CAT_RE)
-      ? ok('le motif jeunesse est identique dans les deux interfaces')
-      : bad('le motif jeunesse DIFFERE entre cosmos.html et app.js');
+    // La derive entre interfaces n'est plus possible : le motif n'existe qu'une
+    // fois, dans auth.js. La garde de la section 1bis verifie qu'aucun des deux
+    // fichiers ne le redefinit.
   }
 }
 ```
@@ -533,22 +627,18 @@ Expected: FAIL, `bloc // <content-policy> absent de app.js`
 
 - [ ] **Step 3 : Insérer le bloc dans app.js**
 
-Insérer juste au-dessus de `function filtered(){` :
+Comme dans Cosmos, ce bloc ne redéfinit rien : il appelle le filtre partagé d'`auth.js`. Insérer juste au-dessus de `function filtered(){` :
 
 ```js
-// ══════ RESTRICTION DE CONTENU PAR COMPTE ═══════════════════════════════
+// ══════ RESTRICTION DE CONTENU PAR COMPTE ═══════════════════════
 // <content-policy>
-// Jumeau du bloc de cosmos.html. Les deux interfaces doivent filtrer a
-// l'identique ; scripts/test-content-policy.js compare les deux motifs.
-// Ici les items portent leur categorie dans category_name, pas category.
-const KID_CAT_RE = /enfant|famille|kids|jeunesse|junior|dessin|cartoon|anim[ée]|manga|disney/i;
-function appContentPolicy(){
-  const p = S._contentPolicy;
-  return (typeof p === 'string' && p.toLowerCase() === 'kids') ? 'kids' : 'all';
-}
+// Restriction de contenu du compte. Motif et logique dans auth.js, seul
+// module charge par les deux interfaces. Ici les items portent leur
+// categorie dans category_name, pas category.
 function appPolicyFilter(list){
-  if(!list || appContentPolicy() !== 'kids') return list || [];
-  return list.filter(i => !!i && KID_CAT_RE.test(i.category_name || ''));
+  const A = window.PIPSILY_AUTH;
+  if(!A || !A.contentFilter) return list || [];
+  return A.contentFilter(list, 'category_name', S._contentPolicy);
 }
 // </content-policy>
 ```
@@ -655,7 +745,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Modify: `cosmos.html` — fonction `renderSettings`, autour de la ligne 2700
 
 **Interfaces:**
-- Consumes: `cosContentPolicy()` de la Task 3.
+- Consumes: `cosPolicy()` de la Task 3 et `normalizeContentPolicy` d'`auth.js` (Task 2).
 - Produces: rien que d'autres tâches consomment.
 
 Les deux interfaces étant filtrées, la bascule n'est plus une échappatoire. On masque par propreté, et parce que l'entrée « Contrôle parental » n'a plus d'objet sur un compte déjà restreint.
@@ -668,7 +758,9 @@ Dans `renderSettings`, après la construction du tableau `items`, avant l'ajout 
   // Compte restreint : la bascule d'interface et le controle parental n'ont
   // plus d'objet. Masquage de confort, pas de securite : les deux interfaces
   // filtrent deja a la source.
-  if(cosContentPolicy() === 'kids'){
+  var _pol = window.PIPSILY_AUTH && window.PIPSILY_AUTH.normalizeContentPolicy
+           ? window.PIPSILY_AUTH.normalizeContentPolicy(cosPolicy()) : 'all';
+  if(_pol === 'kids'){
     for(var _i=items.length-1;_i>=0;_i--){
       if(items[_i].action === 'iface' || items[_i].action === 'parental') items.splice(_i,1);
     }
