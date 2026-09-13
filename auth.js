@@ -106,6 +106,37 @@ async function getProfile(userId){
   } catch { return null; }
 }
 
+// <content-policy-normalize>
+// Restriction de contenu par compte, DEFINITION UNIQUE.
+// Voir docs/superpowers/specs/2026-09-13-restriction-contenu-par-compte-design.md
+//
+// Ce bloc vit dans auth.js parce que c'est le seul module charge par les DEUX
+// interfaces (cosmos.html et index.html/app.js) et deja transpile vers legacy/
+// par build-legacy.yml. Un fichier partage neuf ne serait pas transpile et
+// casserait les moteurs figes en Chrome 61.
+//
+// Toute valeur absente, inconnue ou d'un type inattendu retombe sur 'all' :
+// une restriction ne doit jamais s'appliquer par accident a un compte adulte
+// a cause d'une erreur reseau.
+function normalizeContentPolicy(value){
+  return (typeof value === 'string' && value.toLowerCase() === 'kids') ? 'kids' : 'all';
+}
+
+// Rayons consideres comme jeunesse. Applique a la CATEGORIE, jamais au titre :
+// le titre d'un film pour adultes peut contenir « famille » par hasard.
+const KID_CAT_RE = /enfant|famille|kids|jeunesse|junior|dessin|cartoon|anim[ée]|manga|disney/i;
+
+// Filtre une liste d'items selon la politique du compte.
+// field : nom du champ portant la categorie. Cosmos utilise 'category',
+// l'interface Xstream utilise 'category_name'.
+function contentFilter(list, field, policy){
+  if(!list) return [];
+  if(normalizeContentPolicy(policy) !== 'kids') return list;
+  const f = field || 'category';
+  return list.filter(function(i){ return !!i && KID_CAT_RE.test(i[f] || ''); });
+}
+// </content-policy-normalize>
+
 async function checkSubscription(userId){
   // Mode dev : admin illimité
   if(!_configured || !_supa){
@@ -113,15 +144,17 @@ async function checkSubscription(userId){
     if(sess?.user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase())
       return { ok: true, unlimited: true, plan: "admin", devices_allowed: 99,
                email: sess.user.email, id: sess.user.id };
-    return { ok: false, plan: "pending" };
+    return { ok: false, plan: "pending", content_policy: "all" };
   }
   const prof = await getProfile(userId);
-  if(!prof) return { ok: false, plan: null };
+  if(!prof) return { ok: false, plan: null, content_policy: "all" };
   if(prof.plan === "admin" || prof.plan === "unlimited")
-    return { ok: true, unlimited: true, ...prof };
+    return { ok: true, unlimited: true, ...prof,
+             content_policy: normalizeContentPolicy(prof.content_policy) };
   const expires = prof.subscription_expires_at ? new Date(prof.subscription_expires_at) : null;
   const ok = !!(expires && expires > new Date());
-  return { ok, unlimited: false, ...prof };
+  return { ok, unlimited: false, ...prof,
+           content_policy: normalizeContentPolicy(prof.content_policy) };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -612,7 +645,10 @@ window.PIPSILY_AUTH = {
   authGate,
   getDeviceId,
   getDeviceName,
-  startSessionWatcher
+  startSessionWatcher,
+  normalizeContentPolicy,
+  contentFilter,
+  KID_CAT_RE,
 };
 
 // ─────────────────────────────────────────────────────────────────
