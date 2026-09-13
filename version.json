@@ -1,6 +1,6 @@
 {
-  "apk_version": 65,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v65/PIPSILY.apk",
+  "apk_version": 66,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v66/PIPSILY.apk",
   "changes": "Écran noir corrigé : quand le décodeur de la box lache, le lecteur bascule désormais sur un autre décodeur au lieu d'abandonner. Les segments abimés et les pertes de son sont aussi retentés, et un lecteur resté bloqué est relancé tout seul au bout de quinze secondes. Vous ne devriez plus avoir à ressortir et relancer pour que l'image revienne.",
   "vpn_enabled": true,
   "tizen_version": 1,
