@@ -90,5 +90,106 @@ console.log('\n== definition unique ==');
     : ok(f + ' ne redefinit pas le motif');
 });
 
+// ── 2. policyFilter extrait de cosmos.html ────────────────────────────────
+console.log('\n== cosmos.html : filtrage du catalogue ==');
+{
+  const src = fs.readFileSync(path.join(ROOT, 'cosmos.html'), 'utf8');
+  const m = src.match(/\/\/ <content-policy>([\s\S]*?)\/\/ <\/content-policy>/);
+  if (!m) {
+    bad('bloc // <content-policy> absent de cosmos.html');
+  } else {
+    // Le bloc appelle window.PIPSILY_AUTH : on lui fournit le vrai filtre
+    // extrait d'auth.js, pour tester les deux ensemble comme en production.
+    const authSrc = fs.readFileSync(path.join(ROOT, 'auth.js'), 'utf8');
+    const am = authSrc.match(/\/\/ <content-policy-normalize>([\s\S]*?)\/\/ <\/content-policy-normalize>/);
+    const abox = { console };
+    vm.createContext(abox);
+    vm.runInContext(am[1] + '\nglobalThis._cf = contentFilter;', abox);
+
+    const box = { console, window: { PIPSILY_AUTH: { contentFilter: abox._cf } } };
+    vm.createContext(box);
+    vm.runInContext(m[1] + '\nglobalThis._api = { policyFilter };', box);
+    const { policyFilter } = box._api;
+
+    const items = [
+      { title: 'Asterix', category: 'FAMILLE & ENFANTS' },
+      { title: 'Soul', category: 'DISNEY+' },
+      { title: 'Kubo', category: 'ANIME & MANGA' },
+      { title: 'Heat', category: 'CRIME & MAFIA' },
+      { title: 'Saw', category: 'HORREUR & THRILLER' },
+      { title: 'Sans categorie', category: '' },
+    ];
+
+    // Politique 'all' : rien n'est retire.
+    box.window._cosUser = { sub: { content_policy: 'all' } };
+    policyFilter(items).length === items.length
+      ? ok('politique all : catalogue inchange')
+      : bad('politique all : le catalogue a ete modifie');
+
+    // Politique absente : se comporte comme 'all'.
+    box.window._cosUser = undefined;
+    policyFilter(items).length === items.length
+      ? ok('compte sans politique : catalogue inchange')
+      : bad('compte sans politique : le catalogue a ete modifie');
+
+    // Politique 'kids' : seuls les rayons jeunesse survivent.
+    box.window._cosUser = { sub: { content_policy: 'kids' } };
+    const kids = policyFilter(items);
+    const titres = kids.map(i => i.title).sort().join(',');
+    titres === 'Asterix,Kubo,Soul'
+      ? ok('politique kids : ne garde que les rayons jeunesse')
+      : bad('politique kids : obtenu ' + titres);
+    kids.every(i => i.category !== '')
+      ? ok('politique kids : un item sans categorie est ecarte')
+      : bad('politique kids : un item sans categorie a ete garde');
+  }
+}
+
+// ── 3. Le vrai catalogue reste utilisable en politique kids ───────────────
+console.log('\n== catalogue reel ==');
+{
+  const src = fs.readFileSync(path.join(ROOT, 'cosmos.html'), 'utf8');
+  const m = src.match(/\/\/ <content-policy>([\s\S]*?)\/\/ <\/content-policy>/);
+  if (m) {
+    // Comme en production, window.PIPSILY_AUTH.contentFilter doit etre le
+    // vrai filtre d'auth.js : sans lui, policyFilter applique son repli
+    // "aucune restriction" et ce test contre le catalogue reel ne verifierait
+    // rien (voir section 2 ci-dessus pour la meme extraction).
+    const authSrc = fs.readFileSync(path.join(ROOT, 'auth.js'), 'utf8');
+    const am = authSrc.match(/\/\/ <content-policy-normalize>([\s\S]*?)\/\/ <\/content-policy-normalize>/);
+    const abox = { console };
+    vm.createContext(abox);
+    vm.runInContext(am[1] + '\nglobalThis._cf = contentFilter;', abox);
+
+    const box = {
+      console,
+      window: {
+        PIPSILY_AUTH: { contentFilter: abox._cf },
+        _cosUser: { sub: { content_policy: 'kids' } },
+      },
+    };
+    vm.createContext(box);
+    vm.runInContext(m[1] + '\nglobalThis._api = { policyFilter };', box);
+    const { policyFilter } = box._api;
+    const cleanTitle = t => String(t || '')
+      .replace(/^(FR|SRS|EN|VOD|SERIE)\s*[-|:]\s*/i, '').replace(/\s+/g, ' ').trim();
+
+    [['films', 'vod.json'], ['series', 'series.json']].forEach(pair => {
+      const j = JSON.parse(fs.readFileSync(path.join(ROOT, pair[1]), 'utf8'));
+      const items = (j.items || []).map(r => ({
+        title: r.title || r.name || '', category: cleanTitle(r.category_name || ''),
+      }));
+      const kept = policyFilter(items);
+      kept.length > 0
+        ? ok(pair[0] + ' : ' + kept.length + ' titres jeunesse sur ' + items.length)
+        : bad(pair[0] + ' : catalogue jeunesse VIDE, le motif est trop strict');
+      const hors = kept.filter(i => !/enfant|famille|kids|jeunesse|junior|dessin|cartoon|anim[ée]|manga|disney/i.test(i.category));
+      hors.length === 0
+        ? ok(pair[0] + ' : aucun rayon hors jeunesse retenu')
+        : bad(pair[0] + ' : rayons hors jeunesse retenus : ' + hors.slice(0, 3).map(i => i.category).join(', '));
+    });
+  }
+}
+
 console.log('\n' + (fails ? 'ECHEC : ' + fails + ' assertion(s)' : 'OK : toutes les assertions passent'));
 process.exit(fails ? 1 : 0);
