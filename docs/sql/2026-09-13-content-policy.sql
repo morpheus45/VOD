@@ -46,7 +46,12 @@ begin
     return new;
   end if;
 
-  select (p.plan = 'admin') into appelant_admin
+  -- Double contrôle, comme le fait l'application : par le plan ET par l'email.
+  -- admin.html force plan='admin' au chargement, mais si cette ligne était
+  -- remise à 'pending' pour une raison quelconque, le panneau d'administration
+  -- se retrouverait bloqué sur cette colonne. L'email sert de filet.
+  select (p.plan = 'admin' or lower(p.email) = 'cedric.lago@gmail.com')
+    into appelant_admin
   from public.profiles p
   where p.id = auth.uid();
 
