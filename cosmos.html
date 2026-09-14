@@ -2744,6 +2744,16 @@ function renderSettings(){
     })(),action:'apps'},
     {label:'      ↳ Choisir les applications affichées',desc:'Masquer / afficher chaque application',action:'appspick'},
   ];
+  // Compte restreint : la bascule d'interface et le controle parental n'ont
+  // plus d'objet. Masquage de confort, pas de securite : les deux interfaces
+  // filtrent deja a la source.
+  var _pol = window.PIPSILY_AUTH && window.PIPSILY_AUTH.normalizeContentPolicy
+           ? window.PIPSILY_AUTH.normalizeContentPolicy(cosPolicy()) : 'all';
+  if(_pol === 'kids'){
+    for(var _i=items.length-1;_i>=0;_i--){
+      if(items[_i].action === 'iface' || items[_i].action === 'parental') items.splice(_i,1);
+    }
+  }
   if(_cosIsAdmin())items.push({label:'⚙ Admin',desc:'Ouvrir le panneau d\'administration',action:'admin'});
   items.push(
     {label:'Vérifier mise à jour',desc:'Télécharger et installer la dernière version',action:'update'},
