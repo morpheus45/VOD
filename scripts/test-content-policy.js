@@ -435,6 +435,119 @@ console.log('\n== cosmos.html : favoris et politique ==');
   }
 }
 
+// ── 7. Le direct, et la non-regression sur les vrais fichiers ─────────────
+// live.json n'etait teste nulle part alors que la categorie y est construite
+// differemment dans chaque interface : cleanTitle(category_name) cote Cosmos,
+// category_name brut cote app.js, sur des libelles du genre « EU | FR | ENFANTS ».
+console.log('\n== live.json : les deux formes de champ ==');
+{
+  const api = loadAuthApi();
+  const cleanTitle = loadCosCleanTitle();
+  if (!api || !cleanTitle) {
+    bad('extraction de contentFilter / cleanTitle impossible');
+  } else {
+    const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'live.json'), 'utf8'));
+    const rows = raw.items || raw;
+    // Forme Cosmos : category = cleanTitle(category_name)  (cf. fetchContentData)
+    const cosLive = rows.map(r => ({
+      title: cleanTitle(r.title || r.name || ''),
+      category: cleanTitle(r.category_name || r.category || 'Live TV'),
+    }));
+    // Forme app.js : category_name brut  (cf. normalisation du bloc liveJson)
+    const appLive = rows.map(r => ({
+      title: r.title || r.name || 'Sans titre',
+      category_name: r.category_name || 'Autre',
+    }));
+
+    const KID = /enfant|famille|kids|jeunesse|junior|dessin|cartoon|anim[ée]|manga|disney/i;
+    const keptCos = api.contentFilter(cosLive, 'category', 'kids');
+    const keptApp = api.contentFilter(appLive, 'category_name', 'kids');
+
+    keptCos.length > 0
+      ? ok('direct/Cosmos : ' + keptCos.length + ' chaines jeunesse sur ' + cosLive.length)
+      : bad('direct/Cosmos : AUCUNE chaine jeunesse, le motif ne reconnait pas les libelles du direct');
+    keptApp.length > 0
+      ? ok('direct/app.js : ' + keptApp.length + ' chaines jeunesse sur ' + appLive.length)
+      : bad('direct/app.js : AUCUNE chaine jeunesse, le motif ne reconnait pas les libelles du direct');
+    keptCos.length === keptApp.length
+      ? ok('direct : les deux interfaces gardent le meme nombre de chaines')
+      : bad('direct : divergence entre interfaces (' + keptCos.length + ' vs ' + keptApp.length + ')');
+
+    const horsCos = keptCos.filter(i => !KID.test(i.category));
+    horsCos.length === 0
+      ? ok('direct/Cosmos : aucun rayon hors jeunesse retenu')
+      : bad('direct/Cosmos : rayons hors jeunesse : ' + horsCos.slice(0, 3).map(i => i.category).join(', '));
+    const horsApp = keptApp.filter(i => !KID.test(i.category_name));
+    horsApp.length === 0
+      ? ok('direct/app.js : aucun rayon hors jeunesse retenu')
+      : bad('direct/app.js : rayons hors jeunesse : ' + horsApp.slice(0, 3).map(i => i.category_name).join(', '));
+
+    // Libelles reels du fichier : « EU | FR | ENFANTS » garde, « EU | FR | NEWS » ecarte.
+    const catsCos = new Set(keptCos.map(i => i.category));
+    const toutesCats = new Set(cosLive.map(i => i.category));
+    const kidCats = [...toutesCats].filter(c => KID.test(c));
+    kidCats.length > 0 && kidCats.every(c => catsCos.has(c))
+      ? ok('direct : toutes les categories jeunesse du fichier survivent (' + kidCats.join(' / ') + ')')
+      : bad('direct : categorie jeunesse perdue parmi ' + kidCats.join(' / '));
+    [...toutesCats].filter(c => !KID.test(c)).every(c => !catsCos.has(c))
+      ? ok('direct : aucune categorie non jeunesse ne survit')
+      : bad('direct : une categorie non jeunesse a survecu');
+  }
+}
+
+console.log('\n== non-regression : politique all ne touche a rien ==');
+{
+  // La spec exige qu'en politique 'all' les trois catalogues soient STRICTEMENT
+  // identiques a ce qu'ils sont sans restriction. On le verifie sur les VRAIS
+  // fichiers, via les VRAIS points d'entree des deux interfaces, pas sur
+  // quelques items synthetiques.
+  const cleanTitle = loadCosCleanTitle();
+  const cosBox = loadCosPolicy('globalThis._pf = policyFilter;');
+  const appBox = loadAppPolicy();
+  if (!cleanTitle || !cosBox || !appBox) {
+    bad('extraction des filtres impossible');
+  } else {
+    const policyFilter    = cosBox._pf;
+    const appPolicyFilter = appBox._api.appPolicyFilter;
+    const identique = (out, src) =>
+      Array.isArray(out) && out.length === src.length && out.every((v, i) => v === src[i]);
+
+    const fichiers = [
+      ['films',  'vod.json'],
+      ['series', 'series.json'],
+      ['direct', 'live.json'],
+    ];
+    fichiers.forEach(pair => {
+      const raw  = JSON.parse(fs.readFileSync(path.join(ROOT, pair[1]), 'utf8'));
+      const rows = raw.items || raw;
+      const cosItems = rows.map(r => ({
+        title: r.title || r.name || '',
+        category: cleanTitle(r.category_name || r.category || ''),
+      }));
+      const appItems = rows.map(r => ({
+        title: r.title || r.name || '',
+        category_name: r.category_name || 'Autre',
+      }));
+
+      cosBox.window._cosUser = { sub: { content_policy: 'all' } };
+      const cosAll = policyFilter(cosItems);
+      cosBox.window._cosUser = undefined;
+      const cosAbsente = policyFilter(cosItems);
+      appBox.S._contentPolicy = 'all';
+      const appAll = appPolicyFilter(appItems);
+      appBox.S._contentPolicy = undefined;
+      const appAbsente = appPolicyFilter(appItems);
+
+      identique(cosAll, cosItems) && identique(cosAbsente, cosItems)
+        ? ok(pair[0] + '/Cosmos : ' + cosItems.length + ' items rendus a l\'identique')
+        : bad(pair[0] + '/Cosmos : le catalogue a ete modifie en politique all');
+      identique(appAll, appItems) && identique(appAbsente, appItems)
+        ? ok(pair[0] + '/app.js : ' + appItems.length + ' items rendus a l\'identique')
+        : bad(pair[0] + '/app.js : le catalogue a ete modifie en politique all');
+    });
+  }
+}
+
 // ── 8. Rafraichissement silencieux : comparer du filtre avec du filtre ────
 // `d.allVod` est brut, `S.allVod` est filtre : sur un compte kids, comparer
 // leurs longueurs rend `changed` vrai en PERMANENCE, et l'accueil se
