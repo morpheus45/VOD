@@ -191,5 +191,59 @@ console.log('\n== catalogue reel ==');
   }
 }
 
+// ── 4. appPolicyFilter extrait de app.js ──────────────────────────────────
+console.log('\n== app.js : filtrage du catalogue ==');
+{
+  const src = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+  const m = src.match(/\/\/ <content-policy>([\s\S]*?)\/\/ <\/content-policy>/);
+  if (!m) {
+    bad('bloc // <content-policy> absent de app.js');
+  } else {
+    // Comme pour cosmos.html (section 2 ci-dessus) : on fournit le VRAI
+    // contentFilter extrait d'auth.js. Le brief initial de cette tache avait
+    // une regex sans l'espace attendu par les marqueurs reels d'auth.js
+    // (// <content-policy-normalize>, avec espace) : window.PIPSILY_AUTH y
+    // restait donc absent du bac a sable, et avec le repli "aucune
+    // restriction" de appPolicyFilter, le test aurait verifie 0 chose meme
+    // si le filtrage etait casse. On extrait ici exactement comme section 2.
+    const authSrc = fs.readFileSync(path.join(ROOT, 'auth.js'), 'utf8');
+    const am = authSrc.match(/\/\/ <content-policy-normalize>([\s\S]*?)\/\/ <\/content-policy-normalize>/);
+    const abox = { console };
+    vm.createContext(abox);
+    vm.runInContext(am[1] + '\nglobalThis._cf = contentFilter;', abox);
+
+    const box = { console, S: {}, window: { PIPSILY_AUTH: { contentFilter: abox._cf } } };
+    vm.createContext(box);
+    vm.runInContext(m[1] + '\nglobalThis._api = { appPolicyFilter };', box);
+    const { appPolicyFilter } = box._api;
+
+    const items = [
+      { title: 'Asterix', category_name: 'FR - FAMILLE & ENFANTS' },
+      { title: 'Soul', category_name: 'FR - DISNEY+' },
+      { title: 'Heat', category_name: 'FR - CRIME & MAFIA' },
+    ];
+
+    box.S._contentPolicy = 'all';
+    appPolicyFilter(items).length === 3
+      ? ok('politique all : catalogue inchange')
+      : bad('politique all : le catalogue a ete modifie');
+
+    box.S._contentPolicy = undefined;
+    appPolicyFilter(items).length === 3
+      ? ok('politique absente : catalogue inchange')
+      : bad('politique absente : le catalogue a ete modifie');
+
+    box.S._contentPolicy = 'kids';
+    const kids = appPolicyFilter(items).map(i => i.title).sort().join(',');
+    kids === 'Asterix,Soul'
+      ? ok('politique kids : ne garde que les rayons jeunesse')
+      : bad('politique kids : obtenu ' + kids);
+
+    // La derive entre interfaces n'est plus possible : le motif n'existe qu'une
+    // fois, dans auth.js. La garde de la section 1bis verifie qu'aucun des deux
+    // fichiers ne le redefinit.
+  }
+}
+
 console.log('\n' + (fails ? 'ECHEC : ' + fails + ' assertion(s)' : 'OK : toutes les assertions passent'));
 process.exit(fails ? 1 : 0);

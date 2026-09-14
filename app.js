@@ -2052,6 +2052,18 @@ const _isAdultCat = c => {
 // VOSTFR — toujours masqué (titre ou catégorie)
 const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
 
+// ══════ RESTRICTION DE CONTENU PAR COMPTE ═══════════════════════
+// <content-policy>
+// Restriction de contenu du compte. Motif et logique dans auth.js, seul
+// module charge par les deux interfaces. Ici les items portent leur
+// categorie dans category_name, pas category.
+function appPolicyFilter(list){
+  const A = window.PIPSILY_AUTH;
+  if(!A || !A.contentFilter) return list || [];
+  return A.contentFilter(list, 'category_name', S._contentPolicy);
+}
+// </content-policy>
+
 function filtered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
   // VOSTFR toujours masqué
@@ -4123,13 +4135,15 @@ async function boot(){
       try { _sess = await window.PIPSILY_AUTH.getSession?.(); } catch{}
       const _em = (_sess?.user?.email || "").toLowerCase();
       const _adm = _em && _em === (window.PIPSILY_AUTH?.ADMIN_EMAIL || "").toLowerCase();
-      auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm } };
+      auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm, content_policy: "all" } };
     }
     if(!auth) return; // redirigé vers login.html ou paywall
 
     S._userId  = auth.session?.user?.id || "err";
     S._isAdmin = auth.sub.plan === "admin" || (auth.session?.user?.email||"").toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL||"").toLowerCase();
     S._unlim   = auth.sub.unlimited;
+    // Restriction de contenu du compte, lue avant tout chargement de catalogue.
+    S._contentPolicy = (auth.sub && auth.sub.content_policy === "kids") ? "kids" : "all";
 
     const userBtns = $("topbarUserBtns");
     if(userBtns) userBtns.style.display = "flex";
@@ -4340,23 +4354,23 @@ async function boot(){
     fetchJson("episodes_index.json")
   ]);
 
-  if(vodJson){ S.vod = normalizeItems(extractArr(vodJson), "vod"); }
+  if(vodJson){ S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod")); }
   else {
     const vodM3u = await fetchText("vod.m3u");
-    if(vodM3u){ S.vod = parseM3U(vodM3u, "vod"); }
+    if(vodM3u){ S.vod = appPolicyFilter(parseM3U(vodM3u, "vod")); }
   }
 
-  if(seriesJson){ S.series = normalizeItems(extractArr(seriesJson), "series"); }
+  if(seriesJson){ S.series = appPolicyFilter(normalizeItems(extractArr(seriesJson), "series")); }
   else {
     const seriesM3u = await fetchText("series.m3u");
-    if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); }
+    if(seriesM3u){ S.series = appPolicyFilter(parseM3U(seriesM3u, "series")); }
   }
 
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
     const liveItems = extractArr(liveJson);
     S._liveRegionIdx = null; // reset index quand les données live changent
-    S.live = liveItems.map((x, i) => ({  // normalisation
+    S.live = appPolicyFilter(liveItems.map((x, i) => ({  // normalisation
       id           : x.id || x.stream_id || String(i),
       stream_id    : x.stream_id || x.id || String(i),
       title        : x.title || x.name || "Sans titre",
@@ -4368,7 +4382,7 @@ async function boot(){
       plot         : "",
       type         : "live",
       quality      : ""
-    }));
+    })));
     // Construire l'index régional immédiatement → peupler pipsily_available_regions
     // pour que les pills de région soient disponibles dès le premier affichage du live.
     if(S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
