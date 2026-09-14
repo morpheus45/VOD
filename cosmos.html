@@ -1080,8 +1080,12 @@ function matchTabType(i,t){
 function poursuivreItems(typeFilter){
   const inprog=inProgressItems().filter(i=>matchTabType(i,typeFilter));
   const keys=new Set(inprog.map(itemKey));
-  const favs=getFavs().slice(0,40).map(resolveItem)
-    .filter(i=>i&&isClean(i)&&matchTabType(i,typeFilter)&&!keys.has(itemKey(i)));
+  // Filtrer AVANT de couper : resolveItem peut desormais rendre vide (favori
+  // ecarte par la politique du compte). Couper d'abord viderait la liste des
+  // que les 40 favoris les plus recents sont tous hors politique.
+  const favs=getFavs().map(resolveItem)
+    .filter(i=>i&&isClean(i)&&matchTabType(i,typeFilter)&&!keys.has(itemKey(i)))
+    .slice(0,40);
   return [...inprog,...favs].slice(0,25);
 }
 // Items "en cours" depuis la progression PARTAGÉE (comme PIPSILY Poursuivre).
@@ -1562,7 +1566,7 @@ function buildContent(allVod,allSeries,liveRaw){
   const rows=[];
   const histItems=inProgressItems();
   if(histItems.length)rows.push({title:'▶ Continuer a regarder',items:histItems});
-  const favItems=getFavs().slice(0,30).map(resolveItem).filter(i=>i&&isClean(i));
+  const favItems=getFavs().map(resolveItem).filter(i=>i&&isClean(i)).slice(0,30);
   if(favItems.length)rows.push({title:'♥ Mes favoris',items:favItems});
   if(trending.length)rows.push({title:'Nouveautes Films',items:trending});
   if(newSeries.length)rows.push({title:'Nouveautes Series',items:newSeries});
@@ -2664,7 +2668,7 @@ function renderTabMyList(){
   const rows=[];
   const hist=inProgressItems();
   if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().slice(0,40).map(resolveItem).filter(i=>i&&isClean(i));
+  const favs=getFavs().map(resolveItem).filter(i=>i&&isClean(i)).slice(0,40);
   if(favs.length)rows.push({title:'Ma liste',items:favs});
   if(!rows.length){$('content').innerHTML='<div style="padding:60px var(--safe);font-size:20px;color:var(--dim)">Rien ici — ajoutez des films avec ♡</div>';S.rows=[];return;}
   S.rows=rows;
@@ -2677,7 +2681,7 @@ function renderMyList(){
   const rows=[];
   const hist=inProgressItems();
   if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().slice(0,40).map(resolveItem).filter(i=>i&&isClean(i));
+  const favs=getFavs().map(resolveItem).filter(i=>i&&isClean(i)).slice(0,40);
   if(favs.length)rows.push({title:'Ma liste',items:favs});
   if(!rows.length){
     c.innerHTML='<div style="padding:60px var(--safe);font-size:18px;color:var(--dim)">Rien ici pour l instant — ajoutez des films a votre liste avec ♡</div>';
