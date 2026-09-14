@@ -1476,14 +1476,19 @@ async function refreshContentSilently(){
     const d=await fetchContentData();
     if(!d||(!d.allVod.length&&!d.allSeries.length))return;
     saveCache(d.allVod,d.allSeries,d.liveRaw);
-    const changed = d.allVod.length!==S.allVod.length || d.allSeries.length!==S.allSeries.length;
+    // Meme filtre que buildContent : ce chemin met a jour les donnees sans
+    // repasser par le rendu, il doit donc filtrer lui aussi.
+    const nVod=policyFilter(d.allVod), nSeries=policyFilter(d.allSeries);
+    // Comparer du FILTRE avec du FILTRE : S.allVod est deja filtre, alors que
+    // d.allVod est brut. Sur un compte restreint, comparer les deux rendait
+    // `changed` vrai en permanence et reconstruisait l'accueil a chaque
+    // rafraichissement, en retirant un hero au hasard.
+    const changed = nVod.length!==S.allVod.length || nSeries.length!==S.allSeries.length;
     if(changed && S.sec==='home' && S.zone==='hero'){
       buildContent(d.allVod,d.allSeries,d.liveRaw); // utilisateur au repos → rafraichit visuellement
     }else{
       // MAJ silencieuse des donnees, visible au prochain changement d'onglet
-      // Meme filtre que buildContent : ce chemin met a jour les donnees sans
-      // repasser par le rendu, il doit donc filtrer lui aussi.
-      S.allVod=policyFilter(d.allVod);S.allSeries=policyFilter(d.allSeries);
+      S.allVod=nVod;S.allSeries=nSeries;
       S.allItems=[...S.allVod,...S.allSeries];
       S.liveItems=_cosRegionFilter(groupLiveItems(policyFilter(d.liveRaw).filter(isClean)));
       const cleanItems=S.allItems.filter(i=>isClean(i)&&i.image);

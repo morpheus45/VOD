@@ -435,5 +435,89 @@ console.log('\n== cosmos.html : favoris et politique ==');
   }
 }
 
-console.log('\n' + (fails ? 'ECHEC : ' + fails + ' assertion(s)' : 'OK : toutes les assertions passent'));
-process.exit(fails ? 1 : 0);
+// ── 8. Rafraichissement silencieux : comparer du filtre avec du filtre ────
+// `d.allVod` est brut, `S.allVod` est filtre : sur un compte kids, comparer
+// leurs longueurs rend `changed` vrai en PERMANENCE, et l'accueil se
+// reconstruit a chaque rafraichissement en retirant un hero au hasard.
+(async () => {
+  console.log('\n== cosmos.html : rafraichissement silencieux ==');
+  const rf = topLevelFn(COS_SRC, 'async function refreshContentSilently(){');
+  if (!rf) {
+    bad('cosmos.html : fonction refreshContentSilently introuvable');
+  } else {
+    const RAW = {
+      allVod: [
+        { title: 'Asterix', category: 'FAMILLE & ENFANTS', image: 'a' },
+        { title: 'Kirikou', category: 'JEUNESSE',          image: 'b' },
+        { title: 'Heat',    category: 'CRIME & MAFIA',     image: 'c' },
+        { title: 'Saw',     category: 'HORREUR',           image: 'd' },
+      ],
+      allSeries: [
+        { title: 'Pokemon', category: 'ANIME & MANGA',  image: 'e' },
+        { title: 'Dexter',  category: 'CRIME & MAFIA',  image: 'f' },
+      ],
+      liveRaw: [],
+    };
+    // Dependances de refreshContentSilently, reduites au strict necessaire.
+    const prelude = [
+      'let _refreshing=false;',
+      'function saveCache(){}',
+      'function groupLiveItems(l){return l;}',
+      'function _cosRegionFilter(l){return l;}',
+      'function isClean(){return true;}',
+      'function shuffle(a){return a.slice();}',
+      'async function fetchContentData(){return CNT.raw;}',
+      'function buildContent(a,b,c){CNT.built++;S.allVod=policyFilter(a);' +
+        'S.allSeries=policyFilter(b);S.allItems=S.allVod.concat(S.allSeries);}',
+      'globalThis._refresh = function(){ return refreshContentSilently(); };',
+    ].join('\n');
+
+    const neuf = () => loadCosPolicy(prelude + '\n' + rf, {
+      S: { sec: 'home', zone: 'hero', allVod: [], allSeries: [], allItems: [], liveItems: [], heroPool: [] },
+      CNT: { built: 0, raw: RAW },
+    });
+
+    // Compte restreint, catalogue distant inchange : aucun re-rendu attendu.
+    const bk = neuf();
+    bk.window._cosUser = { sub: { content_policy: 'kids' } };
+    vm.runInContext('buildContent(CNT.raw.allVod, CNT.raw.allSeries, CNT.raw.liveRaw);', bk);
+    bk.CNT.built = 0;
+    await bk._refresh();
+    bk.CNT.built === 0
+      ? ok('politique kids : catalogue inchange => pas de reconstruction de l\'accueil')
+      : bad('politique kids : l\'accueil se reconstruit sans raison (brut compare a filtre)');
+
+    // Controle positif : un vrai ajout DOIT declencher la reconstruction.
+    bk.CNT.raw = {
+      allVod: RAW.allVod.concat([{ title: 'Totoro', category: 'ANIME & MANGA', image: 'g' }]),
+      allSeries: RAW.allSeries,
+      liveRaw: [],
+    };
+    await bk._refresh();
+    bk.CNT.built === 1
+      ? ok('politique kids : un vrai ajout declenche bien la reconstruction')
+      : bad('politique kids : un vrai ajout ne declenche pas la reconstruction (' + bk.CNT.built + ')');
+
+    // Compte non restreint : comportement d'origine inchange.
+    const ba = neuf();
+    ba.window._cosUser = { sub: { content_policy: 'all' } };
+    vm.runInContext('buildContent(CNT.raw.allVod, CNT.raw.allSeries, CNT.raw.liveRaw);', ba);
+    ba.CNT.built = 0;
+    await ba._refresh();
+    ba.CNT.built === 0
+      ? ok('politique all : catalogue inchange => pas de reconstruction')
+      : bad('politique all : reconstruction inattendue');
+    ba.CNT.raw = {
+      allVod: RAW.allVod.concat([{ title: 'Heat 2', category: 'CRIME & MAFIA', image: 'h' }]),
+      allSeries: RAW.allSeries,
+      liveRaw: [],
+    };
+    await ba._refresh();
+    ba.CNT.built === 1
+      ? ok('politique all : un vrai ajout declenche bien la reconstruction')
+      : bad('politique all : un vrai ajout ne declenche pas la reconstruction (' + ba.CNT.built + ')');
+  }
+
+  console.log('\n' + (fails ? 'ECHEC : ' + fails + ' assertion(s)' : 'OK : toutes les assertions passent'));
+  process.exit(fails ? 1 : 0);
+})();
