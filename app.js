@@ -3929,9 +3929,15 @@ function _renderPoursuivreRowInner(){
 
   // ── 2. Favoris non déjà en cours ──────────────────────────────
   const inProgKeys = new Set(inProgress.map(x => itemKey(x.item)));
-  const favItems = getFavs()
+  // Les favoris vivent en localStorage, PAR APPAREIL : contrairement à S.vod /
+  // S.series / S.live, ils n'ont jamais traversé appPolicyFilter au chargement.
+  // Sans ce passage, les favoris d'avant la restriction — et ceux d'un adulte
+  // sur le même appareil — resteraient visibles ET lisibles.
+  const favEntries = getFavs().filter(f => f && f.item);
+  const favAutorises = new Set(appPolicyFilter(favEntries.map(f => f.item)));
+  const favItems = favEntries
     .filter(f => {
-      if(!f.item) return false;
+      if(!favAutorises.has(f.item)) return false;
       if(_hideXXXItem(f.item)) return false;
       const ftype = f.item.type || type;
       return ftype === type && !inProgKeys.has(itemKey(f.item));

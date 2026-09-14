@@ -13,6 +13,74 @@ let fails = 0;
 const ok  = m => console.log('  ✓ ' + m);
 const bad = m => { fails++; console.log('  ✗ ' + m); };
 
+// ── Outils partages : tout est extrait du VRAI code livre ─────────────────
+const COS_SRC  = fs.readFileSync(path.join(ROOT, 'cosmos.html'), 'utf8');
+const APP_SRC  = fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+const AUTH_SRC = fs.readFileSync(path.join(ROOT, 'auth.js'), 'utf8');
+
+// Decoupe une fonction declaree en colonne 0 : du prototype jusqu'a la
+// premiere accolade fermante en colonne 0. cosmos.html et app.js declarent
+// toutes leurs fonctions de premier niveau sans indentation.
+function topLevelFn(src, header){
+  const i = src.indexOf(header);
+  if (i < 0) return null;
+  const e = src.indexOf('\n}', i);
+  return e < 0 ? null : src.slice(i, e + 2);
+}
+// Comparaison insensible aux espaces : un simple reformatage ne doit pas
+// faire passer une verification de site d'appel pour un retrait d'appel.
+const squash   = s => String(s).replace(/\s+/g, '');
+const hasCall  = (body, snippet) => squash(body).indexOf(squash(snippet)) >= 0;
+const countCall = (body, snippet) => {
+  const h = squash(body), n = squash(snippet);
+  let c = 0, i = 0;
+  for (;;) { const j = h.indexOf(n, i); if (j < 0) break; c++; i = j + n.length; }
+  return c;
+};
+
+// Le VRAI contentFilter d'auth.js.
+function loadAuthApi(){
+  const m = AUTH_SRC.match(/\/\/ <content-policy-normalize>([\s\S]*?)\/\/ <\/content-policy-normalize>/);
+  if (!m) return null;
+  const box = { console };
+  vm.createContext(box);
+  vm.runInContext(m[1] + '\nglobalThis._api = { normalizeContentPolicy, contentFilter };', box);
+  return box._api;
+}
+// Le VRAI policyFilter de cosmos.html, branche sur le VRAI contentFilter.
+// extraSrc : code supplementaire de cosmos.html a charger dans le meme bac a
+// sable (resolveItem, refreshContentSilently...). extraCtx : globales du bac.
+function loadCosPolicy(extraSrc, extraCtx){
+  const m = COS_SRC.match(/\/\/ <content-policy>([\s\S]*?)\/\/ <\/content-policy>/);
+  if (!m) return null;
+  const api = loadAuthApi();
+  const box = Object.assign(
+    { console, window: { PIPSILY_AUTH: { contentFilter: api.contentFilter } } },
+    extraCtx || {});
+  vm.createContext(box);
+  vm.runInContext(m[1] + '\n' + (extraSrc || ''), box);
+  return box;
+}
+// Le VRAI appPolicyFilter de app.js.
+function loadAppPolicy(){
+  const m = APP_SRC.match(/\/\/ <content-policy>([\s\S]*?)\/\/ <\/content-policy>/);
+  if (!m) return null;
+  const api = loadAuthApi();
+  const box = { console, S: {}, window: { PIPSILY_AUTH: { contentFilter: api.contentFilter } } };
+  vm.createContext(box);
+  vm.runInContext(m[1] + '\nglobalThis._api = { appPolicyFilter };', box);
+  return box;
+}
+// Le VRAI cleanTitle de cosmos.html : la categorie du direct passe par lui.
+function loadCosCleanTitle(){
+  const fn = topLevelFn(COS_SRC, 'function cleanTitle(t){');
+  if (!fn) return null;
+  const box = { console };
+  vm.createContext(box);
+  vm.runInContext(fn + '\nglobalThis._ct = cleanTitle;', box);
+  return box._ct;
+}
+
 // ── 1. normalizeContentPolicy extrait de auth.js ──────────────────────────
 console.log('\n== auth.js : normalisation ==');
 {
@@ -242,6 +310,70 @@ console.log('\n== app.js : filtrage du catalogue ==');
     // La derive entre interfaces n'est plus possible : le motif n'existe qu'une
     // fois, dans auth.js. La garde de la section 1bis verifie qu'aucun des deux
     // fichiers ne le redefinit.
+  }
+}
+
+// ── 6. Les favoris ne contournent pas la politique (cosmos.html) ──────────
+// Les favoris vivent en localStorage, PAR APPAREIL, sous forme {key,item,at}
+// ou `item` est le blob complet avec son url. Ils ne repassent donc jamais par
+// le catalogue filtre : sans garde, les favoris d'avant la restriction — et
+// ceux d'un adulte sur la meme TV — restent visibles ET lisibles.
+console.log('\n== cosmos.html : favoris et politique ==');
+{
+  const favSrc = topLevelFn(COS_SRC, 'function favId(entry){'); // englobe resolveItem
+  if (!favSrc || favSrc.indexOf('function resolveItem') < 0) {
+    bad('cosmos.html : favId/resolveItem introuvables');
+  } else {
+    const box = loadCosPolicy(favSrc, {
+      S: { allVod: [], allSeries: [], liveItems: [] },
+    });
+    vm.runInContext('globalThis._resolve = resolveItem;', box);
+    const resolveItem = box._resolve;
+
+    const adulte = { title: 'Heat',    category: 'CRIME & MAFIA',     stream_id: '99', image: 'x' };
+    const enfant = { title: 'Asterix', category: 'FAMILLE & ENFANTS', stream_id: '42', image: 'y' };
+    const favAdulte = { key: 'vod||99||Heat',    item: adulte,  at: 1 };
+    const favEnfant = { key: 'vod||42||Asterix', item: enfant, at: 1 };
+
+    // Catalogue vide : resolveItem retombe sur entry.item, le cas du favori
+    // ecarte par la politique.
+    box.window._cosUser = { sub: { content_policy: 'all' } };
+    resolveItem(favAdulte) === adulte
+      ? ok('politique all : le favori reste resolu tel quel')
+      : bad('politique all : le favori a ete altere ou perdu');
+
+    box.window._cosUser = undefined;
+    resolveItem(favAdulte) === adulte
+      ? ok('politique absente : le favori reste resolu tel quel')
+      : bad('politique absente : le favori a ete altere ou perdu');
+
+    box.window._cosUser = { sub: { content_policy: 'kids' } };
+    !resolveItem(favAdulte)
+      ? ok('politique kids : un favori hors politique n\'est plus resolu')
+      : bad('politique kids : un favori hors politique reste visible ET lisible');
+    resolveItem(favEnfant) === enfant
+      ? ok('politique kids : un favori jeunesse reste resolu')
+      : bad('politique kids : un favori jeunesse a ete perdu');
+
+    // Meme verrou quand l'item EST dans le catalogue (chemin de re-resolution).
+    box.S.allVod = [adulte, enfant];
+    !resolveItem(favAdulte)
+      ? ok('politique kids : re-resolution par le catalogue filtree elle aussi')
+      : bad('politique kids : la re-resolution par le catalogue contourne le filtre');
+    resolveItem(favEnfant) === enfant
+      ? ok('politique kids : re-resolution d\'un favori jeunesse conservee')
+      : bad('politique kids : re-resolution d\'un favori jeunesse perdue');
+
+    // Les appelants doivent survivre a l'absence : ils enchainent tous un
+    // .filter(i=>i&&...) ou .filter(Boolean) sur le resultat.
+    let planta = false;
+    let restant = [];
+    try {
+      restant = [favAdulte, favEnfant].map(resolveItem).filter(i => i && i.title);
+    } catch (e) { planta = true; }
+    (!planta && restant.length === 1 && restant[0].title === 'Asterix')
+      ? ok('les appelants filtrent l\'absence sans lever')
+      : bad('les appelants ne gerent pas l\'absence (' + (planta ? 'exception' : restant.length + ' item(s)') + ')');
   }
 }
 

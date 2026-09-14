@@ -1046,16 +1046,27 @@ function seriesPctMap(){
 // stockés par l'autre interface ont une forme différente → on relit par id).
 function favId(entry){return String((entry&&(entry.key||entry.k))||'').split('||')[1]||'';}
 function resolveItem(entry){
+  let out=null;
   const id=favId(entry);
   if(id){
     // inclut les chaînes live (ex SyFy) → on récupère l'item du catalogue avec sa vraie image
     const m=[...S.allVod,...S.allSeries,...S.liveItems].find(x=>String(x.stream_id)===id||String(x.series_id)===id);
-    if(m)return m;
+    if(m)out=m;
   }
-  const it=(entry&&entry.item)||null;
-  // blob stocké par l'autre interface : champ image parfois nommé stream_icon/cover…
-  if(it&&!it.image)it.image=it.stream_icon||it.cover||it.poster||it.logo||'';
-  return it;
+  if(!out){
+    const it=(entry&&entry.item)||null;
+    // blob stocké par l'autre interface : champ image parfois nommé stream_icon/cover…
+    if(it&&!it.image)it.image=it.stream_icon||it.cover||it.poster||it.logo||'';
+    out=it;
+  }
+  if(!out)return null;
+  // Les favoris vivent en localStorage, PAR APPAREIL : ils n'ont jamais
+  // traversé le catalogue filtré. Sans ce passage par la politique du compte,
+  // les favoris d'avant la restriction — et ceux d'un adulte sur la même TV —
+  // resteraient visibles ET lisibles, ce qui viderait la fonctionnalité de son
+  // sens. Un favori écarté donne null ; tous les appelants enchaînent déjà un
+  // .filter(i=>i&&…) et l'ignorent donc.
+  return policyFilter([out])[0]||null;
 }
 // Filtre par type d'onglet : 'vod' | 'series' | 'live' | null (tout)
 function matchTabType(i,t){
