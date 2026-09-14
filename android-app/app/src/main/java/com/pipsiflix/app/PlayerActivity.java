@@ -132,7 +132,22 @@ public class PlayerActivity extends FragmentActivity {
             // Lecture non demandée (pause utilisateur, fin) → rien à surveiller.
             if (!player.getPlayWhenReady()) { lastPosMs = -1L; return; }
             int st = player.getPlaybackState();
-            if (st == Player.STATE_IDLE || st == Player.STATE_ENDED) return;
+            // ENDED = fin normale du media, rien a reparer.
+            if (st == Player.STATE_ENDED) return;
+            // IDLE alors que la lecture est DEMANDEE = le lecteur est mort sur une
+            // erreur fatale et personne ne l'a relance. C'etait le trou : on
+            // ignorait cet etat, donc l'ecran restait noir jusqu'a ce que
+            // l'utilisateur ressorte et relance lui-meme. On le traite comme un
+            // gel, avec le meme delai de tolerance.
+            if (st == Player.STATE_IDLE) {
+                long nowIdle = System.currentTimeMillis();
+                if (lastPosChangeAt == 0L) { lastPosChangeAt = nowIdle; return; }
+                if (nowIdle - lastPosChangeAt < STALL_TIMEOUT_MS) return;
+                Log.w(TAG, "Lecteur IDLE alors que la lecture est demandee — relance");
+                lastPosChangeAt = nowIdle;
+                restartStream(epUrls[currentIdx], "lecteur inactif");
+                return;
+            }
 
             long pos = player.getCurrentPosition();
             long now = System.currentTimeMillis();
@@ -380,7 +395,16 @@ public class PlayerActivity extends FragmentActivity {
                     }
                 }
                     .setExtensionRendererMode(
-                        androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
+                        androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                    // Repli de decodeur. Sans ca, quand le decodeur MATERIEL de la box
+                    // echoue a s'initialiser ou tombe en cours de route, ExoPlayer
+                    // abandonne et l'ecran reste NOIR jusqu'a ce qu'on ressorte et
+                    // relance. Avec ce repli, il bascule automatiquement sur un autre
+                    // decodeur (logiciel au besoin) et la lecture continue.
+                    // Le commentaire ci-dessous documente deja un gel de decodeur
+                    // observe sur ce materiel (C2BqBuffer dequeue failures) : c'est
+                    // la meme famille de panne.
+                    .setEnableDecoderFallback(true);
             // Ne PAS laisser ExoPlayer changer la fréquence d'image de l'écran.
             // Sur les TV 4K MediaTek bas de gamme (ex : SWTV-24AE-4K), chaque appel
             // Surface.setFrameRate() pose puis retire un frameRateOverride, ce qui
@@ -564,7 +588,17 @@ public class PlayerActivity extends FragmentActivity {
             }
             return false;
         }
-        return code >= 2000 && code < 3000;        // famille ERROR_CODE_IO_*
+        // Familles retentees :
+        //   2000-2999 ERROR_CODE_IO_*        transport (reseau, tunnel VPN, serveur)
+        //   3000-3999 ERROR_CODE_PARSING_*   segment malforme du flux IPTV
+        //   4000-4999 ERROR_CODE_DECODING_*  echec de decodeur -> ECRAN NOIR
+        //   5000-5999 ERROR_CODE_AUDIO_TRACK_* sortie audio perdue
+        // Les trois dernieres familles etaient traitees comme definitives : la
+        // lecture s'arretait sur un simple message alors qu'une nouvelle
+        // preparation repart presque toujours. C'est le cas rapporte « ecran noir,
+        // et si je relance ca repart ». Le budget de reprises borne la boucle si
+        // le flux est reellement illisible.
+        return code >= 2000 && code < 6000;
     }
 
     /**
