@@ -1739,6 +1739,11 @@ const _isAdultCat = (c) => {
   return false;
 };
 const _isVostfr = (x) => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
+function appPolicyFilter(list) {
+  const A = window.PIPSILY_AUTH;
+  if (!A || !A.contentFilter) return list || [];
+  return A.contentFilter(list, "category_name", S._contentPolicy);
+}
 function filtered() {
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
   items = items.filter((x) => !_isVostfr(x));
@@ -3577,8 +3582,10 @@ function _renderPoursuivreRowInner() {
     }).filter((x) => x.pct > 0.03 && x.pct < 0.97 && x.ts > 0 && !_hideXXXItem(x.item)).sort((a, b) => b.ts - a.ts).slice(0, 15);
   }
   const inProgKeys = new Set(inProgress.map((x) => itemKey(x.item)));
-  const favItems = getFavs().filter((f) => {
-    if (!f.item) return false;
+  const favEntries = getFavs().filter((f) => f && f.item);
+  const favAutorises = new Set(appPolicyFilter(favEntries.map((f) => f.item)));
+  const favItems = favEntries.filter((f) => {
+    if (!favAutorises.has(f.item)) return false;
     if (_hideXXXItem(f.item)) return false;
     const ftype = f.item.type || type;
     return ftype === type && !inProgKeys.has(itemKey(f.item));
@@ -3761,12 +3768,13 @@ async function boot() {
       }
       const _em = (((_c = _sess == null ? void 0 : _sess.user) == null ? void 0 : _c.email) || "").toLowerCase();
       const _adm = _em && _em === (((_d = window.PIPSILY_AUTH) == null ? void 0 : _d.ADMIN_EMAIL) || "").toLowerCase();
-      auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm } };
+      auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm, content_policy: "all" } };
     }
     if (!auth) return;
     S._userId = ((_f = (_e = auth.session) == null ? void 0 : _e.user) == null ? void 0 : _f.id) || "err";
     S._isAdmin = auth.sub.plan === "admin" || (((_h = (_g = auth.session) == null ? void 0 : _g.user) == null ? void 0 : _h.email) || "").toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL || "").toLowerCase();
     S._unlim = auth.sub.unlimited;
+    S._contentPolicy = auth.sub && auth.sub.content_policy === "kids" ? "kids" : "all";
     const userBtns = $("topbarUserBtns");
     if (userBtns) userBtns.style.display = "flex";
     if (S._isAdmin) {
@@ -3985,25 +3993,25 @@ async function boot() {
     fetchJson("episodes_index.json")
   ]);
   if (vodJson) {
-    S.vod = normalizeItems(extractArr(vodJson), "vod");
+    S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod"));
   } else {
     const vodM3u = await fetchText("vod.m3u");
     if (vodM3u) {
-      S.vod = parseM3U(vodM3u, "vod");
+      S.vod = appPolicyFilter(parseM3U(vodM3u, "vod"));
     }
   }
   if (seriesJson) {
-    S.series = normalizeItems(extractArr(seriesJson), "series");
+    S.series = appPolicyFilter(normalizeItems(extractArr(seriesJson), "series"));
   } else {
     const seriesM3u = await fetchText("series.m3u");
     if (seriesM3u) {
-      S.series = parseM3U(seriesM3u, "series");
+      S.series = appPolicyFilter(parseM3U(seriesM3u, "series"));
     }
   }
   if (liveJson) {
     const liveItems = extractArr(liveJson);
     S._liveRegionIdx = null;
-    S.live = liveItems.map((x, i) => ({
+    S.live = appPolicyFilter(liveItems.map((x, i) => ({
       // normalisation
       id: x.id || x.stream_id || String(i),
       stream_id: x.stream_id || x.id || String(i),
@@ -4016,7 +4024,7 @@ async function boot() {
       plot: "",
       type: "live",
       quality: ""
-    }));
+    })));
     if (S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
   }
   {

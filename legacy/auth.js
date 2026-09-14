@@ -79,6 +79,18 @@ async function getProfile(userId) {
     return null;
   }
 }
+function normalizeContentPolicy(value) {
+  return typeof value === "string" && value.toLowerCase() === "kids" ? "kids" : "all";
+}
+const KID_CAT_RE = /enfant|famille|kids|jeunesse|junior|dessin|cartoon|anim[ée]|manga|disney/i;
+function contentFilter(list, field, policy) {
+  if (!list) return [];
+  if (normalizeContentPolicy(policy) !== "kids") return list;
+  const f = field || "category";
+  return list.filter(function(i) {
+    return !!i && KID_CAT_RE.test(i[f] || "");
+  });
+}
 async function checkSubscription(userId) {
   var _a, _b;
   if (!_configured || !_supa) {
@@ -92,15 +104,25 @@ async function checkSubscription(userId) {
         email: sess.user.email,
         id: sess.user.id
       };
-    return { ok: false, plan: "pending" };
+    return { ok: false, plan: "pending", content_policy: "all" };
   }
   const prof = await getProfile(userId);
-  if (!prof) return { ok: false, plan: null };
+  if (!prof) return { ok: false, plan: null, content_policy: "all" };
   if (prof.plan === "admin" || prof.plan === "unlimited")
-    return { ok: true, unlimited: true, ...prof };
+    return {
+      ok: true,
+      unlimited: true,
+      ...prof,
+      content_policy: normalizeContentPolicy(prof.content_policy)
+    };
   const expires = prof.subscription_expires_at ? new Date(prof.subscription_expires_at) : null;
   const ok = !!(expires && expires > /* @__PURE__ */ new Date());
-  return { ok, unlimited: false, ...prof };
+  return {
+    ok,
+    unlimited: false,
+    ...prof,
+    content_policy: normalizeContentPolicy(prof.content_policy)
+  };
 }
 const SESSION_TIMEOUT_MS = 24 * 60 * 60 * 1e3;
 const ACTIVE_WINDOW_MS = 10 * 60 * 1e3;
@@ -489,5 +511,8 @@ window.PIPSILY_AUTH = {
   authGate,
   getDeviceId,
   getDeviceName,
-  startSessionWatcher
+  startSessionWatcher,
+  normalizeContentPolicy,
+  contentFilter,
+  KID_CAT_RE
 };
