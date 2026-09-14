@@ -313,6 +313,64 @@ console.log('\n== app.js : filtrage du catalogue ==');
   }
 }
 
+// ── 5. Les sites d'appel existent VRAIMENT dans le code livre ─────────────
+// Sans cette section, on peut supprimer TOUS les appels de filtrage du code
+// livre sans qu'une seule assertion ne tombe : les sections 1 a 4 exercent les
+// fonctions en isolation, jamais leur utilisation. C'est la seule section qui
+// protege la fonctionnalite elle-meme.
+console.log('\n== sites d\'appel dans le code livre ==');
+{
+  const bc = topLevelFn(COS_SRC, 'function buildContent(allVod,allSeries,liveRaw){');
+  if (!bc) {
+    bad('cosmos.html : fonction buildContent introuvable');
+  } else {
+    [['allVod', 'films'], ['allSeries', 'series'], ['liveRaw', 'direct']].forEach(p => {
+      hasCall(bc, 'policyFilter(' + p[0] + ')')
+        ? ok('cosmos.html buildContent : ' + p[1] + ' filtres')
+        : bad('cosmos.html buildContent : policyFilter(' + p[0] + ') ABSENT');
+    });
+  }
+
+  const rf = topLevelFn(COS_SRC, 'async function refreshContentSilently(){');
+  if (!rf) {
+    bad('cosmos.html : fonction refreshContentSilently introuvable');
+  } else {
+    [['d.allVod', 'films'], ['d.allSeries', 'series'], ['d.liveRaw', 'direct']].forEach(p => {
+      hasCall(rf, 'policyFilter(' + p[0] + ')')
+        ? ok('cosmos.html rafraichissement silencieux : ' + p[1] + ' filtres')
+        : bad('cosmos.html rafraichissement silencieux : policyFilter(' + p[0] + ') ABSENT');
+    });
+  }
+
+  const ri = topLevelFn(COS_SRC, 'function resolveItem(entry){');
+  if (!ri) {
+    bad('cosmos.html : fonction resolveItem introuvable');
+  } else if (countCall(ri, 'policyFilter(') >= 1) {
+    ok('cosmos.html resolveItem : les favoris repassent par la politique');
+  } else {
+    bad('cosmos.html resolveItem : aucun policyFilter - les favoris echappent au filtre');
+  }
+
+  // app.js : les CINQ points de peuplement du catalogue.
+  [['S.vod=appPolicyFilter(',    2, 'films (JSON + repli M3U)'],
+   ['S.series=appPolicyFilter(', 2, 'series (JSON + repli M3U)'],
+   ['S.live=appPolicyFilter(',   1, 'direct']].forEach(p => {
+    const n = countCall(APP_SRC, p[0]);
+    n === p[1]
+      ? ok('app.js : ' + p[2] + ' filtres (' + n + ' site(s))')
+      : bad('app.js : ' + p[2] + ' - ' + n + ' appel(s) au lieu de ' + p[1]);
+  });
+
+  const pr = topLevelFn(APP_SRC, 'function _renderPoursuivreRowInner(){');
+  if (!pr) {
+    bad('app.js : fonction _renderPoursuivreRowInner introuvable');
+  } else if (countCall(pr, 'appPolicyFilter(') >= 1) {
+    ok('app.js Poursuivre : les favoris repassent par la politique');
+  } else {
+    bad('app.js Poursuivre : aucun appPolicyFilter - les favoris echappent au filtre');
+  }
+}
+
 // ── 6. Les favoris ne contournent pas la politique (cosmos.html) ──────────
 // Les favoris vivent en localStorage, PAR APPAREIL, sous forme {key,item,at}
 // ou `item` est le blob complet avec son url. Ils ne repassent donc jamais par
