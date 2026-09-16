@@ -529,7 +529,7 @@
         if(isOpen){
           // Focus sur l'item actif ou le premier
           const active = listEl.querySelector(".rgn-item.active") || listEl.querySelector(".rgn-item");
-          active?.focus();
+          if(active) active.focus();
         }
       };
 
@@ -545,10 +545,10 @@
       listEl.addEventListener("keydown", e => {
         const btns = [...listEl.querySelectorAll(".rgn-item")];
         const idx  = btns.indexOf(document.activeElement);
-        if(e.key === "ArrowDown"){ e.preventDefault(); btns[Math.min(idx+1,btns.length-1)]?.focus(); }
+        if(e.key === "ArrowDown"){ e.preventDefault(); var _nb=btns[Math.min(idx+1,btns.length-1)]; if(_nb) _nb.focus(); }
         if(e.key === "ArrowUp")  { e.preventDefault();
           if(idx <= 0){ listEl.classList.remove("open"); toggleBtn.querySelector(".rgn-arrow").textContent="▾"; toggleBtn.focus(); }
-          else btns[idx-1]?.focus();
+          else { var _pb=btns[idx-1]; if(_pb) _pb.focus(); }
         }
         if(e.key === "Escape"||e.key === "GoBack"){ listEl.classList.remove("open"); toggleBtn.querySelector(".rgn-arrow").textContent="▾"; toggleBtn.focus(); }
       });

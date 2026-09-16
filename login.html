@@ -99,7 +99,7 @@
   if(!/Android/i.test(navigator.userAgent)||typeof window.AndroidBridge!='undefined')return;
   const d=Number(localStorage.getItem('pf_apk_install_dismiss')||0);if(Date.now()<d)return;
   const v=await fetch('./version.json').then(r=>r.ok?r.json():null).catch(()=>null);
-  const u=/^https:\/\/github\.com\//.test(v?.apk_url||'')?v.apk_url:'https://github.com/morpheus45/VOD/releases/latest';
+  const u=/^https:\/\/github\.com\//.test((v&&v.apk_url)||'')?v.apk_url:'https://github.com/morpheus45/VOD/releases/latest';
   const b=document.createElement('div');
   b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9998;display:flex;align-items:center;gap:12px;padding:12px 16px;background:linear-gradient(135deg,#1a1060,#0e0a30);border-bottom:2px solid rgba(107,63,224,.6);color:#fff;box-shadow:0 4px 20px rgba(0,0,0,.6)';
   b.innerHTML='<img src='+String.fromCharCode(39)+'./logo.svg'+String.fromCharCode(39)+' style='+String.fromCharCode(39)+'height:30px;flex-shrink:0'+String.fromCharCode(39)+'><div style='+String.fromCharCode(39)+'flex:1'+String.fromCharCode(39)+'><div style='+String.fromCharCode(39)+'font-size:13px;font-weight:800'+String.fromCharCode(39)+'>Installer l'+String.fromCharCode(39)+'app</div></div><a href='+String.fromCharCode(39)+u+String.fromCharCode(39)+' target='+String.fromCharCode(39)+'_blank'+String.fromCharCode(39)+' style='+String.fromCharCode(39)+'padding:9px 16px;border-radius:10px;background:linear-gradient(135deg,#6B3FE0,#38A8E8);color:#fff;font-size:13px;font-weight:700;text-decoration:none'+String.fromCharCode(39)+'>Installer</a><button id='+String.fromCharCode(39)+'xb'+String.fromCharCode(39)+' style='+String.fromCharCode(39)+'background:rgba(255,255,255,.1);border:none;color:#fff;border-radius:8px;padding:8px 10px;cursor:pointer'+String.fromCharCode(39)+'>X</button>';
@@ -156,7 +156,7 @@ document.getElementById('authForm').addEventListener('submit',async e=>{
         return;
       }
       // Supabase exige une confirmation email → session est null
-      if(!sData?.session){
+      if(!(sData&&sData.session)){
         showMsg('success','Compte cree ! Verifiez votre boite mail pour confirmer votre adresse, puis revenez vous connecter.');
         return;
       }

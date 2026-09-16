@@ -777,7 +777,7 @@
         document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
         document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
         tab.classList.add("active");
-        document.getElementById("panel-" + id)?.classList.add("active");
+        var _p1=document.getElementById("panel-" + id); if(_p1) _p1.classList.add("active");
         document.getElementById("tabs").scrollIntoView({ behavior:"smooth", block:"nearest" });
       });
     });
@@ -790,7 +790,7 @@
         panel.querySelectorAll(".method-btn").forEach(b => b.classList.remove("active"));
         panel.querySelectorAll(".method-panel").forEach(p => p.classList.remove("active"));
         btn.classList.add("active");
-        document.getElementById("method-" + id)?.classList.add("active");
+        var _m1=document.getElementById("method-" + id); if(_m1) _m1.classList.add("active");
       });
     });
 
@@ -813,10 +813,10 @@
       else if(/Macintosh|Windows/i.test(ua))          tab = "pc";
       // iPad/iPhone stays on default (iphone)
       if(tab){
-        document.querySelector(".tab.active")?.classList.remove("active");
-        document.querySelector(".panel.active")?.classList.remove("active");
+        var _t1=document.querySelector(".tab.active"); if(_t1) _t1.classList.remove("active");
+        var _p2=document.querySelector(".panel.active"); if(_p2) _p2.classList.remove("active");
         const t = document.querySelector(`[data-tab="${tab}"]`);
-        if(t){ t.classList.add("active"); document.getElementById("panel-"+tab)?.classList.add("active"); }
+        if(t){ t.classList.add("active"); var _p3=document.getElementById("panel-"+tab); if(_p3) _p3.classList.add("active"); }
       }
     })();
   </script>

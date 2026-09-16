@@ -20,6 +20,11 @@ on:
       - 'app.js'
       - 'auth.js'
       - 'player.js'
+      - 'index.html'
+      - 'login.html'
+      - 'account.html'
+      - 'install.html'
+      - 'player.html'
       - '.github/workflows/build-legacy.yml'
   workflow_dispatch:
 
@@ -64,6 +69,33 @@ jobs:
             exit 1
           fi
           echo "✅ Aucune construction non transpilable"
+
+      # ─── Garde-fou : scripts INLINE des pages HTML ───
+      # Ces pages ne sont PAS transpilees : elles sont servies telles quelles.
+      # Un seul « ?. » dans un bloc <script> inline fait echouer le bloc ENTIER
+      # sur Chrome 61, sans message visible. C'est ce qui a rendu le bouton de
+      # connexion de login.html inerte sur autoradio : la page s'affichait, mais
+      # plus aucun gestionnaire n'etait cable.
+      - name: 🛡️ Vérifier les scripts inline des pages HTML
+        run: |
+          set -e
+          echec=0
+          for f in index.html login.html account.html install.html player.html; do
+            [ -f "$f" ] || continue
+            trouve=$(grep -n -e '?\.' -e '??' "$f" \
+              | grep -v 'new Function' \
+              | grep -vE '(AOSP|Chrome 61|parse pas|figé)' || true)
+            if [ -n "$trouve" ]; then
+              echo "::error file=$f::syntaxe moderne dans un script inline non transpile"
+              echo "$trouve"
+              echec=1
+            fi
+          done
+          if [ "$echec" = "1" ]; then
+            echo "Remplacez « a?.b » par « a && a.b » dans ces pages."
+            exit 1
+          fi
+          echo "✅ Scripts inline compatibles Chrome 61"
 
       # ─── Transpilation des sources du projet ────────────────────────
       - name: 🔨 Transpiler app / auth / player

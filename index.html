@@ -306,7 +306,7 @@
           .catch(e => console.warn("SW err:", e));
         // Recharger la page si le SW demande RELOAD
         navigator.serviceWorker.addEventListener("message", e => {
-          if(e.data?.type === "RELOAD") window.location.reload();
+          if(e.data && e.data.type === "RELOAD") window.location.reload();
         });
       });
     }
