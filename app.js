@@ -2024,7 +2024,12 @@ async function playItem(item){
 // Exception : "xXx" (film d'action). On ignore les emojis/espaces en tête.
 const _startsXXX = c => {
   if(!c) return false;
-  const clean = c.replace(/^[\s\p{Emoji_Presentation}\p{Extended_Pictographic}°|•\-_]+/u, "").trim();
+  // Le WebView AOSP des autoradios est figé en Chrome 61, qui ne connaît pas
+  // les classes Unicode de propriété (backslash-p entre accolades) : une seule
+  // occurrence fait échouer tout le fichier au parse. D'où les plages
+  // explicites ci-dessous — vérifiées équivalentes sur les 25 610 noms des
+  // catalogues, détection adulte comprise.
+  const clean = c.replace(/^[\s°|•\-_←-⇿⌀-➿⬀-⯿️⃣\uD800-\uDFFF]+/, "").trim();
   if(!clean) return false;
   if(clean.startsWith("xXx")) return false; // film "xXx" — garder
   return /^xxx/i.test(clean);
@@ -2046,6 +2051,18 @@ const _isAdultCat = c => {
 
 // VOSTFR — toujours masqué (titre ou catégorie)
 const _isVostfr = x => /vostfr/i.test(x.title || "") || /vostfr/i.test(x.category_name || "");
+
+// ══════ RESTRICTION DE CONTENU PAR COMPTE ═══════════════════════
+// <content-policy>
+// Restriction de contenu du compte. Motif et logique dans auth.js, seul
+// module charge par les deux interfaces. Ici les items portent leur
+// categorie dans category_name, pas category.
+function appPolicyFilter(list){
+  const A = window.PIPSILY_AUTH;
+  if(!A || !A.contentFilter) return list || [];
+  return A.contentFilter(list, 'category_name', S._contentPolicy);
+}
+// </content-policy>
 
 function filtered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
@@ -2261,7 +2278,17 @@ const _QUAL_RE    = /[\s\[\(]+(HDR\+?|HDTV|FHD|UHD|4K|8K|HEVC|H\.?265|H\.?264|10
 
 function _parseLiveQuality(title){
   if(!title) return null;
-  const matches = [...title.matchAll(_QUAL_RE)].map(m => m[1].toUpperCase());
+  // Boucle exec plutôt que matchAll : matchAll demande Chrome 73, or le WebView
+  // des autoradios est figé en Chrome 61 (et esbuild ne polyfille pas les API,
+  // seulement la syntaxe). Regex recréée à chaque appel pour ne pas partager
+  // lastIndex avec _QUAL_RE — c'est ce que faisait matchAll, qui la clone.
+  const re = new RegExp(_QUAL_RE.source, _QUAL_RE.flags);
+  const matches = [];
+  let m;
+  while((m = re.exec(title)) !== null){
+    if(m[0] === ""){ re.lastIndex++; continue; }
+    matches.push(m[1].toUpperCase());
+  }
   for(const q of _QUAL_ORDER) if(matches.includes(q)) return q;
   return matches[0] || null;
 }
@@ -3902,9 +3929,15 @@ function _renderPoursuivreRowInner(){
 
   // ── 2. Favoris non déjà en cours ──────────────────────────────
   const inProgKeys = new Set(inProgress.map(x => itemKey(x.item)));
-  const favItems = getFavs()
+  // Les favoris vivent en localStorage, PAR APPAREIL : contrairement à S.vod /
+  // S.series / S.live, ils n'ont jamais traversé appPolicyFilter au chargement.
+  // Sans ce passage, les favoris d'avant la restriction — et ceux d'un adulte
+  // sur le même appareil — resteraient visibles ET lisibles.
+  const favEntries = getFavs().filter(f => f && f.item);
+  const favAutorises = new Set(appPolicyFilter(favEntries.map(f => f.item)));
+  const favItems = favEntries
     .filter(f => {
-      if(!f.item) return false;
+      if(!favAutorises.has(f.item)) return false;
       if(_hideXXXItem(f.item)) return false;
       const ftype = f.item.type || type;
       return ftype === type && !inProgKeys.has(itemKey(f.item));
@@ -4108,13 +4141,15 @@ async function boot(){
       try { _sess = await window.PIPSILY_AUTH.getSession?.(); } catch{}
       const _em = (_sess?.user?.email || "").toLowerCase();
       const _adm = _em && _em === (window.PIPSILY_AUTH?.ADMIN_EMAIL || "").toLowerCase();
-      auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm } };
+      auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm, content_policy: "all" } };
     }
     if(!auth) return; // redirigé vers login.html ou paywall
 
     S._userId  = auth.session?.user?.id || "err";
     S._isAdmin = auth.sub.plan === "admin" || (auth.session?.user?.email||"").toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL||"").toLowerCase();
     S._unlim   = auth.sub.unlimited;
+    // Restriction de contenu du compte, lue avant tout chargement de catalogue.
+    S._contentPolicy = (auth.sub && auth.sub.content_policy === "kids") ? "kids" : "all";
 
     const userBtns = $("topbarUserBtns");
     if(userBtns) userBtns.style.display = "flex";
@@ -4325,23 +4360,23 @@ async function boot(){
     fetchJson("episodes_index.json")
   ]);
 
-  if(vodJson){ S.vod = normalizeItems(extractArr(vodJson), "vod"); }
+  if(vodJson){ S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod")); }
   else {
     const vodM3u = await fetchText("vod.m3u");
-    if(vodM3u){ S.vod = parseM3U(vodM3u, "vod"); }
+    if(vodM3u){ S.vod = appPolicyFilter(parseM3U(vodM3u, "vod")); }
   }
 
-  if(seriesJson){ S.series = normalizeItems(extractArr(seriesJson), "series"); }
+  if(seriesJson){ S.series = appPolicyFilter(normalizeItems(extractArr(seriesJson), "series")); }
   else {
     const seriesM3u = await fetchText("series.m3u");
-    if(seriesM3u){ S.series = parseM3U(seriesM3u, "series"); }
+    if(seriesM3u){ S.series = appPolicyFilter(parseM3U(seriesM3u, "series")); }
   }
 
   if(liveJson){
     // Les items live ont déjà type:"live" dans le JSON — normalisation légère
     const liveItems = extractArr(liveJson);
     S._liveRegionIdx = null; // reset index quand les données live changent
-    S.live = liveItems.map((x, i) => ({  // normalisation
+    S.live = appPolicyFilter(liveItems.map((x, i) => ({  // normalisation
       id           : x.id || x.stream_id || String(i),
       stream_id    : x.stream_id || x.id || String(i),
       title        : x.title || x.name || "Sans titre",
@@ -4353,7 +4388,7 @@ async function boot(){
       plot         : "",
       type         : "live",
       quality      : ""
-    }));
+    })));
     // Construire l'index régional immédiatement → peupler pipsily_available_regions
     // pour que les pills de région soient disponibles dès le premier affichage du live.
     if(S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
@@ -4479,6 +4514,15 @@ async function checkApkInstallBanner(){
   const _rawUrl   = vinfo?.apk_url || "";
   const url       = /^https:\/\/github\.com\//.test(_rawUrl) ? _rawUrl : "https://github.com/morpheus45/VOD/releases/latest";
 
+  // Variante autoradio, proposée en second choix explicite.
+  // Depuis une page web on ne peut pas distinguer de façon fiable un poste de
+  // voiture d'une tablette Android : leur user-agent est identique. On laisse
+  // donc l'utilisateur choisir plutôt que de deviner.
+  // Pas d'optional chaining ici : le WebView AOSP des autoradios est figé en
+  // Chrome 61, qui ne parse pas "?." — une seule occurrence casse tout le fichier.
+  const _rawCar   = (vinfo && vinfo.car_url) || "";
+  const carUrl    = /^https:\/\/github\.com\//.test(_rawCar) ? _rawCar : "";
+
   // Si une nouvelle version est disponible → ignorer le timer de dismiss
   const dismissedUntil = Number(localStorage.getItem("pf_apk_install_dismiss") || 0);
   const dismissedVer   = Number(localStorage.getItem("pf_apk_install_dismiss_ver") || 0);
@@ -4517,6 +4561,13 @@ async function checkApkInstallBanner(){
                  font-size:15px;font-weight:800;text-decoration:none;margin-bottom:10px">
           📥 Télécharger l'APK
         </a>
+        ${carUrl ? `
+        <a href="${carUrl}" target="_blank" rel="noopener"
+          style="display:block;width:100%;box-sizing:border-box;padding:12px;border-radius:12px;
+                 background:transparent;border:1px solid rgba(107,63,224,.6);color:#c9b8ff;
+                 font-size:13px;font-weight:700;text-decoration:none;margin-bottom:10px">
+          🚗 Version autoradio &middot; PIPSILY CAR
+        </a>` : ''}
         <button id="apkInstallDismiss"
           style="width:100%;padding:11px;border-radius:12px;border:1px solid rgba(255,255,255,.15);
                  background:transparent;color:#7a9cc0;font-size:13px;cursor:pointer">
@@ -4559,14 +4610,42 @@ async function checkApkInstallBanner(){
   };
 }
 
+/**
+ * Canal de mise à jour de la build installée.
+ *
+ * PIPSILY CAR est un paquet distinct (com.pipsiflix.car) : lui proposer
+ * PIPSILY.apk n'updaterait rien, cela installerait une seconde appli à côté.
+ * Les builds CAR annoncent "car" via le bridge natif et lisent alors
+ * car_version / car_url. Les builds TV/téléphone n'exposent pas la méthode :
+ * l'appel lève, on retombe sur le canal par défaut — comportement inchangé.
+ *
+ * Appel direct volontaire (pas de typeof) : sur certains WebView Android les
+ * méthodes Java ne sont pas de type "function" mais restent appelables.
+ */
+function apkUpdateChannel(){
+  try {
+    const c = window.AndroidBridge.getUpdateChannel();
+    if(c) return String(c);
+  } catch {}
+  return "default";
+}
+
+/** Champs de version.json à lire pour le canal courant. */
+function apkChannelFields(){
+  return apkUpdateChannel() === "car"
+    ? { ver:"car_version", url:"car_url", changes:"car_changes", label:"PIPSILY CAR" }
+    : { ver:"apk_version", url:"apk_url", changes:"changes",     label:"PIPSILY"     };
+}
+
 async function checkApkUpdate(){
   // Hors APK natif → rien à faire
   if(typeof window.AndroidBridge === "undefined") return;
 
   try {
     const vinfo = await fetchJson("version.json?cb=" + Date.now());
-    if(!vinfo || !vinfo.apk_version || !vinfo.apk_url) return;
-    const remoteVer = parseInt(vinfo.apk_version, 10);
+    const chan  = apkChannelFields();
+    if(!vinfo || !vinfo[chan.ver] || !vinfo[chan.url]) return;
+    const remoteVer = parseInt(vinfo[chan.ver], 10);
     if(!remoteVer) return;
 
     // ── Lire la version APK installée ──────────────────────────────
@@ -4599,12 +4678,14 @@ async function checkApkUpdate(){
     localStorage.removeItem("pf_apk_sv5");
     localStorage.removeItem("pf_apk_su5");
 
-    showApkUpdateBanner(vinfo, remoteVer);
+    showApkUpdateBanner(vinfo, remoteVer, chan);
   } catch {}
 }
 
-function showApkUpdateBanner(vinfo, remoteVer){
+function showApkUpdateBanner(vinfo, remoteVer, chan){
   if($("apkUpdateBanner")) return;
+  // Repli sur le canal par défaut si l'appelant n'en fournit pas.
+  chan = chan || { url:"apk_url", changes:"changes", label:"PIPSILY" };
 
   // Détection TV (user-agent ou flag injecté par TvActivity)
   const isTV = window.PIPSILY_NATIVE === "android_tv" ||
@@ -4617,8 +4698,8 @@ function showApkUpdateBanner(vinfo, remoteVer){
   banner.innerHTML =
     '<div class="apk-tv-modal">' +
       '<div class="apk-tv-icon">📦</div>' +
-      '<h2 class="apk-tv-title">PIPSILY v' + remoteVer + ' disponible</h2>' +
-      '<p class="apk-tv-changes">' + (vinfo.changes || "Améliorations & corrections") + '</p>' +
+      '<h2 class="apk-tv-title">' + chan.label + ' v' + remoteVer + ' disponible</h2>' +
+      '<p class="apk-tv-changes">' + (vinfo[chan.changes] || "Améliorations & corrections") + '</p>' +
       '<div id="apkProgWrap" style="display:none;margin:16px auto 6px;max-width:340px">' +
         '<div style="height:10px;border-radius:6px;background:rgba(255,255,255,.12);overflow:hidden">' +
           '<div id="apkProgBar" style="height:100%;width:0%;border-radius:6px;' +
@@ -4664,7 +4745,7 @@ function showApkUpdateBanner(vinfo, remoteVer){
 
   // ── Lancer / relancer le téléchargement ──
   const startDownload = () => {
-    const url = vinfo.apk_url;
+    const url = vinfo[chan.url];
     const btn = $("apkDownloadBtn");
     if(btn){ btn.textContent = "📥 Téléchargement…"; btn.disabled = true; }
     setApkProg(0);

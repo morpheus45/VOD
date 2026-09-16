@@ -74,6 +74,22 @@ public class PlayerActivity extends FragmentActivity {
     private String   seriesTitle     = "";
     private int      currentIdx      = 0;
     private boolean  hlsRetried      = false;
+
+    // ── Reprise automatique après coupure réseau ──────────────────────────
+    // Un flux IPTV lu sur plusieurs dizaines de minutes voit forcément sa
+    // connexion HTTP tomber (rotation côté serveur, renégociation du tunnel
+    // VPN, micro-coupure Wi-Fi). Jusqu'ici la lecture s'arrêtait DÉFINITIVEMENT
+    // sur un simple message : il fallait ressortir et relancer le film, qui
+    // recoupait peu après. On retente désormais à la position courante.
+    private static final int  MAX_NET_RETRIES     = 6;
+    // Une chaine en direct doit pouvoir encaisser bien plus d'incidents qu'un
+    // film : elle est faite pour rester allumee des heures.
+    private static final int  MAX_LIVE_RETRIES    = 40;
+    // Au-delà de ce temps de lecture saine, l'incident suivant est considéré
+    // comme un NOUVEL incident : le compteur repart à zéro.
+    private static final long RETRY_RESET_AFTER_MS = 60_000L;
+    private int  netRetries      = 0;
+    private long lastRetryAtMs   = 0L;
     private boolean  controllerShown = false; // état controller pour toggle TV
     private String   currentUrl      = "";    // URL en cours (pour rapport de progression)
     private long     startPositionMs = 0L;   // position de reprise (0 = depuis le début)
@@ -90,6 +106,115 @@ public class PlayerActivity extends FragmentActivity {
             progHandler.postDelayed(this, PROGRESS_SAVE_INTERVAL_MS);
         }
     };
+
+    // ── Surveillance anti-blocage (chien de garde) ────────────────────────
+    // ExoPlayer n'émet PAS toujours onPlayerError quand un flux IPTV meurt en
+    // cours de route : la socket reste ouverte, plus aucun octet n'arrive, et le
+    // lecteur tourne indéfiniment sur son cercle de chargement. Aucune erreur →
+    // la reprise automatique ne se déclenchait jamais. C'est le motif exact
+    // d'une « coupure aléatoire » qui ne repart pas toute seule.
+    // On surveille donc la POSITION : si elle n'avance plus alors que la lecture
+    // est demandée, on relance le flux nous-mêmes.
+    private static final long STALL_CHECK_MS   = 2_000L;   // fréquence du contrôle
+    private static final long STALL_TIMEOUT_MS = 15_000L;  // gel toléré avant relance
+    private long lastPosMs        = -1L;
+    private long lastPosChangeAt  = 0L;
+    private boolean reconnecting  = false;
+    private final android.os.Handler stallHandler =
+        new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable stallRunnable = new Runnable() {
+        @Override public void run() {
+            stallHandler.postDelayed(this, STALL_CHECK_MS);
+            if (player == null || reconnecting) return;
+            // La liste peut ne pas etre encore prete : le minuteur est arme
+            // dans onResume, qui peut passer avant la construction du player.
+            if (epUrls == null || currentIdx < 0 || currentIdx >= epUrls.length) return;
+            // Lecture non demandée (pause utilisateur, fin) → rien à surveiller.
+            if (!player.getPlayWhenReady()) { lastPosMs = -1L; return; }
+            int st = player.getPlaybackState();
+            // ENDED = fin normale du media, rien a reparer.
+            if (st == Player.STATE_ENDED) return;
+            // IDLE alors que la lecture est DEMANDEE = le lecteur est mort sur une
+            // erreur fatale et personne ne l'a relance. C'etait le trou : on
+            // ignorait cet etat, donc l'ecran restait noir jusqu'a ce que
+            // l'utilisateur ressorte et relance lui-meme. On le traite comme un
+            // gel, avec le meme delai de tolerance.
+            if (st == Player.STATE_IDLE) {
+                long nowIdle = System.currentTimeMillis();
+                if (lastPosChangeAt == 0L) { lastPosChangeAt = nowIdle; return; }
+                if (nowIdle - lastPosChangeAt < STALL_TIMEOUT_MS) return;
+                Log.w(TAG, "Lecteur IDLE alors que la lecture est demandee — relance");
+                lastPosChangeAt = nowIdle;
+                restartStream(epUrls[currentIdx], "lecteur inactif");
+                return;
+            }
+
+            long pos = player.getCurrentPosition();
+            long now = System.currentTimeMillis();
+            if (pos != lastPosMs) { lastPosMs = pos; lastPosChangeAt = now; return; }
+            if (lastPosChangeAt == 0L) { lastPosChangeAt = now; return; }
+            if (now - lastPosChangeAt < STALL_TIMEOUT_MS) return;
+
+            // Position figée trop longtemps alors que la lecture est demandée.
+            Log.w(TAG, "Flux gele depuis " + (now - lastPosChangeAt) + " ms — relance");
+            lastPosChangeAt = now;
+            restartStream(epUrls[currentIdx], "flux fige");
+        }
+    };
+
+    /** Vrai si le flux courant est une chaîne en direct (pas de fin, pas de reprise). */
+    private boolean isLiveStream() {
+        try { if (player != null && player.isCurrentMediaItemLive()) return true; } catch (Throwable ignored) {}
+        // Repli sur l'URL : chez Xtream, seules les chaines passent par /live/.
+        // Surtout PAS « .m3u8 » : beaucoup de films sont servis en HLS et
+        // perdraient leur reprise a la position courante.
+        return currentUrl.toLowerCase().contains("/live/");
+    }
+
+    /** Budget de reprises : une chaîne en direct est faite pour tourner des heures. */
+    private int maxRetries() { return isLiveStream() ? MAX_LIVE_RETRIES : MAX_NET_RETRIES; }
+
+    /**
+     * Relance le flux courant, en repartant là où on en était pour un film et au
+     * bord du direct pour une chaîne — y chercher une position absolue n'aurait
+     * pas de sens et ferait échouer la reprise.
+     */
+    private void restartStream(final String url, final String raison) {
+        if (player == null || reconnecting) return;
+        if (netRetries >= maxRetries()) {
+            Log.w(TAG, "Reprise abandonnee apres " + netRetries + " essais (" + raison + ")");
+            runOnUiThread(() -> Toast.makeText(PlayerActivity.this,
+                "Flux indisponible — reessayez plus tard", Toast.LENGTH_LONG).show());
+            return;
+        }
+        reconnecting = true;
+        netRetries++;
+        lastRetryAtMs = System.currentTimeMillis();
+        final boolean live = isLiveStream();
+        final long resumeAt = live ? -1L : Math.max(0L, player.getCurrentPosition());
+        final long backoffMs = Math.min(8_000L, 1000L * netRetries);   // 1 s… plafonné à 8 s
+        final int attempt = netRetries, budget = maxRetries();
+        Log.i(TAG, "Reprise " + attempt + "/" + budget + " (" + raison + ") "
+                 + (live ? "au bord du direct" : "a " + resumeAt + " ms")
+                 + " dans " + backoffMs + " ms");
+        runOnUiThread(() -> {
+            Toast.makeText(PlayerActivity.this,
+                "Flux interrompu — reprise (" + attempt + "/" + budget + ")…",
+                Toast.LENGTH_SHORT).show();
+            progHandler.postDelayed(() -> {
+                reconnecting = false;
+                if (player == null) return;
+                player.stop();
+                player.clearMediaItems();
+                player.setMediaSource(buildSourceFor(url));
+                player.setPlayWhenReady(true);
+                player.prepare();
+                if (resumeAt > 0) player.seekTo(resumeAt);
+                else if (live) { try { player.seekToDefaultPosition(); } catch (Throwable ignored) {} }
+                lastPosMs = -1L; lastPosChangeAt = 0L;
+            }, backoffMs);
+        });
+    }
 
     /** Remonte la position actuelle au WebView (sauvegarde) sans libérer le player. */
     private void reportCurrentProgress() {
@@ -229,6 +354,7 @@ public class PlayerActivity extends FragmentActivity {
         }
 
         hlsRetried = false;
+        netRetries = 0;          // nouveau titre → quota de reprises remis à neuf
 
         if (player == null) {
             // Préférer la piste audio française PRINCIPALE (pas l'audiodescription).
@@ -241,17 +367,81 @@ public class PlayerActivity extends FragmentActivity {
             // Renderers + décodeur FFmpeg logiciel (E-AC3/AC3/DTS) en repli :
             // décodage matériel d'abord, FFmpeg quand la plateforme ne sait pas
             // (TV sans licence Dolby → la VF E-AC3 redevient lisible)
+            // Forcer le décodage audio en PCM (ni offload DSP, ni passthrough).
+            // Sur les TV MediaTek, l'audio Dolby E-AC3 part en offload matériel
+            // (offload_pipe_start/pause sur « Decoder_85 ») : ce pipeline se met en
+            // pause puis redémarre toutes les ~9 s, ce qui déclenche un
+            // AudioFlinger.moveEffectChain et gèle 2 à 7 s TOUT le pipeline A/V
+            // (le fameux « cercle » de rebuffering). En limitant les capacités du
+            // sink au PCM stéréo par défaut, ExoPlayer décode l'audio lui-même
+            // (décodeur plateforme, sinon FFmpeg) et écrit dans un AudioTrack PCM
+            // stable → plus d'offload instable, plus de gels. Le son sort en stéréo
+            // (parfait pour les HP de la TV ; un ampli Dolby ne recevra plus le
+            // bitstream 5.1, compromis acceptable vu l'instabilité).
             androidx.media3.exoplayer.DefaultRenderersFactory rf =
-                new androidx.media3.exoplayer.DefaultRenderersFactory(this)
+                new androidx.media3.exoplayer.DefaultRenderersFactory(this) {
+                    @Override
+                    protected androidx.media3.exoplayer.audio.AudioSink buildAudioSink(
+                            android.content.Context context,
+                            boolean enableFloatOutput,
+                            boolean enableAudioTrackPlaybackParams) {
+                        return new androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                            .setAudioCapabilities(
+                                androidx.media3.exoplayer.audio.AudioCapabilities
+                                    .DEFAULT_AUDIO_CAPABILITIES)
+                            .setEnableFloatOutput(enableFloatOutput)
+                            .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                            .build();
+                    }
+                }
                     .setExtensionRendererMode(
-                        androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
-            player = new ExoPlayer.Builder(this, rf).setTrackSelector(ts).build();
+                        androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+                    // Repli de decodeur. Sans ca, quand le decodeur MATERIEL de la box
+                    // echoue a s'initialiser ou tombe en cours de route, ExoPlayer
+                    // abandonne et l'ecran reste NOIR jusqu'a ce qu'on ressorte et
+                    // relance. Avec ce repli, il bascule automatiquement sur un autre
+                    // decodeur (logiciel au besoin) et la lecture continue.
+                    // Le commentaire ci-dessous documente deja un gel de decodeur
+                    // observe sur ce materiel (C2BqBuffer dequeue failures) : c'est
+                    // la meme famille de panne.
+                    .setEnableDecoderFallback(true);
+            // Ne PAS laisser ExoPlayer changer la fréquence d'image de l'écran.
+            // Sur les TV 4K MediaTek bas de gamme (ex : SWTV-24AE-4K), chaque appel
+            // Surface.setFrameRate() pose puis retire un frameRateOverride, ce qui
+            // fait renégocier l'affichage en boucle et gèle le décodeur vidéo
+            // (C2BqBuffer dequeue failures) → coupure toutes les ~20 s, surtout sur
+            // les films 24 im/s. STRATEGY_OFF supprime ces appels tout en gardant
+            // la SurfaceView (donc le HDR et le décodage matériel 4K).
+            // Réserve de lecture élargie mais bornée en RAM (TV ~1,8 Go) : encaisse
+            // les creux de débit du VPN/IPTV sans multiplier les « cercles » de
+            // rebuffering. Le plafond en octets (48 Mo) protège de l'OOM.
+            androidx.media3.exoplayer.LoadControl loadControl =
+                new androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(
+                        30_000,   // min : 30 s d'avance visée
+                        90_000,   // max : jusqu'à 90 s si la RAM/plafond le permet
+                        2_500,    // démarrer la lecture après 2,5 s bufferisées
+                        12_000)   // après un blocage : attendre 12 s avant de repartir
+                    .setTargetBufferBytes(48 * 1024 * 1024)      // plafond RAM ~48 Mo
+                    .setPrioritizeTimeOverSizeThresholds(false)  // le plafond octets prime
+                    .build();
+            player = new ExoPlayer.Builder(this, rf)
+                    .setTrackSelector(ts)
+                    .setLoadControl(loadControl)
+                    .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
+                    .build();
             playerView.setPlayer(player);
             playerView.setKeepScreenOn(true);
 
             player.addListener(new Player.Listener() {
                 @Override
                 public void onPlaybackStateChanged(int state) {
+                    // La lecture est repartie et tient depuis assez longtemps :
+                    // on rend ses essais au compteur pour la prochaine coupure.
+                    if (state == Player.STATE_READY && netRetries > 0
+                            && System.currentTimeMillis() - lastRetryAtMs > RETRY_RESET_AFTER_MS) {
+                        netRetries = 0;
+                    }
                     if (state == Player.STATE_ENDED && currentIdx < epUrls.length - 1) {
                         goEp(currentIdx + 1);
                     }
@@ -287,9 +477,19 @@ public class PlayerActivity extends FragmentActivity {
                 @Override
                 public void onPlayerError(PlaybackException error) {
                     Log.e(TAG, "ExoPlayer error [" + error.errorCode + "]", error);
+                    String curUrl = epUrls[currentIdx];
+
+                    // ── Reprise à la position courante après coupure réseau ──
+                    // C'est le cas de loin le plus fréquent en cours de film.
+                    // On rouvre le MÊME flux et on repart où on en était, avec
+                    // une attente croissante pour laisser le réseau (ou le
+                    // tunnel VPN) se rétablir.
+                    if (isRecoverable(error) && netRetries < maxRetries()) {
+                        restartStream(curUrl, "erreur " + error.errorCode);
+                        return;
+                    }
 
                     // ── Retry automatique : ProgressiveMedia → HLS ──
-                    String curUrl = epUrls[currentIdx];
                     String lo     = curUrl.toLowerCase();
                     boolean wasProgressive = !lo.contains(".m3u8")
                             && !lo.contains("/live/")
@@ -322,20 +522,7 @@ public class PlayerActivity extends FragmentActivity {
             player.clearMediaItems();
         }
 
-        String lUrl = url.toLowerCase();
-        MediaSource source;
-
-        if (lUrl.contains(".m3u8") || lUrl.contains("/live/") || lUrl.contains("get_series_info")) {
-            // ── HLS : TV Live, séries, playlists Xtream ──
-            source = new HlsMediaSource.Factory(buildDsFactory())
-                    .createMediaSource(MediaItem.fromUri(url));
-        } else {
-            // ── Progressive : VOD mp4/mkv/ts Xtream ──
-            source = new ProgressiveMediaSource.Factory(buildDsFactory())
-                    .createMediaSource(MediaItem.fromUri(url));
-        }
-
-        player.setMediaSource(source);
+        player.setMediaSource(buildSourceFor(url));
         player.setPlayWhenReady(true);
         // Reprise à la position sauvegardée (0 = depuis le début)
         if (startPositionMs > 0) {
@@ -352,6 +539,66 @@ public class PlayerActivity extends FragmentActivity {
                 playerView.hideController();
             }
         }, 3000);
+    }
+
+    /** Vrai si l'URL doit être lue en HLS (TV live, séries, playlists Xtream). */
+    private static boolean isHlsUrl(String url) {
+        String lo = (url == null) ? "" : url.toLowerCase();
+        return lo.contains(".m3u8") || lo.contains("/live/") || lo.contains("get_series_info");
+    }
+
+    /** Source média correspondant au type d'URL — partagée par la lecture et la reprise. */
+    // Nombre de reprises SILENCIEUSES tentees par ExoPlayer sur un segment ou une
+    // plage avant de remonter une erreur. Le defaut (3) laisse passer trop vite
+    // les hoquets d'un serveur IPTV : on absorbe davantage avant d'aller jusqu'a
+    // la relance visible du flux, qui elle coupe l'image.
+    private static final int LOAD_RETRY_COUNT = 8;
+    private androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy loadErrorPolicy() {
+        return new androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(LOAD_RETRY_COUNT);
+    }
+    private MediaSource buildSourceFor(String url) {
+        return isHlsUrl(url)
+            ? new HlsMediaSource.Factory(buildDsFactory())
+                    .setLoadErrorHandlingPolicy(loadErrorPolicy())
+                    .createMediaSource(MediaItem.fromUri(url))
+            : new ProgressiveMediaSource.Factory(buildDsFactory())
+                    .setLoadErrorHandlingPolicy(loadErrorPolicy())
+                    .createMediaSource(MediaItem.fromUri(url));
+    }
+
+    /**
+     * Erreur dont on peut espérer se remettre en retentant la même URL.
+     *
+     * Toute la famille ERROR_CODE_IO_* (2000-2999) correspond à un incident de
+     * transport : connexion coupée, délai dépassé, réseau perdu — exactement ce
+     * que produit une renégociation du tunnel VPN ou un hoquet du serveur IPTV.
+     * Un statut HTTP 4xx, lui, est définitif (abonnement, flux supprimé) : le
+     * retenter ne ferait que marteler le serveur.
+     */
+    private static boolean isRecoverable(PlaybackException error) {
+        int code = error.errorCode;
+        if (code == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS) {
+            Throwable cause = error.getCause();
+            while (cause != null) {
+                if (cause instanceof HttpDataSource.InvalidResponseCodeException) {
+                    int http = ((HttpDataSource.InvalidResponseCodeException) cause).responseCode;
+                    return http >= 500;            // 5xx = transitoire, 4xx = définitif
+                }
+                cause = cause.getCause();
+            }
+            return false;
+        }
+        // Familles retentees :
+        //   2000-2999 ERROR_CODE_IO_*        transport (reseau, tunnel VPN, serveur)
+        //   3000-3999 ERROR_CODE_PARSING_*   segment malforme du flux IPTV
+        //   4000-4999 ERROR_CODE_DECODING_*  echec de decodeur -> ECRAN NOIR
+        //   5000-5999 ERROR_CODE_AUDIO_TRACK_* sortie audio perdue
+        // Les trois dernieres familles etaient traitees comme definitives : la
+        // lecture s'arretait sur un simple message alors qu'une nouvelle
+        // preparation repart presque toujours. C'est le cas rapporte « ecran noir,
+        // et si je relance ca repart ». Le budget de reprises borne la boucle si
+        // le flux est reellement illisible.
+        return code >= 2000 && code < 6000;
     }
 
     /**
@@ -547,6 +794,7 @@ public class PlayerActivity extends FragmentActivity {
         // Sauver la position dès le passage en arrière-plan (appelé de façon fiable,
         // contrairement à onDestroy lors d'un kill brutal) + stopper le minuteur.
         progHandler.removeCallbacks(progRunnable);
+        stallHandler.removeCallbacks(stallRunnable);
         reportCurrentProgress();
         if (player != null) player.pause();
     }
@@ -558,17 +806,30 @@ public class PlayerActivity extends FragmentActivity {
         // (Re)démarrer la sauvegarde périodique pendant la lecture au premier plan.
         progHandler.removeCallbacks(progRunnable);
         progHandler.postDelayed(progRunnable, PROGRESS_SAVE_INTERVAL_MS);
+        // (Re)armer la surveillance anti-blocage.
+        lastPosMs = -1L; lastPosChangeAt = 0L;
+        stallHandler.removeCallbacks(stallRunnable);
+        stallHandler.postDelayed(stallRunnable, STALL_CHECK_MS);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         progHandler.removeCallbacks(progRunnable);
+        stallHandler.removeCallbacks(stallRunnable);
         // ── Remonter la progression au WebView avant de libérer le player ──
         if (player != null && !currentUrl.isEmpty()) {
             reportCurrentProgress();   // getDuration()=TIME_UNSET géré (durMs=0) côté JS
             player.release();
             player = null;
+        }
+        // Fermer les sockets encore ouvertes vers le serveur IPTV. Sans cela,
+        // le pool OkHttp les gardait actives jusqu'à 5 minutes : en relançant
+        // aussitôt une lecture, le compte dépassait sa limite de connexions
+        // simultanées et le fournisseur coupait le nouveau flux très vite.
+        if (okClient != null) {
+            try { okClient.connectionPool().evictAll(); } catch (Exception ignored) {}
+            try { okClient.dispatcher().cancelAll(); }   catch (Exception ignored) {}
         }
     }
 

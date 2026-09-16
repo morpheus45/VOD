@@ -14,8 +14,13 @@
   <title>PIPSILY TV</title>
   <link rel="icon" href="./icons/icon-192.png" type="image/png" />
 
-  <!-- API Tizen native — placeholder remplacé automatiquement par Tizen Studio au packaging -->
-  <script src="$TIZEN_SCRIPT"></script>
+  <!-- Aucun script d'API native n'est chargé ici, volontairement.
+       Le placeholder historique n'était substitué que par le builder de l'IDE
+       Tizen Studio, pas par `tizen build-web` en CLI, où il restait littéral et
+       provoquait une requête 404. L'app n'utilise que des API tizen.*
+       (application, tvinputdevice, filesystem, package), injectées automatiquement
+       par le Web Runtime. webapis.js ne serait nécessaire que pour des API
+       webapis.* (avplay, productinfo...), non utilisées ici. -->
 
   <!-- Auto-update Tizen (chargé en premier) -->
   <script src="tizen-update.js"></script>

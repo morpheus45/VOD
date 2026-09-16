@@ -50,6 +50,47 @@ public class MainActivity extends AppCompatActivity {
     // Référence faible vers l'instance active (pour reportProgress depuis PlayerActivity)
     static WeakReference<MainActivity> sInstance;
 
+    // ── VPN (WireGuard) — instance unique partagée avec VpnActivity/PipsilyBridge ──
+    private static com.pipsiflix.app.vpn.VpnManager sVpn;
+    private static com.pipsiflix.app.vpn.VpnPrefs sVpnPrefs;
+    public static com.pipsiflix.app.vpn.VpnManager vpn() { return sVpn; }
+    public static com.pipsiflix.app.vpn.VpnPrefs vpnPrefs() { return sVpnPrefs; }
+
+    /**
+     * Instancie une fois pour toutes le duo VpnPrefs/VpnManager partagé.
+     *
+     * Il n'existait qu'un point de création, dans startWithVpnThenLoad(), donc
+     * uniquement sur le chemin TÉLÉPHONE. Sur Android TV le lanceur est
+     * TvActivity, qui ne touchait pas au VPN : le tunnel n'était jamais monté
+     * ni surveillé, et une fois tombé il ne revenait pas, même en relançant
+     * l'application. Ce point d'entrée permet à TvActivity d'utiliser
+     * exactement la même instance que MainActivity et VpnActivity.
+     */
+    public static synchronized com.pipsiflix.app.vpn.VpnManager ensureVpn(android.content.Context ctx) {
+        android.content.Context app = ctx.getApplicationContext();
+        if (sVpnPrefs == null) sVpnPrefs = new com.pipsiflix.app.vpn.VpnPrefs(app);
+        if (sVpn == null) sVpn = new com.pipsiflix.app.vpn.VpnManager(
+            new com.pipsiflix.app.vpn.GoWgBackend(app), ctx.getPackageName());
+        return sVpn;
+    }
+    private boolean vpnGateOpen = false; // true quand on peut charger la WebView
+    // Porte VPN effectivement franchie au moins une fois (loadWebApp() appelé) — statique,
+    // survit donc à recreate() (même process, après un crash renderer). Sert à distinguer,
+    // sur recreate, "une page avait bien été chargée avant le crash" (on peut rouvrir
+    // vpnGateOpen sans risque) de "le crash a eu lieu PENDANT la connexion VPN initiale,
+    // avant tout chargement" (rouvrir la porte inconditionnellement ferait prendre aux
+    // transitions VPN suivantes la branche "reprise JS" sur une page inexistante → écran
+    // blanc définitif). Voir onCreate() et loadWebApp().
+    private static boolean sVpnGateOpened = false;
+    // Garde anti-double-déclenchement : set() ne notifie qu'aux changements d'état,
+    // mais si jamais il renotifiait le même état deux fois de suite, cette garde
+    // évite de relancer un thread de reconnexion en double (voir onVpnState).
+    private com.pipsiflix.app.vpn.VpnManager.State lastNotifiedVpnState = null;
+    // Listener VPN de l'instance courante — retiré à onDestroy() / avant ré-enregistrement,
+    // pour ne jamais laisser deux listeners actifs ou un listener référençant une
+    // Activity détruite (fuite après recreate() sur renderer mort).
+    private com.pipsiflix.app.vpn.VpnManager.Listener vpnListener;
+
     // Garde anti-boucle : si le renderer meurt en boucle (OOM appareil bas de gamme),
     // on ne recrée pas indéfiniment l'activité.
     private static long sLastRecreate  = 0;
@@ -75,6 +116,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Réclamer l'espace des caches WebView s'ils ont trop grossi — AVANT que la
+        // WebView n'ouvre ses fichiers (sinon verrouillés).
+        purgeWebViewCachesIfHuge();
 
         // Plein écran immersif
         getWindow().getDecorView().setSystemUiVisibility(
@@ -103,6 +148,20 @@ public class MainActivity extends AppCompatActivity {
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
+            // Après recreate (renderer mort) : sVpn existe déjà (statique) → ré-enregistrer
+            // le listener sur la nouvelle instance dans tous les cas.
+            if (sVpn != null) registerVpnListener();
+            if (sVpnGateOpened) {
+                // une page avait bien été chargée avant le crash → porte déjà ouverte
+                vpnGateOpen = true;
+            } else if (sVpn != null) {
+                // crash pendant la phase de connexion VPN (avant tout chargement) →
+                // refaire connexion + chargement (le consentement Android persiste)
+                connectThenLoad();
+            } else {
+                // VPN non initialisé (ne devrait pas arriver ici) → chargement normal
+                loadWebApp();
+            }
         } else {
             // Vider le cache WebView au premier lancement de cette version
             android.content.SharedPreferences prefs =
@@ -113,8 +172,273 @@ public class MainActivity extends AppCompatActivity {
                 webView.clearHistory();
                 prefs.edit().putString("apk_version", APK_VERSION).apply();
             }
-            webView.loadUrl(APP_URL);
+            startWithVpnThenLoad();   // ← remplace webView.loadUrl(APP_URL)
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  VPN (WireGuard) — gating démarrage, consentement, reconnexion (Task 9)
+    // ══════════════════════════════════════════════════════════════════════
+    private static final int REQ_VPN_CONSENT = 8931;
+
+    private void startWithVpnThenLoad() {
+        ensureVpn(this);       // instance partagée avec TvActivity / VpnActivity
+        // Listener d'état : marshale vers le thread UI. C'est lui qui pilote
+        // désormais l'overlay et la reconnexion (voir onVpnState) — le tick de
+        // santé ne fait plus que détecter la staleness (Task 8/9).
+        registerVpnListener();
+        // Les serveurs (WARP généré PAR APPAREIL au 1er lancement + configs assets
+        // optionnelles) sont assemblés dans connectThenLoad(), sur un thread de fond,
+        // car l'enregistrement WARP est un appel réseau bloquant — jamais sur l'UI.
+
+        // Kill-switch distant : lu depuis pipsily_prefs/vpn_enabled_remote, stocké
+        // par le parseur de version.json (si présent) — défaut true (fail-open),
+        // voir Step 5 du brief Task 9 : aucun point de parsing JSON existant de
+        // version.json n'a été trouvé côté Java (l'updater vit côté JS), donc ce
+        // flag reste à sa valeur par défaut tant qu'aucun code ne l'écrit.
+        boolean remoteEnabled = getSharedPreferences("pipsily_prefs", MODE_PRIVATE)
+            .getBoolean("vpn_enabled_remote", true);
+        boolean enforce = com.pipsiflix.app.vpn.VpnGate.shouldEnforce(
+            sVpnPrefs.isEnabled(), remoteEnabled, sVpnPrefs.sessionOverride());
+
+        if (!enforce) {
+            // Porte de retour : pas de VPN → comportement v60 exact.
+            loadWebApp();
+            return;
+        }
+        // Consentement Android (une fois), puis connexion, puis chargement.
+        android.content.Intent prep = android.net.VpnService.prepare(this);
+        if (prep != null) startActivityForResult(prep, REQ_VPN_CONSENT);
+        else connectThenLoad();
+    }
+
+    /**
+     * (Ré)enregistre le listener d'état VPN sur l'instance courante de l'Activity.
+     * Retire d'abord tout listener précédemment enregistré par CETTE instance
+     * (idempotent), puis en crée un nouveau qui marshale vers le thread UI.
+     * Nécessaire après recreate() (renderer mort) : sVpn est statique et survit,
+     * mais son ancien listener référence encore l'Activity détruite — sans ce
+     * ré-enregistrement, la nouvelle instance ne reçoit plus aucun état VPN.
+     */
+    private void registerVpnListener() {
+        if (sVpn == null) return;
+        if (vpnListener != null) sVpn.removeListener(vpnListener);
+        vpnListener = (st, cur) -> runOnUiThread(() -> onVpnState(st, cur));
+        sVpn.addListener(vpnListener);
+    }
+
+    @Override protected void onActivityResult(int req, int res, android.content.Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req == REQ_VPN_CONSENT) {
+            if (res == RESULT_OK) connectThenLoad();
+            else { // refus → on ne bloque pas l'appli
+                android.widget.Toast.makeText(this, "VPN refusé — lecture sans VPN", android.widget.Toast.LENGTH_LONG).show();
+                sVpnPrefs.setSessionOverride(true); loadWebApp();
+            }
+        }
+    }
+
+    private void connectThenLoad() {
+        showVpnOverlay("Connexion VPN…");
+        // La réaction à l'issue de CETTE connexion (CONNECTED → ferme l'overlay
+        // + charge l'appli ; ERROR → failover) n'est PLUS gérée ici : le listener
+        // global (sVpn.addListener, voir startWithVpnThenLoad) est déjà enregistré
+        // à ce stade et reçoit exactement les mêmes transitions d'état via
+        // set(). Réagir aussi ici doublerait l'action (double loadWebApp() /
+        // double AlertDialog de failover) — c'est onVpnState() qui décide seul.
+        new Thread(() -> {
+            // Assembler les serveurs sur ce thread de fond : WARP propre à l'appareil
+            // (généré au 1er lancement puis mis en cache) + configs assets optionnelles
+            // (multi-pays éventuel). Aucune clé n'est embarquée dans l'APK.
+            java.util.List<com.pipsiflix.app.vpn.VpnServer> servers = new java.util.ArrayList<>();
+            com.pipsiflix.app.vpn.VpnServer warp =
+                com.pipsiflix.app.vpn.WarpProvisioner.getOrCreate(this);
+            if (warp != null) servers.add(warp);
+            servers.addAll(com.pipsiflix.app.vpn.VpnServers.loadFromAssets(this));
+            sVpn.setServers(servers);
+
+            if (servers.isEmpty()) {
+                // Échec réseau WARP + aucune config assets → failover (jamais de gel).
+                runOnUiThread(() -> { hideVpnOverlay(); showVpnFailoverChoices(); });
+                return;
+            }
+            if (sVpnPrefs.autoFastest() || sVpnPrefs.lastServerId() == null) {
+                sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+            } else {
+                com.pipsiflix.app.vpn.VpnServer last = null;
+                for (com.pipsiflix.app.vpn.VpnServer s : sVpn.getServers())
+                    if (s.id.equals(sVpnPrefs.lastServerId())) last = s;
+                if (last != null) sVpn.connect(last);
+                else sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+            }
+        }).start();
+    }
+
+    private void loadWebApp() {
+        vpnGateOpen = true;
+        sVpnGateOpened = true;
+        webView.loadUrl(APP_URL);
+    }
+
+    /**
+     * Réagit à CHAQUE transition d'état du VPN (appelé sur le thread UI via le
+     * listener enregistré dans startWithVpnThenLoad). Remplace la logique
+     * before/after synchrone de l'ancien tick de santé, qui ratait les
+     * reconnexions asynchrones (Task 8/9 — corrige l'overlay figé + l'impasse
+     * du failover « Choisir un serveur »).
+     */
+    private void onVpnState(com.pipsiflix.app.vpn.VpnManager.State st,
+                            com.pipsiflix.app.vpn.VpnServer cur) {
+        // Garde anti-boucle : set() ne notifie qu'aux changements, mais on se
+        // protège si jamais il renotifiait deux fois le même état de suite
+        // (éviterait de relancer un 2e thread de reconnexion en RECONNECTING).
+        if (st == lastNotifiedVpnState) return;
+        lastNotifiedVpnState = st;
+
+        switch (st) {
+            case CONNECTED:
+                hideVpnOverlay();
+                if (!vpnGateOpen) {
+                    loadWebApp();                 // 1er passage ou après failover → ouvre la porte
+                } else {
+                    // reprise de lecture après une reconnexion
+                    webView.evaluateJavascript(
+                        "try{document.querySelectorAll('video').forEach(v=>v.play());}catch(e){}", null);
+                }
+                break;
+            case RECONNECTING:
+                showVpnOverlay("Reconnexion VPN…");
+                if (vpnGateOpen) {
+                    webView.evaluateJavascript(
+                        "try{document.querySelectorAll('video').forEach(v=>v.pause());}catch(e){}", null);
+                }
+                // déclenche la reconnexion réelle (async) — une seule fois par bascule
+                new Thread(() -> {
+                    if (sVpnPrefs.autoFastest())
+                        sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+                    else if (sVpn.getCurrent() != null)
+                        sVpn.connect(sVpn.getCurrent());
+                }).start();
+                break;
+            case IDLE:
+                hideVpnOverlay();
+                if (!vpnGateOpen) loadWebApp();  // ex: "Continuer sans VPN" depuis VpnActivity
+                break;
+            case ERROR:
+                // échec (connexion ou reconnexion) : TOUJOURS proposer une issue,
+                // en session comme au démarrage → jamais de gel.
+                showVpnFailoverChoices();
+                break;
+            default:
+                break;
+        }
+    }
+
+    // ── Overlay natif anti-blocage (pas de vidéo affichée avant l'ouverture du tunnel) ──
+    private android.widget.FrameLayout vpnOverlay;
+    private void showVpnOverlay(String msg) {
+        if (vpnOverlay == null) {
+            vpnOverlay = new android.widget.FrameLayout(this);
+            vpnOverlay.setBackgroundColor(0xEE0A0A0F);
+            android.widget.TextView tv = new android.widget.TextView(this);
+            tv.setId(android.R.id.text1); tv.setTextColor(0xFFFFFFFF); tv.setTextSize(18);
+            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(-2, -2);
+            lp.gravity = android.view.Gravity.CENTER; vpnOverlay.addView(tv, lp);
+            addContentView(vpnOverlay, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        }
+        ((android.widget.TextView) vpnOverlay.findViewById(android.R.id.text1)).setText(msg);
+        vpnOverlay.setVisibility(android.view.View.VISIBLE);
+    }
+    private void hideVpnOverlay() { if (vpnOverlay != null) vpnOverlay.setVisibility(android.view.View.GONE); }
+
+    private void showVpnFailoverChoices() {
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("VPN indisponible")
+            .setMessage("Aucun serveur n'a répondu.")
+            .setPositiveButton("Réessayer", (d,w) -> {
+                if (!vpnGateOpen) { connectThenLoad(); }
+                else {
+                    showVpnOverlay("Reconnexion VPN…");
+                    new Thread(() -> {
+                        if (sVpnPrefs.autoFastest())
+                            sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+                        else if (sVpn.getCurrent() != null)
+                            sVpn.connect(sVpn.getCurrent());
+                        else
+                            sVpn.connectFastest(com.pipsiflix.app.vpn.LatencyProbe.tcpPinger());
+                    }).start();
+                }
+            })
+            .setNeutralButton("Choisir un serveur", (d,w) -> {
+                hideVpnOverlay();
+                startActivity(new android.content.Intent(this, com.pipsiflix.app.vpn.VpnActivity.class));
+            })
+            .setNegativeButton("Continuer sans VPN", (d,w) -> {
+                sVpnPrefs.setSessionOverride(true);
+                hideVpnOverlay();
+                sVpn.disconnect();               // → IDLE → onVpnState(IDLE) ouvre la porte si besoin
+                if (vpnGateOpen) webView.evaluateJavascript(
+                    "try{document.querySelectorAll('video').forEach(v=>v.play());}catch(e){}", null);
+            })
+            .setCancelable(false).show();
+    }
+
+    // ── Surveillance du tunnel (spec §6) : pause lecture si le tunnel tombe, reprend au retour ──
+    private final android.os.Handler vpnHealth = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable vpnHealthTick = new Runnable() {
+        @Override public void run() {
+            if (sVpn != null && vpnGateOpen) {
+                sVpn.onHealthTick();   // détecte staleness → passe RECONNECTING → le listener réagit
+            }
+            vpnHealth.postDelayed(this, 5000);
+        }
+    };
+
+    /**
+     * Purge les caches WebView volumineux (CacheStorage du Service Worker, cache
+     * HTTP Chromium, GPUCache, blob_storage…) en PRÉSERVANT « Local Storage »
+     * (le login/session). À appeler AVANT la création de la WebView.
+     *
+     * Pourquoi : le stockage de l'appli monte tout seul (observé : 3,2 Go) sans que
+     * webView.clearCache() n'y change rien — car clearCache ne touche PAS le
+     * CacheStorage du Service Worker, et WebView n'expose aucune API pour le vider.
+     * On supprime donc directement les sous-dossiers de cache, en gardant le dossier
+     * « Local Storage » où vit le token de session → espace récupéré, login conservé.
+     * Ne se déclenche qu'au-delà de 1 Go pour ne pas ralentir les démarrages normaux.
+     */
+    private void purgeWebViewCachesIfHuge() {
+        try {
+            if (Build.VERSION.SDK_INT < 26) return;
+            android.app.usage.StorageStatsManager ssm =
+                (android.app.usage.StorageStatsManager) getSystemService(STORAGE_STATS_SERVICE);
+            android.app.usage.StorageStats st = ssm.queryStatsForPackage(
+                android.os.storage.StorageManager.UUID_DEFAULT,
+                getPackageName(), android.os.Process.myUserHandle());
+            long dataMb = st.getDataBytes() / (1024L * 1024L);
+            if (dataMb < 1024) return;   // < 1 Go : rien à faire
+            java.io.File webviewDir = new java.io.File(getDataDir(), "app_webview");
+            java.io.File base = new java.io.File(webviewDir, "Default");
+            if (!base.isDirectory()) base = webviewDir;   // appareils sans profil "Default"
+            String[] toPurge = {
+                "Service Worker", "Cache", "GPUCache", "Code Cache",
+                "blob_storage", "IndexedDB", "Session Storage",
+                "File System", "Shared Dictionary"
+            };
+            for (String p : toPurge) deleteRecursive(new java.io.File(base, p));
+            android.util.Log.i("PipsilyMain",
+                "Purge caches WebView : data etait " + dataMb + " Mo (Local Storage/login preserve)");
+        } catch (Exception e) {
+            android.util.Log.w("PipsilyMain", "purge WebView echouee", e);
+        }
+    }
+
+    private static void deleteRecursive(java.io.File f) {
+        if (f == null || !f.exists()) return;
+        if (f.isDirectory()) {
+            java.io.File[] kids = f.listFiles();
+            if (kids != null) for (java.io.File k : kids) deleteRecursive(k);
+        }
+        f.delete();
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "SetJavaScriptInterface"})
@@ -549,9 +873,24 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        vpnHealth.removeCallbacks(vpnHealthTick);
+        vpnHealth.postDelayed(vpnHealthTick, 5000);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        vpnHealth.removeCallbacks(vpnHealthTick);
+    }
+
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         unregisterApkReceiver();
+        vpnHealth.removeCallbacks(vpnHealthTick);
+        if (sVpn != null && vpnListener != null) sVpn.removeListener(vpnListener);
         sInstance = null;
     }
 
@@ -617,6 +956,20 @@ public class MainActivity extends AppCompatActivity {
     //  Bridge JavaScript ↔ Java  (window.AndroidBridge)
     // ══════════════════════════════════════════════════════════════════════
     class PipsilyBridge {
+
+        /** Ouvre l'écran natif de sélection VPN (pastille / accès rapide côté JS). */
+        @JavascriptInterface
+        public void openVpn() {
+            runOnUiThread(() -> startActivity(
+                new android.content.Intent(MainActivity.this, com.pipsiflix.app.vpn.VpnActivity.class)));
+        }
+
+        /** État courant du VPN pour l'UI web : "ETAT|libellé". */
+        @JavascriptInterface
+        public String getVpnState() {
+            return sVpn == null ? "OFF" : sVpn.getState().name()
+                + "|" + (sVpn.getCurrent() != null ? sVpn.getCurrent().label : "");
+        }
 
         /** Lecteur natif ExoPlayer — appelé par app.js PipPlayer */
         @JavascriptInterface

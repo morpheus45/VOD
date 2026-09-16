@@ -29,10 +29,26 @@
   <feature name="http://tizen.org/feature/network.internet" required="true"/>
 
   <!-- ─── Privileges ───────────────────────────────────────────────── -->
+  <!--
+    Tous les privilèges ci-dessous sont de niveau PUBLIC, le seul que couvre un
+    certificat distributeur « VD DEVELOPER Public CA Class » (celui que délivre
+    le Certificate Manager avec un compte Samsung Developer standard).
+
+    NE PAS réintroduire http://tizen.org/privilege/packagemanager.install :
+    c'est un privilège de niveau PLATEFORME. Demandé avec un certificat public,
+    la TV rejette l'installation entière avec install failed[118019] — le même
+    code que pour un certificat invalide, d'où la confusion possible.
+    Vérifié sur UE55NU7305 / Tizen 4.0 le 2026-09-08 : paquet par ailleurs
+    parfaitement signé (29/29 empreintes SHA-512 correctes, signatures
+    RSA-SHA512 valides, DUID correspondant), refusé à cause de ce seul
+    privilège.
+
+    Conséquence assumée : tizen-update.js ne peut pas installer la mise à jour
+    lui-même et bascule sur son message de repli avec le lien de téléchargement.
+  -->
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
   <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
-  <tizen:privilege name="http://tizen.org/privilege/packagemanager.install"/>
   <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
   <tizen:privilege name="http://tizen.org/privilege/application.info"/>
 

@@ -15,12 +15,14 @@ android {
         minSdk 21                // Android 5.0+
         targetSdk 34
         // Canal CAR : numérotation propre, démarrée à 1000. Elle reste au-dessus
-        // du canal TV/téléphone (v57, +1 par release) pour que le site ne
-        // propose jamais d'installer PIPSILY.apk par-dessus PIPSILY CAR.
-        versionCode 1001
-        versionName "1.1-car"
-        // Le poste est un ARMv7 : les libs arm64 (FFmpeg) seraient du poids mort
-        // sur un appareil à 2 Go de RAM. On ne garde que armeabi-v7a.
+        // du canal TV/téléphone pour que le site ne propose jamais d'installer
+        // PIPSILY.apk par-dessus PIPSILY CAR.
+        // 1002 : reprend tout le travail de main (VPN WireGuard, chien de garde
+        // du lecteur, repli de décodeur, filtrage de contenu par compte).
+        versionCode 1002
+        versionName "1.2-car"
+        // Le poste est un ARMv7 : les libs arm64 seraient du poids mort sur un
+        // appareil à 2 Go de RAM. On ne garde que armeabi-v7a.
         ndk { abiFilters 'armeabi-v7a' }
     }
 
@@ -105,4 +107,10 @@ dependencies {
     // vocal système (Fire TV : ni Google, ni RecognitionService). Le modèle
     // français n'est PAS embarqué : il est téléchargé au 1er usage vocal.
     implementation 'com.alphacephei:vosk-android:0.3.47'
+
+    // ── VPN WireGuard embarqué (backend WireGuard-Go) ──
+    implementation 'com.wireguard.android:tunnel:1.0.20230706'
+    // Tests JVM
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.json:json:20231013'
 }

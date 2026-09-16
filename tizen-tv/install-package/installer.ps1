@@ -1,6 +1,20 @@
 #Requires -Version 5.0
 # installer.ps1 — PIPSILY TV — Installateur Samsung Smart TV
 # Usage : lancé automatiquement par INSTALLER.bat
+#
+# Cet installateur N'EST PAS un installateur « sans compte » : il ne peut pas
+# fabriquer un certificat valide. Une TV Samsung valide la chaîne de
+# certification du distributeur contre la CA racine Samsung, donc le .wgt doit
+# avoir été signé au préalable avec un profil Samsung créé dans Tizen Studio
+# (Certificate Manager → « + » → Samsung) POUR LE DUID DE CETTE TV.
+#
+# Ce que fait ce script :
+#   - connecte la TV en sdb
+#   - lit son DUID automatiquement
+#   - vérifie que le .wgt fourni est réellement signable/installable sur elle
+#   - installe et lance l'app
+#
+# Voir tizen-tv/TIZEN-README.md pour la production du .wgt signé.
 
 param([string]$BaseDir = $PSScriptRoot)
 $ErrorActionPreference = "Stop"
@@ -21,13 +35,12 @@ function Write-Banner {
   Write-Host "  ╚══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
   Write-Host ""
 }
+function Quit-With { param($code) Read-Host "`n  Entrée pour quitter" | Out-Null; exit $code }
 
 Write-Banner
 
 # ─── Chemins ─────────────────────────────────────────────────────────────────
 $SdbExe    = Join-Path $BaseDir "sdb\sdb.exe"
-$SignerExe = Join-Path $BaseDir "sign_wgt.exe"
-$WgtSrc    = Join-Path $BaseDir "PIPSILY-TV.wgt"
 $WgtSigned = Join-Path $BaseDir "PIPSILY-TV-signed.wgt"
 $AppId     = "com.morpheus45.pipsily"
 
@@ -37,89 +50,32 @@ Write-Step "0" "Vérification des fichiers..."
 if (-not (Test-Path $SdbExe)) {
   Write-Err "sdb.exe introuvable : $SdbExe"
   Write-Info "Le dossier sdb\ doit être présent à côté de INSTALLER.bat"
-  Read-Host "`n  Appuyer sur Entrée pour quitter" | Out-Null
-  exit 1
+  Quit-With 1
 }
 Write-OK "sdb.exe trouvé"
 
-if (-not (Test-Path $SignerExe)) {
-  Write-Err "sign_wgt.exe introuvable : $SignerExe"
-  Read-Host "`n  Appuyer sur Entrée pour quitter" | Out-Null
-  exit 1
+if (-not (Test-Path $WgtSigned)) {
+  Write-Err "Package introuvable : PIPSILY-TV-signed.wgt"
+  Write-Host ""
+  Write-Info "Ce fichier doit être signé avec un profil de certificats Samsung"
+  Write-Info "créé pour TA TV. Voir tizen-tv/TIZEN-README.md, section"
+  Write-Info "« Créer le profil de certificats »."
+  Quit-With 1
 }
-Write-OK "sign_wgt.exe trouvé"
-
-if (-not (Test-Path $WgtSrc)) {
-  Write-Err "Package introuvable : PIPSILY-TV.wgt"
-  Read-Host "`n  Appuyer sur Entrée pour quitter" | Out-Null
-  exit 1
-}
-Write-OK "PIPSILY-TV.wgt trouvé"
+Write-OK "PIPSILY-TV-signed.wgt trouvé"
 
 Write-Host ""
 Write-Line
 
-# ─── ÉTAPE 1 : DUID de la TV ─────────────────────────────────────────────────
+# ─── ÉTAPE 1 : Guide mode développeur ────────────────────────────────────────
 Write-Host ""
-Write-Host "  ┌─ ÉTAPE 1 : DUID de ta TV Samsung ─────────────────────────┐" -ForegroundColor Yellow
+Write-Host "  ┌─ ÉTAPE 1 : Mode développeur sur ta TV Samsung ────────────┐" -ForegroundColor Yellow
 Write-Host "  │                                                             │" -ForegroundColor DarkGray
-Write-Host "  │  Sur la TV, va dans :                                       │" -ForegroundColor White
-Write-Host "  │    Paramètres  →  Support  →  À propos de ce TV            │" -ForegroundColor White
-Write-Host "  │                                                             │" -ForegroundColor DarkGray
-Write-Host "  │  Clique 5 fois sur le numéro de modèle                     │" -ForegroundColor White
-Write-Host "  │  → Un dialogue Mode développeur s'ouvre                    │" -ForegroundColor White
-Write-Host "  │  → Le DUID est affiché dans ce dialogue                    │" -ForegroundColor White
-Write-Host "  │    Exemple : 1ABCD1234567EF0                                │" -ForegroundColor Cyan
-Write-Host "  │                                                             │" -ForegroundColor DarkGray
-Write-Host "  └─────────────────────────────────────────────────────────────┘" -ForegroundColor Yellow
-Write-Host ""
-
-$tvDuid = ""
-while ($true) {
-  $tvDuid = (Read-Host "  Entre le DUID de la TV").Trim()
-  if ($tvDuid -match '^[A-Za-z0-9\-]{8,64}$') { break }
-  Write-Warn "DUID invalide. Lettres, chiffres et tirets uniquement. Exemple : 1ABCD1234567EF0"
-}
-
-Write-Host ""
-Write-Line
-
-# ─── ÉTAPE 2 : Signature du package avec le DUID ─────────────────────────────
-Write-Banner
-Write-Host "  ┌─ ÉTAPE 2 : Signature du package pour ta TV ───────────────┐" -ForegroundColor Yellow
-Write-Host "  └─────────────────────────────────────────────────────────────┘" -ForegroundColor Yellow
-Write-Host ""
-Write-Step "1" "Signature avec DUID : $tvDuid"
-Write-Info "Génération du certificat personnalisé..."
-Write-Host ""
-
-$ErrorActionPreference = "Continue"
-$signOut = & $SignerExe --duid $tvDuid --input $WgtSrc --output $WgtSigned 2>&1 | Out-String
-$ErrorActionPreference = "Stop"
-
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path $WgtSigned)) {
-  Write-Err "Signature échouée."
-  Write-Info $signOut
-  Read-Host "`n  Entrée pour quitter" | Out-Null
-  exit 1
-}
-
-$wgtSize = [Math]::Round((Get-Item $WgtSigned).Length / 1KB)
-Write-OK "Package signé ($wgtSize Ko)"
-
-Write-Host ""
-Write-Line
-
-# ─── ÉTAPE 3 : Guide mode développeur ────────────────────────────────────────
-Write-Banner
-Write-Host "  ┌─ ÉTAPE 3 : Mode développeur sur ta TV Samsung ────────────┐" -ForegroundColor Yellow
-Write-Host "  │                                                             │" -ForegroundColor DarkGray
-Write-Host "  │  (si pas encore fait depuis l'étape 1)                     │" -ForegroundColor Gray
-Write-Host "  │                                                             │" -ForegroundColor DarkGray
-Write-Host "  │  1. Clique 5 fois sur le numéro de modèle (cf étape 1)    │" -ForegroundColor White
-Write-Host "  │  2. Mode développeur → Activé (ON)                         │" -ForegroundColor White
-Write-Host "  │  3. Entre l'adresse IP de CE PC dans 'Host PC IP'          │" -ForegroundColor White
-Write-Host "  │  4. Redémarre la TV                                         │" -ForegroundColor White
+Write-Host "  │  1. Paramètres → Support → À propos de ce TV                │" -ForegroundColor White
+Write-Host "  │  2. Clique 5 fois sur le NUMÉRO DE MODÈLE                   │" -ForegroundColor White
+Write-Host "  │  3. Mode développeur → Activé (ON)                          │" -ForegroundColor White
+Write-Host "  │  4. Entre l'adresse IP de CE PC dans 'Host PC IP'           │" -ForegroundColor White
+Write-Host "  │  5. Redémarre la TV                                         │" -ForegroundColor White
 Write-Host "  │                                                             │" -ForegroundColor DarkGray
 Write-Host "  └─────────────────────────────────────────────────────────────┘" -ForegroundColor Yellow
 Write-Host ""
@@ -143,9 +99,9 @@ Write-Host "  └─────────────────────
 Write-Host ""
 Read-Host "  → Appuyer sur Entrée quand le mode développeur est activé et la TV redémarrée" | Out-Null
 
-# ─── ÉTAPE 4 : Saisie IP TV + connexion ──────────────────────────────────────
+# ─── ÉTAPE 2 : Saisie IP TV + connexion ──────────────────────────────────────
 Write-Banner
-Write-Host "  ┌─ ÉTAPE 4 : Connexion à la TV ──────────────────────────────┐" -ForegroundColor Yellow
+Write-Host "  ┌─ ÉTAPE 2 : Connexion à la TV ──────────────────────────────┐" -ForegroundColor Yellow
 Write-Host "  └─────────────────────────────────────────────────────────────┘" -ForegroundColor Yellow
 Write-Host ""
 
@@ -157,20 +113,20 @@ while ($true) {
 }
 
 Write-Host ""
-Write-Step "2" "Connexion à la TV ($tvIp)..."
+Write-Step "1" "Connexion à la TV ($tvIp)..."
 Write-Host ""
 
 $ErrorActionPreference = "Continue"
-$connectOut = & $SdbExe connect $tvIp 2>&1 | Out-String
+$connectOut = & $SdbExe connect $tvIp | Out-String
 Write-Info $connectOut.Trim()
 
-$devices = & $SdbExe devices 2>&1 | Out-String
-if ($devices -match $tvIp -or $devices -match "device") {
+$devices = & $SdbExe devices | Out-String
+if ($devices -match [regex]::Escape($tvIp)) {
   Write-OK "TV connectée !"
 } else {
   Write-Host ""
   Write-Warn "Connexion difficile. Vérifie que :"
-  Write-Info "  - La TV est en mode développeur (étape 3)"
+  Write-Info "  - La TV est en mode développeur (étape 1)"
   Write-Info "  - L'IP de CE PC est bien entrée dans 'Host PC IP' sur la TV"
   Write-Info "  - TV et PC sont sur le même réseau Wi-Fi"
   Write-Info "  - La TV a bien redémarré après activation du mode dev"
@@ -178,10 +134,101 @@ if ($devices -match $tvIp -or $devices -match "device") {
   $retry = Read-Host "  Réessayer ? (O/n)"
   if ($retry -eq "n" -or $retry -eq "N") { exit 1 }
 
-  Write-Step "2" "Nouvelle tentative..."
-  & $SdbExe disconnect $tvIp 2>&1 | Out-Null
+  Write-Step "1" "Nouvelle tentative..."
+  & $SdbExe disconnect $tvIp | Out-Null
   Start-Sleep 2
-  & $SdbExe connect $tvIp 2>&1 | Out-Null
+  & $SdbExe connect $tvIp | Out-Null
+
+  $devices = & $SdbExe devices | Out-String
+  if (-not ($devices -match [regex]::Escape($tvIp))) {
+    Write-Err "Impossible de joindre la TV. Abandon."
+    Quit-With 1
+  }
+  Write-OK "TV connectée !"
+}
+
+Write-Host ""
+Write-Line
+
+# ─── ÉTAPE 3 : DUID de la TV (automatique) ───────────────────────────────────
+Write-Host ""
+Write-Step "2" "Lecture du DUID de la TV..."
+
+$tvDuid = (& $SdbExe -s "${tvIp}:26101" shell 0 getduid | Out-String).Trim()
+if ($tvDuid -match '^[A-Za-z0-9\-]{8,64}$') {
+  Write-OK "DUID : $tvDuid"
+} else {
+  $tvDuid = ""
+  Write-Warn "DUID illisible — la vérification du certificat sera partielle."
+}
+
+Write-Host ""
+Write-Line
+
+# ─── ÉTAPE 4 : Contrôle du package avant installation ────────────────────────
+Write-Host ""
+Write-Step "3" "Contrôle de la signature du package..."
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$certCount = 0
+$certSubjects = @()
+try {
+  $zip = [System.IO.Compression.ZipFile]::OpenRead($WgtSigned)
+  $entry = $zip.Entries | Where-Object { $_.FullName -eq "signature1.xml" }
+  if ($entry) {
+    $reader = New-Object System.IO.StreamReader($entry.Open())
+    $xml = $reader.ReadToEnd(); $reader.Close()
+    $matches = [regex]::Matches($xml, '<X509Certificate>([^<]+)</X509Certificate>')
+    $certCount = $matches.Count
+    foreach ($m in $matches) {
+      $der = [Convert]::FromBase64String(($m.Groups[1].Value -replace '\s',''))
+      $c = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(,$der)
+      $certSubjects += $c.Subject
+    }
+  }
+  $zip.Dispose()
+} catch {
+  Write-Warn "Lecture de la signature impossible : $_"
+}
+
+if ($certCount -eq 0) {
+  Write-Err "Le package ne contient aucune signature distributeur."
+  Quit-With 1
+}
+
+Write-Info "Chaîne de $certCount certificat(s) dans signature1.xml"
+
+if ($certCount -lt 2) {
+  Write-Host ""
+  Write-Err "Certificat auto-signé — la TV va refuser (erreur 118019)."
+  Write-Host ""
+  Write-Host "  POURQUOI :" -ForegroundColor Yellow
+  Write-Info "La TV valide la CHAÎNE du certificat contre la CA racine Samsung."
+  Write-Info "Un certificat isolé, même avec le bon DUID, est rejeté."
+  Write-Host ""
+  Write-Host "  CE QU'IL FAUT FAIRE :" -ForegroundColor Yellow
+  Write-Info "1. Installer Tizen Studio + l'extension Samsung TV"
+  Write-Info "2. Tools → Certificate Manager → « + » → Samsung"
+  Write-Info "3. Se connecter avec un compte Samsung Developer (gratuit)"
+  Write-Info "4. Renseigner le DUID de cette TV : $tvDuid"
+  Write-Info "5. Re-signer le package avec ce profil, puis relancer ce script"
+  Write-Host ""
+  Write-Info "Détail complet : tizen-tv/TIZEN-README.md"
+  Quit-With 1
+}
+
+Write-OK "Chaîne de certification complète"
+
+if ($tvDuid -and ($certSubjects -join ' ') -notmatch [regex]::Escape($tvDuid)) {
+  Write-Host ""
+  Write-Warn "Le DUID $tvDuid n'apparaît pas dans le certificat distributeur."
+  Write-Info "Ce package a probablement été signé pour une AUTRE TV."
+  Write-Info "L'installation va sans doute échouer en 118019."
+  Write-Host ""
+  $go = Read-Host "  Tenter quand même ? (o/N)"
+  if ($go -ne "o" -and $go -ne "O") { exit 1 }
+} elseif ($tvDuid) {
+  Write-OK "Le certificat vise bien cette TV"
 }
 
 Write-Host ""
@@ -192,55 +239,50 @@ Write-Host ""
 Write-Host "  ┌─ ÉTAPE 5 : Installation de PIPSILY TV ─────────────────────┐" -ForegroundColor Yellow
 Write-Host "  └─────────────────────────────────────────────────────────────┘" -ForegroundColor Yellow
 Write-Host ""
-Write-Step "3" "Installation du package sur la TV..."
+Write-Step "4" "Installation du package sur la TV..."
 Write-Info "Cela peut prendre 30 à 60 secondes..."
 Write-Host ""
 
-$installOut = & $SdbExe install $WgtSigned 2>&1 | Out-String
+$installOut = & $SdbExe -s "${tvIp}:26101" install $WgtSigned | Out-String
 Write-Info $installOut.Trim()
 
-$installOk = ($installOut -match "successful|installed|success") -or ($LASTEXITCODE -eq 0 -and $installOut -notmatch "closed|failed|error")
+$appCheck = & $SdbExe -s "${tvIp}:26101" shell 0 applist | Out-String
+$installOk = $appCheck -match [regex]::Escape($AppId)
 
-if ($installOk) {
-  Write-OK "Installation réussie !"
-} else {
-  $appCheck = & $SdbExe shell 0 applist 2>&1 | Out-String
-  if ($appCheck -match $AppId) {
-    Write-OK "Application présente sur la TV !"
+if (-not $installOk) {
+  Write-Host ""
+  Write-Err "Installation échouée."
+  Write-Host ""
+
+  if ($installOut -match "118019") {
+    Write-Host "  CAUSE : Chaîne de certificats refusée par la TV." -ForegroundColor Red
+    Write-Info "Le certificat distributeur doit être émis par Samsung"
+    Write-Info "pour le DUID $tvDuid — voir tizen-tv/TIZEN-README.md"
+  } elseif ($installOut -match "download failed") {
+    Write-Host "  CAUSE : Le package n'a pas été transféré sur la TV." -ForegroundColor Red
+    Write-Info "Relancer le script ; vérifier l'espace disque de la TV."
+  } elseif ($installOut -match "closed") {
+    Write-Host "  CAUSE : La TV a fermé la connexion." -ForegroundColor Red
+    Write-Info "1. Désactiver le mode développeur, le réactiver"
+    Write-Info "   et bien entrer l'IP de CE PC dans 'Host PC IP'"
+    Write-Info "2. Laisser la TV démarrer 30 secondes après le reboot"
+    Write-Info "3. Relancer cet installateur"
   } else {
-    Write-Host ""
-    Write-Err "Installation échouée."
-    Write-Host ""
-
-    if ($installOut -match "closed") {
-      Write-Host "  CAUSE : La TV a fermé la connexion." -ForegroundColor Red
-      Write-Host ""
-      Write-Host "  SOLUTIONS A ESSAYER :" -ForegroundColor Yellow
-      Write-Info "  1. Verifier que le DUID entré ($tvDuid) correspond"
-      Write-Info "     exactement au DUID affiché sur la TV"
-      Write-Info "  2. Desactiver le mode developpeur, le reactiver"
-      Write-Info "     et bien entrer l'IP de CE PC dans 'Host PC IP'"
-      Write-Info "  3. Laisser la TV demarrer 30 secondes apres le reboot"
-      Write-Info "  4. Relancer cet installateur"
-    } elseif ($installOut -match "certificate|signature") {
-      Write-Host "  CAUSE : Certificat invalide." -ForegroundColor Red
-      Write-Info "  → Verifier que le DUID est correct et relancer"
-    } else {
-      Write-Info "Sortie sdb : $installOut"
-    }
-
-    Read-Host "`n  Entree pour quitter" | Out-Null
-    exit 1
+    Write-Info "Sortie sdb : $installOut"
   }
+
+  Quit-With 1
 }
+
+Write-OK "Application présente sur la TV !"
 
 Write-Host ""
 Write-Line
 
 # ─── ÉTAPE 6 : Lancement ──────────────────────────────────────────────────────
 Write-Host ""
-Write-Step "4" "Lancement de PIPSILY TV..."
-& $SdbExe shell 0 execute $AppId 2>&1 | Out-Null
+Write-Step "5" "Lancement de PIPSILY TV..."
+& $SdbExe -s "${tvIp}:26101" shell 0 execute $AppId | Out-Null
 
 Write-Host ""
 Write-Host "  ╔══════════════════════════════════════════════════════════╗" -ForegroundColor Green

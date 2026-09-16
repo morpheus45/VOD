@@ -1,8 +1,12 @@
 {
-  "apk_version": 57,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v57/PIPSILY.apk",
-  "changes": "Reprise de lecture corrigée : sauvegarde régulière de la position (même si l'appli est coupée brutalement) pour films et séries, et reprise fiable du bon épisode au fil des saisons.",
+  "apk_version": 66,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v66/PIPSILY.apk",
+  "changes": "Écran noir corrigé : quand le décodeur de la box lache, le lecteur bascule désormais sur un autre décodeur au lieu d'abandonner. Les segments abimés et les pertes de son sont aussi retentés, et un lecteur resté bloqué est relancé tout seul au bout de quinze secondes. Vous ne devriez plus avoir à ressortir et relancer pour que l'image revienne.",
+  "vpn_enabled": true,
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
-  "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct"
+  "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct",
+  "car_version": 1001,
+  "car_url": "https://github.com/morpheus45/VOD/releases/download/car-v1001/PIPSILY-CAR.apk",
+  "car_changes": "Version initiale autoradio — interface tactile, sans écran d'accueil ni démarrage automatique."
 }

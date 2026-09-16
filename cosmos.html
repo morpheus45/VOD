@@ -1,8 +1,22 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="./auth.js"></script>
+<!-- Chargement adapté au moteur — même principe que index.html : le WebView
+     AOSP des autoradios est figé en Chrome 61 et ne parse pas « ?. ». Une seule
+     occurrence casse tout le fichier, donc on sert à ces moteurs les versions
+     transpilées de legacy/. Les moteurs récents chargent les mêmes fichiers
+     qu'avant. Version supabase pinée : legacy/supabase.js vient de la même. -->
+<script>
+(function(){
+  var moderne = false;
+  try { new Function("var o = {}; return o?.x;"); moderne = true; } catch (e) {}
+  var srcs = moderne
+    ? ["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/dist/umd/supabase.min.js", "./auth.js"]
+    : ["legacy/supabase.js", "legacy/auth.js"];
+  for (var i = 0; i < srcs.length; i++)
+    document.write('<scr' + 'ipt src="' + srcs[i] + '"></scr' + 'ipt>');
+})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <script>
@@ -963,7 +977,7 @@ const S = {
   rows:[], rowIdx:0, cardIdx:0,
   gridItems:[], gridAll:[],
   gridFilter:'', gridQuality:'', gridFavOnly:false, gridSort:'title',
-  gridIdx:0, filterIdx:0, filterPills:[],
+  gridIdx:0, gridShown:0, filterIdx:0, filterPills:[],
   allItems:[], allVod:[], allSeries:[], liveItems:[], appItems:[],
   panelItem:null, panelIsVod:false,
   panelSmap:{}, panelSmeta:[], panelSelSeason:null,
@@ -1032,16 +1046,27 @@ function seriesPctMap(){
 // stockés par l'autre interface ont une forme différente → on relit par id).
 function favId(entry){return String((entry&&(entry.key||entry.k))||'').split('||')[1]||'';}
 function resolveItem(entry){
+  let out=null;
   const id=favId(entry);
   if(id){
     // inclut les chaînes live (ex SyFy) → on récupère l'item du catalogue avec sa vraie image
     const m=[...S.allVod,...S.allSeries,...S.liveItems].find(x=>String(x.stream_id)===id||String(x.series_id)===id);
-    if(m)return m;
+    if(m)out=m;
   }
-  const it=(entry&&entry.item)||null;
-  // blob stocké par l'autre interface : champ image parfois nommé stream_icon/cover…
-  if(it&&!it.image)it.image=it.stream_icon||it.cover||it.poster||it.logo||'';
-  return it;
+  if(!out){
+    const it=(entry&&entry.item)||null;
+    // blob stocké par l'autre interface : champ image parfois nommé stream_icon/cover…
+    if(it&&!it.image)it.image=it.stream_icon||it.cover||it.poster||it.logo||'';
+    out=it;
+  }
+  if(!out)return null;
+  // Les favoris vivent en localStorage, PAR APPAREIL : ils n'ont jamais
+  // traversé le catalogue filtré. Sans ce passage par la politique du compte,
+  // les favoris d'avant la restriction — et ceux d'un adulte sur la même TV —
+  // resteraient visibles ET lisibles, ce qui viderait la fonctionnalité de son
+  // sens. Un favori écarté donne null ; tous les appelants enchaînent déjà un
+  // .filter(i=>i&&…) et l'ignorent donc.
+  return policyFilter([out])[0]||null;
 }
 // Filtre par type d'onglet : 'vod' | 'series' | 'live' | null (tout)
 function matchTabType(i,t){
@@ -1055,8 +1080,12 @@ function matchTabType(i,t){
 function poursuivreItems(typeFilter){
   const inprog=inProgressItems().filter(i=>matchTabType(i,typeFilter));
   const keys=new Set(inprog.map(itemKey));
-  const favs=getFavs().slice(0,40).map(resolveItem)
-    .filter(i=>i&&isClean(i)&&matchTabType(i,typeFilter)&&!keys.has(itemKey(i)));
+  // Filtrer AVANT de couper : resolveItem peut desormais rendre vide (favori
+  // ecarte par la politique du compte). Couper d'abord viderait la liste des
+  // que les 40 favoris les plus recents sont tous hors politique.
+  const favs=getFavs().map(resolveItem)
+    .filter(i=>i&&isClean(i)&&matchTabType(i,typeFilter)&&!keys.has(itemKey(i)))
+    .slice(0,40);
   return [...inprog,...favs].slice(0,25);
 }
 // Items "en cours" depuis la progression PARTAGÉE (comme PIPSILY Poursuivre).
@@ -1103,6 +1132,34 @@ function forgetItem(i){
   const h=getHist().filter(x=>(x.key||x.k)!==itemKey(i));storeSet(STORE.hist,h);
 }
 function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
+// ══════ RESTRICTION DE CONTENU PAR COMPTE ═══════════════════════
+// <content-policy>
+// Restriction de contenu du compte. Le motif et la logique vivent dans
+// auth.js, seul module charge par les DEUX interfaces : ici on ne fait
+// qu'appeler. Voir
+// docs/superpowers/specs/2026-09-13-restriction-contenu-par-compte-design.md
+//
+// Le filtre est applique AU CHARGEMENT du catalogue, pas a l'affichage :
+// toutes les vues lisent S.allVod / S.allSeries / S.liveItems, donc etageres,
+// grille, recherche, hero, favoris, reprise et direct sont couverts d'office,
+// y compris les vues ajoutees plus tard.
+//
+// Les items de Cosmos portent leur categorie dans le champ 'category'.
+function cosPolicy(){
+  try{
+    var u = window._cosUser;
+    return (u && u.sub) ? u.sub.content_policy : null;
+  }catch(e){ return null; }
+}
+function policyFilter(list){
+  var A = window.PIPSILY_AUTH;
+  // auth.js absent : on ne restreint pas. Le portail d'authentification de
+  // cosmos.html redirige deja vers login.html dans ce cas, donc ce repli ne
+  // sert qu'a ne jamais lever d'exception ici.
+  if(!A || !A.contentFilter) return list || [];
+  return A.contentFilter(list, 'category', cosPolicy());
+}
+// </content-policy>
 function isClean(i){return !ADULT_RE.test(i.category||'')&&!ADULT_RE.test(i.title||'');}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function pad2(n){return String(n).padStart(2,'0');}
@@ -1129,7 +1186,10 @@ function prettyCat(i){
   if(!c) return i.isLive ? 'En direct' : i.series_id ? 'Série' : 'Film';
   const low=c.toLowerCase();
   if(CAT_FR[low]) return CAT_FR[low];
-  return c.toLowerCase().replace(/\b\p{L}/gu,m=>m.toUpperCase());
+  // \p{L} exige Chrome 64+, or le WebView des autoradios est figé en
+  // Chrome 61 : plages Latin explicites — vérifié équivalent sur les
+  // 25 610 noms des catalogues.
+  return c.toLowerCase().replace(/\b[a-zA-ZÀ-ɏḀ-ỿ]/g,m=>m.toUpperCase());
 }
 
 // ══════ NETTOYAGE / DEDUP CHAÎNES LIVE ═══════════════════════════════════
@@ -1168,7 +1228,16 @@ function cleanLiveCat(cat){
   if(h('canad')||h('quebec')||h('québec')) return 'Canada';
   if(h('afriq')||h('arab')||h('maghreb')||h('turk')||h('portug')||h('espag')||h('ital')||h('monde')||h('world')) return 'Monde';
   if(h('france')||h('national')||h('general')||h('général')||h('tnt')||h('dom')||h('tom')||h('metro')) return 'France';
-  return c.replace(/\b\p{L}/gu,m=>m.toUpperCase());
+  // Capitalisation par MOT. L'ancienne version utilisait \b dans une classe de
+  // caracteres, or \b est ASCII : chaque lettre accentuee creait une fausse
+  // frontiere de mot, d'ou les libelles bancals vus dans l'interface
+  // (Reunion et Caraibes s'affichaient avec une majuscule au milieu du mot).
+  const ACRO={'ppv':'PPV','tv':'TV','tnt':'TNT'};
+  return c.split(' ').map(function(w){
+    if(!w) return w;
+    if(ACRO[w]) return ACRO[w];
+    return w.charAt(0).toUpperCase()+w.slice(1);
+  }).join(' ');
 }
 
 // ══════ TITLE/QUALITY ═══════════════════════════════════════════════════
@@ -1411,13 +1480,21 @@ async function refreshContentSilently(){
     const d=await fetchContentData();
     if(!d||(!d.allVod.length&&!d.allSeries.length))return;
     saveCache(d.allVod,d.allSeries,d.liveRaw);
-    const changed = d.allVod.length!==S.allVod.length || d.allSeries.length!==S.allSeries.length;
+    // Meme filtre que buildContent : ce chemin met a jour les donnees sans
+    // repasser par le rendu, il doit donc filtrer lui aussi.
+    const nVod=policyFilter(d.allVod), nSeries=policyFilter(d.allSeries);
+    // Comparer du FILTRE avec du FILTRE : S.allVod est deja filtre, alors que
+    // d.allVod est brut. Sur un compte restreint, comparer les deux rendait
+    // `changed` vrai en permanence et reconstruisait l'accueil a chaque
+    // rafraichissement, en retirant un hero au hasard.
+    const changed = nVod.length!==S.allVod.length || nSeries.length!==S.allSeries.length;
     if(changed && S.sec==='home' && S.zone==='hero'){
       buildContent(d.allVod,d.allSeries,d.liveRaw); // utilisateur au repos → rafraichit visuellement
     }else{
       // MAJ silencieuse des donnees, visible au prochain changement d'onglet
-      S.allVod=d.allVod;S.allSeries=d.allSeries;S.allItems=[...d.allVod,...d.allSeries];
-      S.liveItems=_cosRegionFilter(groupLiveItems(d.liveRaw.filter(isClean)));
+      S.allVod=nVod;S.allSeries=nSeries;
+      S.allItems=[...S.allVod,...S.allSeries];
+      S.liveItems=_cosRegionFilter(groupLiveItems(policyFilter(d.liveRaw).filter(isClean)));
       const cleanItems=S.allItems.filter(i=>isClean(i)&&i.image);
       S.heroPool=shuffle(cleanItems).slice(0,80);
     }
@@ -1465,6 +1542,10 @@ function restoreNavPos(){
 }
 
 function buildContent(allVod,allSeries,liveRaw){
+  // Restriction de compte appliquee a la SOURCE : tout ce qui lit ces tableaux
+  // en aval est couvert sans modification.
+  allVod=policyFilter(allVod); allSeries=policyFilter(allSeries);
+  liveRaw=policyFilter(liveRaw);
   S.allVod=allVod;S.allSeries=allSeries;S.allItems=[...allVod,...allSeries];
   S.liveItems=_cosRegionFilter(groupLiveItems(liveRaw.filter(isClean)));
   const cleanItems=S.allItems.filter(i=>isClean(i)&&i.image);
@@ -1485,7 +1566,7 @@ function buildContent(allVod,allSeries,liveRaw){
   const rows=[];
   const histItems=inProgressItems();
   if(histItems.length)rows.push({title:'▶ Continuer a regarder',items:histItems});
-  const favItems=getFavs().slice(0,30).map(resolveItem).filter(i=>i&&isClean(i));
+  const favItems=getFavs().map(resolveItem).filter(i=>i&&isClean(i)).slice(0,30);
   if(favItems.length)rows.push({title:'♥ Mes favoris',items:favItems});
   if(trending.length)rows.push({title:'Nouveautes Films',items:trending});
   if(newSeries.length)rows.push({title:'Nouveautes Series',items:newSeries});
@@ -1583,6 +1664,28 @@ function renderRows(rows){
   });
 }
 
+// ══════ IMAGES PARESSEUSES ══════════════════════════════════════════════
+// loading="lazy" n'existe qu'à partir de Chrome 76 ; ce WebView peut être figé
+// en Chrome 61 (cf. en-tête du fichier), où TOUTES les vignettes se seraient
+// téléchargées d'un coup. IntersectionObserver existe depuis Chrome 51 : il
+// couvre donc tous les appareils cibles, y compris les plus anciens.
+const _imgIO = (typeof IntersectionObserver!=='undefined')
+  ? new IntersectionObserver(function(entries,obs){
+      entries.forEach(function(e){
+        if(!e.isIntersecting)return;
+        const img=e.target; obs.unobserve(img);
+        const src=img.getAttribute('data-src');
+        if(src){ img.removeAttribute('data-src'); img.src=src; }
+      });
+    },{rootMargin:'600px'})
+  : null;
+function lazyImg(img,src){
+  img.loading='lazy';                       // pris en compte si dispo
+  if(!src){ img.src=BLANK; img.classList.add('loaded'); return; }
+  if(_imgIO){ img.src=BLANK; img.setAttribute('data-src',src); _imgIO.observe(img); }
+  else { img.src=src; if(img.complete)img.classList.add('loaded'); }
+}
+
 // ══════ CARD ════════════════════════════════════════════════════════════
 function mkCard(item,ri,ci,isLive){
   if(item.seeAll){
@@ -1594,7 +1697,7 @@ function mkCard(item,ri,ci,isLive){
     iw.innerHTML='<div class="seeall-inner"><div class="seeall-pill">&rarr;</div><div class="seeall-txt">Voir tout</div><div class="seeall-sub">'+(_n?_n+' titres':'tout afficher')+'</div></div>';
     el.appendChild(iw);
     const info=document.createElement('div');info.className='cinfo';
-    const title=document.createElement('div');title.className='ctitle';title.textContent=item.gridCat||'';
+    const title=document.createElement('div');title.className='ctitle';title.textContent=item.catLabel||item.gridCat||'';
     info.appendChild(title);el.appendChild(info);
     return el;
   }
@@ -1626,8 +1729,7 @@ function mkCard(item,ri,ci,isLive){
   img.loading='lazy';
   img.onload=()=>img.classList.add('loaded');
   img.onerror=()=>{img.src=BLANK;img.onerror=null;img.classList.add('loaded');};
-  img.src=item.image||item.stream_icon||item.cover||item.poster||item.logo||BLANK;
-  if(img.complete)img.classList.add('loaded');
+  lazyImg(img,item.image||item.stream_icon||item.cover||item.poster||item.logo||'');
   iw.appendChild(img);
   // Progress bar — films (stream_id) ET séries (series_id : progPct lit seriesPctMap)
   if(!live&&(item.stream_id||item.series_id)){
@@ -1660,19 +1762,28 @@ function openGrid(type,cat){
   // Back de la grille repartait toujours à l'accueil).
   S.gridRet={sec:S.sec,rowIdx:S.rowIdx,cardIdx:S.cardIdx};
   showOnlyView('grid-view');
-  $('grid-title').textContent=cat||(type==='movies'?'Films':'Séries');
-  S.gridAll=(type==='movies'?S.allVod:S.allSeries).filter(isClean);
+  // shelfLabel : un rayon nommé « LATEST MOVIES » côté fournisseur doit
+  // s'afficher « Derniers ajouts » ici aussi, pas seulement sur l'étagère.
+  $('grid-title').textContent=cat?shelfLabel(cat):(type==='live'?'TV Direct':type==='movies'?'Films':'Séries');
+  // Le type 'live' ouvre la grille des chaines : c'est l'echappatoire des
+  // etageres TV tronquees (227 chaines etaient inaccessibles sans lui).
+  S.gridAll = type==='live' ? liveVisible()
+            : (type==='movies'?S.allVod:S.allSeries).filter(isClean);
   S.gridFilter=cat||'';S.gridQuality='';S.gridFavOnly=false;S.gridSort='recent';
   S.sec='grid';
   buildFilters();applyGrid();
   S.zone=S.gridItems.length?'grid':'filter';S.filterIdx=0;S.gridIdx=0;focus();
 }
 function buildFilters(){
-  const cats=[...new Set(S.gridAll.map(i=>i.category).filter(Boolean))].sort();
-  const quals=[...new Set(S.gridAll.map(i=>i.quality).filter(Boolean))].sort();
+  // Tri alphabétique localisé : avec .sort() par défaut (comparaison de codes
+  // UTF-16), « ÉPOUVANTE » ou « QUÉBEC » atterrissaient APRÈS « Z ».
+  const _alpha=(a,b)=>String(a).localeCompare(String(b),'fr',{sensitivity:'base',numeric:true});
+  const cats=[...new Set(S.gridAll.map(i=>i.category).filter(Boolean))]
+    .sort((a,b)=>_alpha(shelfLabel(a),shelfLabel(b)));
+  const quals=[...new Set(S.gridAll.map(i=>i.quality).filter(Boolean))].sort(_alpha);
   const pills=[
     {label:'Tout',val:'',type:'cat'},
-    ...cats.map(c=>({label:c,val:c,type:'cat'})),
+    ...cats.map(c=>({label:shelfLabel(c),val:c,type:'cat'})),
     {sep:true},
     {label:'Toute qualite',val:'',type:'qual'},
     ...quals.map(q=>({label:q,val:q,type:'qual'})),
@@ -1698,15 +1809,41 @@ function applyGrid(){
   if(S.gridFilter)items=items.filter(i=>i.category===S.gridFilter);
   if(S.gridQuality)items=items.filter(i=>i.quality===S.gridQuality);
   if(S.gridFavOnly){const favKeys=new Set(getFavs().map(f=>(f.key||f.k)));items=items.filter(i=>favKeys.has(itemKey(i)));}
+  // Une grille ne doit jamais afficher deux fois le meme titre.
+  items=dedupeByTitle(items);
   if(S.gridSort==='recent')items=[...items].sort((a,b)=>Number(b.added)-Number(a.added));
-  else items=[...items].sort((a,b)=>(a.title||'').localeCompare(b.title||''));
+  // Locale explicite : sans elle, « Été » passait après « Zoo » sur les WebView
+  // dont la locale par défaut n'est pas le français.
+  else items=[...items].sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''),'fr',{sensitivity:'base',numeric:true}));
   S.gridItems=items;renderGrid();
 }
+// Rendu PAR PALIERS. Avant, la grille créait une carte par titre : « Voir tout »
+// sur un gros rayon fabriquait jusqu'à 16 000 cartes (~115 000 nœuds DOM, 3 s
+// sur un PC de bureau, donc inutilisable sur une box TV). On n'insère plus que
+// GRID_CHUNK cartes à la fois ; gridEnsure() complète à la demande quand la
+// navigation descend. S.gridItems reste complet : rien n'est retiré du
+// catalogue, seule la matérialisation DOM est étalée.
+const GRID_CHUNK=180;
 function renderGrid(){
   const wrap=$('grid-wrap');wrap.innerHTML='';
-  S.gridItems.forEach((item,i)=>{
-    const c=mkCard(item,-1,i,false);c.dataset.gi=i;wrap.appendChild(c);
-  });
+  S.gridShown=0;
+  gridAppend();
+}
+function gridAppend(){
+  const wrap=$('grid-wrap');
+  const end=Math.min(S.gridItems.length,S.gridShown+GRID_CHUNK);
+  const frag=document.createDocumentFragment();
+  for(let i=S.gridShown;i<end;i++){
+    const c=mkCard(S.gridItems[i],-1,i,false);c.dataset.gi=i;frag.appendChild(c);
+  }
+  wrap.appendChild(frag);
+  S.gridShown=end;
+  return S.gridShown;
+}
+// Garantit que la carte d'indice idx est présente dans le DOM.
+function gridEnsure(idx){
+  let guard=0;
+  while(S.gridShown<=idx && S.gridShown<S.gridItems.length && guard++<500) gridAppend();
 }
 function activateFilterPill(idx){
   const nonSep=S.filterPills.filter(p=>!p.sep);
@@ -2261,6 +2398,196 @@ function showOnlyView(id){
   const el=$(id);if(el){el.hidden=false;el.classList.add('view-active');}
 }
 
+// ══════ ÉTAGÈRES TV DIRECT ══════════════════════════════════════════════
+// Chaînes réellement affichables : on masque celles au logo « drapeau tricolore »
+// générique (frlog.png), qui ne diffusent rien. ROLLBACK : passer HIDE_FLAG_LIVE
+// à false pour toutes les réafficher.
+const HIDE_FLAG_LIVE = true;
+function _isFlagLive(i){ return /frlog\.png(\?|$)/i.test(i.image || ''); }
+function liveVisible(){
+  return HIDE_FLAG_LIVE ? S.liveItems.filter(function(i){return !_isFlagLive(i);}) : S.liveItems;
+}
+// <live-shelves-logic>
+// Même défaut que les rayons films/séries, resté ici : l'onglet TV coupait
+// chaque catégorie à 40 chaînes SANS carte « Voir tout ». Mesuré sur le
+// catalogue : 227 chaînes sur 747 n'avaient aucun point d'entrée, dont
+// AUTO MOTO (rang 44 de « Sport »), MY TV CARAÏBES (rang 78), ANTENNE RÉUNION
+// (rang 79) et RÉUNION 1ERE (rang 80). Les catégories Réunion et Caraïbes sont
+// surtout remplies de reprises régionales des chaînes nationales (préfixes
+// REU- / CAR-, volontairement distinctes — cf. liveBase), qui repoussaient les
+// vraies chaînes locales au-delà de la coupe.
+const LIVE_REGION_PREFIX=/^\s*(?:REU|CAR|GUA|MAR|GUY|MAY|DOM|TOM)\s*[:\-|]\s*/i;
+// Nom de base d'une chaine, prefixe regional retire : « REU - TF1 » et « TF1 »
+// partagent la meme cle, donc la premiere est reconnue comme une reprise.
+function liveDedupKey(t){
+  return String(t||'').replace(LIVE_REGION_PREFIX,'').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+// Fait remonter les chaines PROPRES a l'etagere. Les categories regionales
+// (Reunion, Caraibes) sont surtout remplies de reprises des chaines nationales
+// (REU - TF1, CAR - M6...) : elles enterraient ANTENNE REUNION au rang 79 et
+// REUNION 1ERE au rang 80 sur 86. Rien n'est supprime, seulement reordonne :
+// ce qui n'existe nulle part ailleurs passe devant, le reste suit dans l'ordre
+// d'origine. Fusionner ces chaines serait faux : « REU - TF1 » ne diffuse pas
+// le meme programme que « TF1 » (cf. liveBase).
+function liveSortLocalFirst(list,globalCount){
+  const propres=[], reprises=[];
+  for(let i=0;i<list.length;i++){
+    const t=list[i].title||'';
+    // Une chaine SANS prefixe regional n'est jamais une reprise : « AUTO MOTO »
+    // est l'originale, « REU - AUTOMOTO » et « CAR - AUTOMOTO » sont les copies.
+    const estReprise = LIVE_REGION_PREFIX.test(t) && (globalCount[liveDedupKey(t)]||0)>1;
+    (estReprise ? reprises : propres).push(list[i]);
+  }
+  return propres.concat(reprises);
+}
+const LIVE_SHELF_MAX = 60;   // chaînes par étagère avant la carte « Voir tout »
+// 60 et non 40 : à 40, « Sport » (53 chaînes) perdait AUTO MOTO au rang 44 et
+// AUTOMOTO LA CHAINE au rang 45. Les vignettes se chargent à la demande
+// (IntersectionObserver), donc une étagère plus longue ne coûte rien au rendu.
+function buildLiveRows(liveItems){
+  // Combien de fois chaque nom de base apparait dans TOUT le catalogue live.
+  const globalCount={};
+  liveItems.forEach(i=>{const k=liveDedupKey(i.title); if(k) globalCount[k]=(globalCount[k]||0)+1;});
+  const byCat={};
+  liveItems.forEach(i=>{const c=i.category||'Général';(byCat[c]=byCat[c]||[]).push(i);});
+  // Petites catégories regroupées dans « Autres », jamais supprimées.
+  Object.keys(byCat).forEach(c=>{
+    if(byCat[c].length<3 && c!=='Autres'){
+      (byCat['Autres']=byCat['Autres']||[]).push.apply(byCat['Autres'],byCat[c]);
+      delete byCat[c];
+    }
+  });
+  // Priorité (France, Cinéma, Sport…) puis taille.
+  return Object.entries(byCat).sort(function(a,b){
+    const pa=CATPRIO[a[0]]!==undefined?CATPRIO[a[0]]:80;
+    const pb=CATPRIO[b[0]]!==undefined?CATPRIO[b[0]]:80;
+    return pa!==pb ? pa-pb : b[1].length-a[1].length;
+  }).map(function(e){
+    const cat=e[0], list=liveSortLocalFirst(e[1],globalCount), head=list.slice(0,LIVE_SHELF_MAX);
+    return {
+      title:cat, isLive:true,
+      items:list.length>LIVE_SHELF_MAX
+        ? head.concat([{seeAll:true,gridType:'live',gridCat:cat,catLabel:cat,title:'Voir tout',count:list.length}])
+        : head
+    };
+  });
+}
+// </live-shelves-logic>
+
+// ══════ ÉTAGÈRES PAR CATÉGORIE ═══════════════════════════════════════════
+// <shelves-logic>
+// Règle d'or : AUCUN titre ne doit devenir inaccessible à la navigation.
+// Avant, les onglets Films/Séries coupaient les catégories à slice(0,16),
+// jetaient celles de moins de 3 titres et écartaient les catégories « LATEST »
+// via LATEST_RE. Résultat mesuré sur le catalogue : ~6 300 films et ~870
+// séries n'avaient plus AUCUN point d'entrée (seule la recherche les trouvait),
+// dont FAMILLE & ENFANTS, MARVEL, DC, CLASSIQUES et les 6 151 films présents
+// uniquement dans « LATEST MOVIES ».
+// On applique désormais la logique déjà éprouvée de l'onglet TV Direct : on
+// REGROUPE les petites catégories dans « Autres » au lieu de les supprimer, et
+// chaque étagère tronquée expose une carte « Voir tout » vers la grille.
+// Invariant vérifié par scripts/test-shelves.js.
+const SHELF_MIN = 3;    // en dessous de ce seuil → regroupé dans « Autres »
+const SHELF_MAX = 25;   // cartes par étagère avant la carte « Voir tout »
+const HOME_MAX_SHELVES = 14; // l'accueil reste une vitrine ; la liste complète
+                             // des rayons vit dans les onglets Films / Séries.
+// Ordre d'affichage : les genres grand public d'abord (sinon le classement par
+// taille seule enterrait « Famille & Enfants » derrière les rayons fourre-tout),
+// puis, à priorité égale, la catégorie la plus fournie en premier.
+const SHELF_PRIO = [
+  [/enfant|famille|kids|jeunesse|junior/i, 10],
+  [/action|aventure|guerre|\bwar\b/i,      20],
+  [/com[ée]die/i,                          25],
+  [/drame|drama|romance/i,                 30],
+  [/horreur|thriller|[ée]pouvante|horror/i,35],
+  [/sci-?fi|fantast|fantasy/i,             40],
+  [/anim[ée]|manga/i,                      45],
+  [/crime|mafia|policier/i,                50],
+  [/document|histoire|biograph/i,          55],
+  [/\b4k\b|uhd/i,                          60],
+  [/netflix|disney|amazon|prime|hbo|paramount|apple|canal/i, 65],
+  [/latest|nouveau/i,                      85],  // « Derniers ajouts » en fin
+];
+function shelfPrio(cat){
+  if(cat==='Autres') return 95;                  // fourre-tout toujours dernier
+  for(let k=0;k<SHELF_PRIO.length;k++){ if(SHELF_PRIO[k][0].test(cat)) return SHELF_PRIO[k][1]; }
+  return 80;
+}
+// « LATEST MOVIES » / « LATEST SERIES » sont des noms de flux fournisseur, pas
+// des rayons : on les renomme au lieu de les cacher.
+function shelfLabel(cat){
+  if(!/latest|nouveau/i.test(cat)) return cat;
+  // On retire les mots de flux (LATEST / MOVIES / SERIES) ; ce qui reste sert
+  // de qualificatif, sinon deux rayons « LATEST » porteraient le même nom.
+  const rest=String(cat).replace(/\b(latest|nouveaut[ée]s?|nouveau|movies?|films?|s[ée]ries?|tv|vod)\b/gi,' ')
+    .replace(/[-_|]+/g,' ').replace(/\s+/g,' ').trim();
+  return rest ? 'Derniers ajouts — '+rest.charAt(0).toUpperCase()+rest.slice(1).toLowerCase()
+              : 'Derniers ajouts';
+}
+// Type de grille d'une catégorie mixte (accueil) : le type majoritaire.
+function shelfGridType(list){
+  let s=0; for(let k=0;k<list.length;k++){ if(list[k].series_id) s++; }
+  return s*2>list.length?'shows':'movies';
+}
+// Deux entrées du même titre dans UNE MÊME liste = doublon visible à l'écran.
+// Le fournisseur réimporte régulièrement un film sous un nouvel identifiant :
+// 267 cas mesurés côté films (dont 101 dans le seul rayon « LATEST MOVIES »)
+// et 56 côté séries, avec souvent la même affiche. On garde l'entrée la plus
+// récemment ajoutée, qui pointe en général sur la source encore valide.
+// La déduplication est LOCALE à la liste affichée : un film légitimement
+// présent dans « Netflix » ET dans « Derniers ajouts » reste dans les deux.
+function dedupeByTitle(list){
+  const key=it=>String(it&&it.title||'').toLowerCase().replace(/\s+/g,' ').trim();
+  const best={};
+  for(let i=0;i<list.length;i++){
+    const k=key(list[i]); if(!k) continue;
+    const b=best[k];
+    if(b===undefined||Number(list[i].added||0)>Number(list[b].added||0)) best[k]=i;
+  }
+  const keep={};
+  for(const k in best) keep[best[k]]=true;
+  return list.filter((it,i)=>!key(it)||keep[i]);
+}
+
+// items : liste DÉJÀ filtrée par isClean. gridType : 'movies' | 'shows' | null
+// (null = déduit par catégorie, pour l'accueil qui mélange films et séries).
+function buildCatRows(items,gridType){
+  const byCat={};
+  items.forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
+  // Seul filtre destructif conservé : l'adulte.
+  Object.keys(byCat).forEach(c=>{ if(ADULT_RE.test(c)) delete byCat[c]; });
+  // Petites catégories regroupées, jamais supprimées (cf. onglet TV Direct).
+  Object.keys(byCat).forEach(c=>{
+    if(byCat[c].length<SHELF_MIN && c!=='Autres'){
+      (byCat['Autres']=byCat['Autres']||[]).push.apply(byCat['Autres'],byCat[c]);
+      delete byCat[c];
+    }
+  });
+  return Object.entries(byCat).sort(function(a,b){
+    const pa=shelfPrio(a[0]), pb=shelfPrio(b[0]);
+    return pa!==pb ? pa-pb : b[1].length-a[1].length;
+  }).map(function(e){
+    // Dédup PAR RAYON : supprime les doublons visibles dans une même étagère
+    // sans retirer un titre légitimement présent dans deux rayons différents.
+    const cat=e[0], list=dedupeByTitle(e[1]), gt=gridType||shelfGridType(list);
+    const label=shelfLabel(cat);
+    const head=list.slice(0,SHELF_MAX);
+    return {
+      title:label,
+      items:list.length>SHELF_MAX
+        ? head.concat([{seeAll:true,gridType:gt,gridCat:cat,catLabel:label,title:'Voir tout',count:list.length}])
+        : head
+    };
+  });
+}
+// Carte « Voir tout » d'une étagère éditoriale (Nouveautés) : ouvre la grille
+// complète, sans filtre de catégorie — c'est le point d'entrée vers l'intégralité
+// du catalogue, y compris les rayons qui n'ont pas d'étagère dédiée.
+function shelfSeeAllCard(gridType,label,count){
+  return {seeAll:true,gridType:gridType,gridCat:'',catLabel:label,title:'Voir tout',count:count};
+}
+// </shelves-logic>
+
 // ── Rendus par tab ───────────────────────────────────────────────────────
 function renderTabHome(){
   const rows=[];
@@ -2269,15 +2596,21 @@ function renderTabHome(){
   // Poursuivre = en cours + favoris, TOUS types confondus
   const poursuivre=poursuivreItems(null);
   if(poursuivre.length)rows.push({title:'Poursuivre',items:poursuivre});
-  const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
-  if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms});
-  const newSeries=[...S.allSeries].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,20);
-  if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries});
+  // Les rangees Nouveautes recoivent une carte « Voir tout » : c'est le point
+  // d'entree vers la grille complete (tous rayons confondus), donc vers les
+  // titres qui n'ont pas d'etagere dediee sur cet ecran.
+  const _vodC=S.allVod.filter(isClean), _serC=S.allSeries.filter(isClean);
+  const newFilms=dedupeByTitle(_vodC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0))).slice(0,20);
+  if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms.concat([shelfSeeAllCard('movies','Tous les films',_vodC.length)])});
+  const newSeries=dedupeByTitle(_serC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0))).slice(0,20);
+  if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries.concat([shelfSeeAllCard('shows','Toutes les series',_serC.length)])});
   if(S.heroPool.length)rows.push({title:'Recommande pour vous',items:S.heroPool.slice(0,25)});
-  // Categories mixtes
-  const byCat={};
-  S.allItems.forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
-  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=4).slice(0,12).forEach(([cat,items])=>rows.push({title:cat,items:items.filter(isClean).slice(0,20)}));
+  // Categories mixtes — l'accueil reste une vitrine : on limite le NOMBRE
+  // d'etageres, mais plus le contenu (les onglets Films/Series, eux, montrent
+  // desormais TOUTES les categories). Le filtrage isClean se fait AVANT le
+  // regroupement, sinon une categorie pouvait passer le seuil puis s'afficher
+  // vide une fois nettoyee.
+  buildCatRows(S.allItems.filter(isClean),null).slice(0,HOME_MAX_SHELVES).forEach(r=>rows.push(r));
   if(S.liveItems.length)rows.push({title:'TV Direct',items:S.liveItems.slice(0,25),isLive:true});
   S.rows=rows;
   if(S.heroPool.length)setHero(S.heroPool[Math.floor(Math.random()*Math.min(S.heroPool.length,30))]);
@@ -2289,11 +2622,11 @@ function renderTabMovies(){
   const rows=[];
   const p=poursuivreItems('vod');                       // Films : que les films
   if(p.length)rows.push({title:'Poursuivre',items:p});
-  const newFilms=[...S.allVod].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
-  if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms});
-  const byCat={};
-  S.allVod.filter(isClean).forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
-  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=3).slice(0,16).forEach(([cat,items])=>rows.push({title:cat,items:items.length>25?[...items.slice(0,25),{seeAll:true,gridType:(items[0]&&items[0].series_id?'shows':'movies'),gridCat:cat,title:'Voir tout',count:items.length}]:items.slice(0,25)}));
+  const _vodC=S.allVod.filter(isClean);
+  const newFilms=dedupeByTitle(_vodC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0))).slice(0,25);
+  if(newFilms.length)rows.push({title:'Nouveaux films',items:newFilms.concat([shelfSeeAllCard('movies','Tous les films',_vodC.length)])});
+  // TOUTES les categories de films, sans coupe au rang ni exclusion LATEST.
+  buildCatRows(S.allVod.filter(isClean),'movies').forEach(r=>rows.push(r));
   S.rows=rows;
   if(S.allVod.length){const pool=S.allVod.filter(i=>isClean(i)&&i.image);setHero(pool[Math.floor(Math.random()*Math.min(pool.length,30))]);}
   renderRows(rows);S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();
@@ -2303,11 +2636,11 @@ function renderTabShows(){
   const rows=[];
   const p=poursuivreItems('series');                    // Séries : que les séries
   if(p.length)rows.push({title:'Poursuivre',items:p});
-  const newSeries=[...S.allSeries].filter(i=>isClean(i)&&i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0)).slice(0,25);
-  if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries});
-  const byCat={};
-  S.allSeries.filter(isClean).forEach(i=>{const c=i.category||'Autre';(byCat[c]=byCat[c]||[]).push(i);});
-  Object.entries(byCat).filter(([c])=>!ADULT_RE.test(c)&&!LATEST_RE.test(c)).sort((a,b)=>b[1].length-a[1].length).filter(([,v])=>v.length>=3).slice(0,16).forEach(([cat,items])=>rows.push({title:cat,items:items.length>25?[...items.slice(0,25),{seeAll:true,gridType:(items[0]&&items[0].series_id?'shows':'movies'),gridCat:cat,title:'Voir tout',count:items.length}]:items.slice(0,25)}));
+  const _serC=S.allSeries.filter(isClean);
+  const newSeries=dedupeByTitle(_serC.filter(i=>i.image).sort((a,b)=>Number(b.added||0)-Number(a.added||0))).slice(0,25);
+  if(newSeries.length)rows.push({title:'Nouvelles series',items:newSeries.concat([shelfSeeAllCard('shows','Toutes les series',_serC.length)])});
+  // TOUTES les categories de series, sans coupe au rang ni exclusion LATEST.
+  buildCatRows(S.allSeries.filter(isClean),'shows').forEach(r=>rows.push(r));
   S.rows=rows;
   if(S.allSeries.length){const pool=S.allSeries.filter(i=>isClean(i)&&i.image);setHero(pool[Math.floor(Math.random()*Math.min(pool.length,30))]);}
   renderRows(rows);S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();
@@ -2320,25 +2653,11 @@ function renderTabLive(){
   // Masquer TOUTES les chaînes au logo "drapeau tricolore" générique (frlog.png)
   // — elles ne diffusent rien. ROLLBACK : passer HIDE_FLAG_LIVE à false pour
   // toutes les réafficher (ou revert le commit).
-  const HIDE_FLAG_LIVE = true;
-  const _isFlagLive = i => /frlog\.png(\?|$)/i.test(i.image || '');
-  const liveItems = HIDE_FLAG_LIVE ? S.liveItems.filter(i => !_isFlagLive(i)) : S.liveItems;
-  const byLiveCat={};
-  liveItems.forEach(i=>{const c=i.category||'Général';(byLiveCat[c]=byLiveCat[c]||[]).push(i);});
-  // Regrouper les toutes petites catégories dans "Autres"
-  Object.keys(byLiveCat).forEach(c=>{
-    if(byLiveCat[c].length<3 && c!=='Autres'){
-      (byLiveCat['Autres']=byLiveCat['Autres']||[]).push(...byLiveCat[c]);
-      delete byLiveCat[c];
-    }
-  });
-  // Ordonner par priorité (France, Cinéma, Sport...) puis par taille
-  const cats=Object.entries(byLiveCat).sort((a,b)=>{
-    const pa=CATPRIO[a[0]]??80, pb=CATPRIO[b[0]]??80;
-    return pa!==pb ? pa-pb : b[1].length-a[1].length;
-  });
-  if(cats.length===0)rows.push({title:'TV Direct',items:S.liveItems.slice(0,40),isLive:true});
-  else cats.forEach(([cat,items])=>rows.push({title:cat,items:items.slice(0,40),isLive:true}));
+  const liveItems = liveVisible();
+  // Toutes les categories, chacune avec « Voir tout » si elle depasse la coupe.
+  const liveRows=buildLiveRows(liveItems);
+  if(liveRows.length===0)rows.push({title:'TV Direct',items:S.liveItems.slice(0,LIVE_SHELF_MAX),isLive:true});
+  else liveRows.forEach(r=>rows.push(r));
   S.rows=rows;
   // Hero = premiere chaine dispo
   if(liveItems.length)setHero({...liveItems[0],plot:'Regardez vos chaines en direct'});
@@ -2349,7 +2668,7 @@ function renderTabMyList(){
   const rows=[];
   const hist=inProgressItems();
   if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().slice(0,40).map(resolveItem).filter(i=>i&&isClean(i));
+  const favs=getFavs().map(resolveItem).filter(i=>i&&isClean(i)).slice(0,40);
   if(favs.length)rows.push({title:'Ma liste',items:favs});
   if(!rows.length){$('content').innerHTML='<div style="padding:60px var(--safe);font-size:20px;color:var(--dim)">Rien ici — ajoutez des films avec ♡</div>';S.rows=[];return;}
   S.rows=rows;
@@ -2362,7 +2681,7 @@ function renderMyList(){
   const rows=[];
   const hist=inProgressItems();
   if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().slice(0,40).map(resolveItem).filter(i=>i&&isClean(i));
+  const favs=getFavs().map(resolveItem).filter(i=>i&&isClean(i)).slice(0,40);
   if(favs.length)rows.push({title:'Ma liste',items:favs});
   if(!rows.length){
     c.innerHTML='<div style="padding:60px var(--safe);font-size:18px;color:var(--dim)">Rien ici pour l instant — ajoutez des films a votre liste avec ♡</div>';
@@ -2445,6 +2764,16 @@ function renderSettings(){
     })(),action:'apps'},
     {label:'      ↳ Choisir les applications affichées',desc:'Masquer / afficher chaque application',action:'appspick'},
   ];
+  // Compte restreint : la bascule d'interface et le controle parental n'ont
+  // plus d'objet. Masquage de confort, pas de securite : les deux interfaces
+  // filtrent deja a la source.
+  var _pol = window.PIPSILY_AUTH && window.PIPSILY_AUTH.normalizeContentPolicy
+           ? window.PIPSILY_AUTH.normalizeContentPolicy(cosPolicy()) : 'all';
+  if(_pol === 'kids'){
+    for(var _i=items.length-1;_i>=0;_i--){
+      if(items[_i].action === 'iface' || items[_i].action === 'parental') items.splice(_i,1);
+    }
+  }
   if(_cosIsAdmin())items.push({label:'⚙ Admin',desc:'Ouvrir le panneau d\'administration',action:'admin'});
   items.push(
     {label:'Vérifier mise à jour',desc:'Télécharger et installer la dernière version',action:'update'},
@@ -2988,16 +3317,21 @@ function onKey(type){
       while(cols<items.length && Math.abs(items[cols].offsetTop-top0)<4) cols++;
     }
     cols=Math.max(1,cols);
+    // Grille paginée : la borne est le NOMBRE DE TITRES (S.gridItems), pas le
+    // nombre de cartes déjà insérées — sinon la navigation butait sur la fin du
+    // palier courant et le reste du rayon paraissait absent. gridEnsure()
+    // matérialise le palier suivant avant de déplacer le focus.
+    const _last=(z==='grid'?S.gridItems.length:items.length)-1;
     if(type==='U'){
       if(S.gridIdx<cols){S.zone=z==='grid'?'filter':'nav';focus();}
       else{S.gridIdx=Math.max(0,S.gridIdx-cols);focus();}
     }
-    else if(type==='D'){S.gridIdx=Math.min(items.length-1,S.gridIdx+cols);focus();}
+    else if(type==='D'){const _w=Math.min(_last,S.gridIdx+cols);if(z==='grid')gridEnsure(_w);S.gridIdx=_w;focus();}
     else if(type==='L'){
       if(S.gridIdx%cols!==0){S.gridIdx--;focus();}
       else if(z==='search'){S.zone='search-kb';focus();} // bord gauche → clavier
     }
-    else if(type==='R'){if(S.gridIdx%cols!==cols-1&&S.gridIdx<items.length-1){S.gridIdx++;focus();}}
+    else if(type==='R'){if(S.gridIdx%cols!==cols-1&&S.gridIdx<_last){S.gridIdx=S.gridIdx+1;if(z==='grid')gridEnsure(S.gridIdx);focus();}}
     else if(type==='E'){
       if(S.gridItems[S.gridIdx])openItem(S.gridItems[S.gridIdx]);
     }
@@ -3158,14 +3492,25 @@ function startCosmosUpdate(){
 }
 // Vérification auto de mise à jour (comme PIPSILY Xstream) : compare version.json
 // à la version installée → propose la MAJ dans Cosmos aussi.
+// Canal de mise à jour : les builds PIPSILY CAR (paquet com.pipsiflix.car)
+// annoncent "car" et lisent car_version / car_url — leur proposer PIPSILY.apk
+// installerait une seconde appli à côté au lieu de les mettre à jour. Les
+// builds TV/téléphone n'exposent pas getUpdateChannel : l'appel lève, on
+// retombe sur le canal par défaut, comportement inchangé.
+function cosmosUpdateChannel(){
+  try{ const c=window.AndroidBridge.getUpdateChannel(); if(c) return String(c); }catch(e){}
+  return 'default';
+}
 async function cosmosCheckUpdate(){
   if(!window.AndroidBridge?.getApkVersion) return;
   try{
     const v=await fetch(GH+'version.json?cb='+Date.now()).then(r=>r.json());
-    if(!v||!v.apk_version||!v.apk_url) return;
-    const remote=parseInt(v.apk_version,10);
+    const car=cosmosUpdateChannel()==='car';
+    const vk=car?'car_version':'apk_version', uk=car?'car_url':'apk_url';
+    if(!v||!v[vk]||!v[uk]) return;
+    const remote=parseInt(v[vk],10);
     const local=parseInt(window.AndroidBridge.getApkVersion()||'0',10);
-    if(remote>local) showUpdateToast('v'+remote, v.apk_url);
+    if(remote>local) showUpdateToast('v'+remote, v[uk]);
   }catch(e){}
 }
 

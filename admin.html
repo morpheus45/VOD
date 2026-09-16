@@ -160,8 +160,22 @@
     <div id="adminContent" class="loading">Vérification des droits…</div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="./auth.js"></script>
+  <!-- Chargement adapté au moteur — même principe que index.html : le WebView
+       AOSP des autoradios est figé en Chrome 61 et ne parse pas « ?. ». Une seule
+       occurrence casse tout le fichier, donc on sert à ces moteurs les versions
+       transpilées de legacy/. Les moteurs récents chargent les mêmes fichiers
+       qu'avant. Version supabase pinée : legacy/supabase.js vient de la même. -->
+  <script>
+  (function(){
+    var moderne = false;
+    try { new Function("var o = {}; return o?.x;"); moderne = true; } catch (e) {}
+    var srcs = moderne
+      ? ["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/dist/umd/supabase.min.js", "./auth.js"]
+      : ["legacy/supabase.js", "legacy/auth.js"];
+    for (var i = 0; i < srcs.length; i++)
+      document.write('<scr' + 'ipt src="' + srcs[i] + '"></scr' + 'ipt>');
+  })();
+  </script>
   <script>
     const A = window.PIPSILY_AUTH || {};
     const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -394,6 +408,7 @@
             <div class="user-card__meta">
               ${exp ? `<span>📅 ${fmtDate(u.subscription_expires_at)}</span>` : ""}
               <span>📱 ${userDevs.length}/${devLimit} appareils</span>
+              ${u.content_policy === "kids" ? `<span>👦 Contenu jeunesse</span>` : ""}
             </div>
             ${sessHtml}
             ${isMe
@@ -404,6 +419,10 @@
                   <button class="action-btn action-btn--green"  onclick="activateUser('${u.id}',30)">+30 jours</button>
                   <button class="action-btn action-btn--gold"   onclick="setTest('${u.id}')">Test 7j</button>
                   <button class="action-btn action-btn--red"    onclick="deactivate('${u.id}')">Bloquer</button>
+                  ${u.content_policy === "kids"
+                    ? `<button class="action-btn" style="background:rgba(120,170,255,.2);color:#9cc4ff;border:1px solid rgba(120,170,255,.5);font-weight:800"
+                        onclick="setContentPolicy('${u.id}','all')">👦 Jeunesse : activé — lever</button>`
+                    : `<button class="action-btn" onclick="setContentPolicy('${u.id}','kids')">👦 Limiter au jeunesse</button>`}
                   <button class="action-btn" style="background:rgba(232,51,74,.25);color:#ff8899;border:1px solid rgba(232,51,74,.5);font-weight:800"
                     onclick="deleteUser('${u.id}', ${JSON.stringify(u.email||"").replace(/"/g, '&quot;')})">🗑 Supprimer</button>
                 </div>`
@@ -496,6 +515,17 @@
         showGlobalMsg("✓ Activé pour " + days + " jours");
         loadAdmin();
       } catch(err){ alert("Erreur activation : " + (err.message||err)); }
+    }
+
+    async function setContentPolicy(userId, policy){
+      try {
+        const { error } = await A.supabase.from("profiles")
+          .update({ content_policy: policy }).eq("id", userId);
+        if(error) throw error;
+        showGlobalMsg(policy === "kids" ? "✓ Compte limité au contenu jeunesse"
+                                        : "✓ Restriction de contenu levée");
+        loadAdmin();
+      } catch(err){ alert("Erreur restriction : " + (err.message||err)); }
     }
 
     async function setUnlimited(userId){
