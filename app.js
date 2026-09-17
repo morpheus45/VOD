@@ -1016,6 +1016,96 @@ function abortAfter(ms){
   return { signal: ctrl.signal, done(){ clearTimeout(tid); } };
 }
 
+// ─────────────────────────────────────────────────────────────────
+//  CACHE DE CATALOGUE
+// ─────────────────────────────────────────────────────────────────
+//
+// Les trois catalogues pèsent 2,5 Mo compressés, et ils étaient retéléchargés
+// EN ENTIER à chaque lancement. Sur l'autoradio c'est incompressible autrement :
+// le WebView de l'APK tourne en LOAD_NO_CACHE et n'utilise pas le service
+// worker, donc rien n'y survit d'un démarrage à l'autre. Sur un partage de
+// connexion mobile, ces mégaoctets sont l'essentiel de l'attente — le décodage,
+// lui, a été mesuré à 20 ms pour vod.json, il n'a jamais été en cause.
+//
+// On garde donc les catalogues dans IndexedDB, avec l'ETag renvoyé par le
+// serveur. Au lancement suivant, la requête part avec « If-None-Match » : si
+// rien n'a changé, GitHub répond 304 et ZÉRO octet de corps. Mesuré sur le site
+// en production, service worker compris.
+//
+// La fraîcheur n'est pas sacrifiée : un 304 est le serveur qui CONFIRME que le
+// fichier est identique, ce n'est pas une péremption devinée. Un catalogue mis
+// à jour est retéléchargé au premier lancement qui suit, comme avant.
+//
+// Tout échec — IndexedDB absent, quota plein, mode privé, réseau coupé —
+// retombe silencieusement sur le comportement d'avant. Un cache ne doit jamais
+// pouvoir empêcher l'application de démarrer.
+
+const _CACHE_DB    = "pipsily_cache";
+const _CACHE_STORE = "catalogs";
+
+function _idbOpen(){
+  return new Promise((resolve, reject) => {
+    if(typeof indexedDB === "undefined"){ reject(new Error("IndexedDB indisponible")); return; }
+    const rq = indexedDB.open(_CACHE_DB, 1);
+    rq.onupgradeneeded = () => {
+      const db = rq.result;
+      if(!db.objectStoreNames.contains(_CACHE_STORE)) db.createObjectStore(_CACHE_STORE);
+    };
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror   = () => reject(rq.error);
+    rq.onblocked = () => reject(new Error("IndexedDB bloqué"));
+  });
+}
+
+function _idbGet(cle){
+  return _idbOpen().then(db => new Promise((resolve, reject) => {
+    const rq = db.transaction(_CACHE_STORE, "readonly").objectStore(_CACHE_STORE).get(cle);
+    rq.onsuccess = () => resolve(rq.result || null);
+    rq.onerror   = () => reject(rq.error);
+  }));
+}
+
+function _idbPut(cle, valeur){
+  return _idbOpen().then(db => new Promise((resolve, reject) => {
+    const tx = db.transaction(_CACHE_STORE, "readwrite");
+    tx.objectStore(_CACHE_STORE).put(valeur, cle);
+    tx.oncomplete = () => resolve();
+    tx.onerror    = () => reject(tx.error);
+    tx.onabort    = () => reject(tx.error);
+  }));
+}
+
+/**
+ * Comme fetchJson, mais ne retélécharge le fichier que s'il a changé.
+ *
+ * @param {string} url  fichier de catalogue, servi par le même domaine
+ * @returns {Promise<any|null>}  le JSON, ou null si rien n'est disponible
+ */
+async function fetchJsonCached(url){
+  let cache = null;
+  try { cache = await _idbGet(url); } catch(e) { /* pas de cache : on continue */ }
+
+  const opts = { headers: {} };
+  if(cache && cache.etag) opts.headers["If-None-Match"] = cache.etag;
+
+  let r;
+  try { r = await fetch(url, opts); }
+  catch(e){ return cache ? cache.data : null; }   // hors-ligne : le cache sauve l'affichage
+
+  if(r.status === 304 && cache) return cache.data;   // inchangé : rien n'a été téléchargé
+  if(!r.ok) return cache ? cache.data : null;
+
+  let data;
+  try { data = await r.json(); }
+  catch(e){ return cache ? cache.data : null; }
+
+  const etag = r.headers.get("ETag");
+  // Écriture en tâche de fond : l'affichage ne l'attend pas, et un quota plein
+  // ne doit rien casser — on repartira du réseau au prochain lancement.
+  if(etag) _idbPut(url, { etag, data, at: Date.now() }).catch(() => {});
+  return data;
+}
+
 async function fetchJson(url){
   try { const r = await fetch(url); return r.ok ? r.json() : null; } catch { return null; }
 }
@@ -4178,6 +4268,20 @@ async function boot(){
       if(adminBtn) adminBtn.style.display = "inline-flex";
     }
 
+    // Bouton VPN — seulement dans l'APK, où le pont natif existe.
+    //
+    // Appel direct volontaire, sans « typeof === function » : sur certains
+    // WebView Android les méthodes Java ne sont pas de type "function" mais
+    // restent appelables. Même raison qu'apkUpdateChannel() plus bas.
+    const vpnBtn = $("vpnBtn");
+    if(vpnBtn && typeof window.AndroidBridge !== "undefined"){
+      vpnBtn.style.display = "inline-flex";
+      vpnBtn.onclick = () => {
+        try { window.AndroidBridge.openVpn(); }
+        catch(e){ alert("Réglage VPN indisponible sur cette version de l'application."); }
+      };
+    }
+
     // Surveillance session : déconnexion forcée si autre appareil se connecte (Standard/Test)
     window.PIPSILY_AUTH.startSessionWatcher?.(S._userId);
   } else {
@@ -4374,10 +4478,10 @@ async function boot(){
 
   // ── Chargement VOD + Séries + Live + index en parallèle ──
   const [vodJson, seriesJson, liveJson, epIndex] = await Promise.all([
-    fetchJson("vod.json"),
-    fetchJson("series.json"),
-    fetchJson("live.json"),
-    fetchJson("episodes_index.json")
+    fetchJsonCached("vod.json"),
+    fetchJsonCached("series.json"),
+    fetchJsonCached("live.json"),
+    fetchJson("episodes_index.json")   // 4 Ko : rien à gagner à le mettre en cache
   ]);
 
   if(vodJson){ S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod")); }
