@@ -1,7 +1,7 @@
 {
   "apk_version": 66,
   "apk_url": "https://github.com/morpheus45/VOD/releases/download/v66/PIPSILY.apk",
-  "changes": "Écran noir corrigé : quand le décodeur de la box lache, le lecteur bascule désormais sur un autre décodeur au lieu d'abandonner. Les segments abimés et les pertes de son sont aussi retentés, et un lecteur resté bloqué est relancé tout seul au bout de quinze secondes. Vous ne devriez plus avoir à ressortir et relancer pour que l'image revienne.",
+  "changes": "Plus de « Flux interrompu » sur connexion lente. Le lecteur confondait un flux mort avec un flux simplement long à charger : au bout de quinze secondes de mise en tampon, il coupait et relançait une vidéo pourtant en train d'arriver, jusqu'à abandonner. Il regarde désormais si des données arrivent encore avant de couper quoi que ce soit.",
   "vpn_enabled": true,
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
