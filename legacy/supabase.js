@@ -1,3 +1,64 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  Rustines posées en tête de chaque fichier de legacy/                ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+//
+// esbuild convertit la SYNTAXE vers Chrome 61. Il ne touche pas aux API : un
+// « globalThis » compile tel quel et lève une ReferenceError sur le poste.
+//
+// Le bundle supabase-js en référence au premier niveau. Résultat sur
+// l'autoradio : le fichier ne s'évalue pas, « window.supabase » reste indéfini,
+// auth.js en conclut « Supabase CDN non chargé » et toute connexion répond
+// « Service d'authentification indisponible ». Le poste avait pourtant
+// Internet — rien dans le message ne pouvait le laisser deviner.
+//
+// Ces trois rustines sont exactes et sans effet sur un moteur récent : chacune
+// ne se pose que si l'API manque vraiment.
+//
+// N'est PAS rustiné : AbortController (Chrome 66). Une version qui n'annule
+// rien donnerait l'illusion d'un délai de garde là où il n'y en a plus. Les
+// appels du dépôt le testent donc eux-mêmes avant de s'en servir.
+(function () {
+  "use strict";
+
+  // ── globalThis — Chrome 71 ───────────────────────────────────────────
+  // Le détour par un accesseur sur Object.prototype est la seule méthode qui
+  // trouve l'objet global dans tous les contextes, y compris en mode strict.
+  if (typeof globalThis !== "object") {
+    var global_;
+    try {
+      Object.defineProperty(Object.prototype, "__pipsily_global__", {
+        get: function () { return this; },
+        configurable: true
+      });
+      global_ = __pipsily_global__;
+      delete Object.prototype.__pipsily_global__;
+    } catch (e) {
+      global_ = typeof self !== "undefined" ? self
+              : typeof window !== "undefined" ? window : null;
+    }
+    if (global_) { global_.globalThis = global_; }
+  }
+
+  // ── Object.fromEntries — Chrome 73 ───────────────────────────────────
+  if (typeof Object.fromEntries !== "function") {
+    Object.fromEntries = function (entries) {
+      var out = {}, list = Array.from(entries);
+      for (var i = 0; i < list.length; i++) { out[list[i][0]] = list[i][1]; }
+      return out;
+    };
+  }
+
+  // ── Promise.prototype.finally — Chrome 63 ────────────────────────────
+  if (typeof Promise.prototype["finally"] !== "function") {
+    Promise.prototype["finally"] = function (apres) {
+      var C = this.constructor || Promise;
+      return this.then(
+        function (valeur) { return C.resolve(apres()).then(function () { return valeur; }); },
+        function (erreur) { return C.resolve(apres()).then(function () { throw erreur; }); }
+      );
+    };
+  }
+})();
 var supabase=function(k){var qr,Mr,Hr;function xe(t,e){var r={};for(var s in t)Object.prototype.hasOwnProperty.call(t,s)&&e.indexOf(s)<0&&(r[s]=t[s]);if(t!=null&&typeof Object.getOwnPropertySymbols=="function")for(var i=0,s=Object.getOwnPropertySymbols(t);i<s.length;i++)e.indexOf(s[i])<0&&Object.prototype.propertyIsEnumerable.call(t,s[i])&&(r[s[i]]=t[s[i]]);return r}function Kr(t,e,r,s){function i(a){return a instanceof r?a:new r(function(n){n(a)})}return new(r||(r=Promise))(function(a,n){function o(c){try{h(s.next(c))}catch(u){n(u)}}function l(c){try{h(s.throw(c))}catch(u){n(u)}}function h(c){c.done?a(c.value):i(c.value).then(o,l)}h((s=s.apply(t,e||[])).next())})}let Jr=t=>t?(...e)=>t(...e):(...e)=>fetch(...e);var Ne=class extends Error{constructor(t,e="FunctionsError",r){super(t),this.name=e,this.context=r}toJSON(){return{name:this.name,message:this.message,context:this.context}}},Tt=class extends Ne{constructor(t){super("Failed to send a request to the Edge Function","FunctionsFetchError",t)}},tt=class extends Ne{constructor(t){super("Relay Error invoking the Edge Function","FunctionsRelayError",t)}},rt=class extends Ne{constructor(t){super("Edge Function returned a non-2xx status code","FunctionsHttpError",t)}},st;(function(t){t.Any="any",t.ApNortheast1="ap-northeast-1",t.ApNortheast2="ap-northeast-2",t.ApSouth1="ap-south-1",t.ApSoutheast1="ap-southeast-1",t.ApSoutheast2="ap-southeast-2",t.CaCentral1="ca-central-1",t.EuCentral1="eu-central-1",t.EuWest1="eu-west-1",t.EuWest2="eu-west-2",t.EuWest3="eu-west-3",t.SaEast1="sa-east-1",t.UsEast1="us-east-1",t.UsWest1="us-west-1",t.UsWest2="us-west-2"})(st||(st={}));var Gr=class{constructor(t,{headers:e={},customFetch:r,region:s=st.Any}={}){this.url=t,this.headers=e,this.region=s,this.fetch=Jr(r)}setAuth(t){this.headers.Authorization=`Bearer ${t}`}invoke(t){return Kr(this,arguments,void 0,function*(e,r={}){var o;var s;let i,a,n;try{let{headers:l,method:h,body:c,signal:u,timeout:p}=r,d={},{region:f}=r;f||(f=this.region);let g=new URL(`${this.url}/${e}`);f&&f!=="any"&&(d["x-region"]=f,g.searchParams.set("forceFunctionRegion",f));let m,S=!!l&&Object.keys(l).some(O=>O.toLowerCase()==="content-type");c&&!S?typeof Blob<"u"&&c instanceof Blob||c instanceof ArrayBuffer?(d["Content-Type"]="application/octet-stream",m=c):typeof c=="string"?(d["Content-Type"]="text/plain",m=c):typeof FormData<"u"&&c instanceof FormData?m=c:(d["Content-Type"]="application/json",m=JSON.stringify(c)):m=c&&typeof c!="string"&&!(typeof Blob<"u"&&c instanceof Blob)&&!(c instanceof ArrayBuffer)&&!(typeof FormData<"u"&&c instanceof FormData)?JSON.stringify(c):c;let v=u;p&&(a=new AbortController,i=setTimeout(()=>a.abort(),p),u?(v=a.signal,n=()=>a.abort(),u.addEventListener("abort",n)):v=a.signal);let w=yield this.fetch(g.toString(),{method:h||"POST",headers:Object.assign(Object.assign(Object.assign({},d),this.headers),l),body:m,signal:v}).catch(O=>{throw new Tt(O)}),R=w.headers.get("x-relay-error");if(R&&R==="true")throw new tt(w);if(!w.ok)throw new rt(w);let P=((o=w.headers.get("Content-Type"))!=null?o:"text/plain").split(";")[0].trim().toLowerCase(),T;return T=P==="application/json"?yield w.json():P==="application/octet-stream"||P==="application/pdf"?yield w.blob():P==="text/event-stream"?w:P==="multipart/form-data"?yield w.formData():yield w.text(),{data:T,error:null,response:w}}catch(l){return{data:null,error:l,response:l instanceof rt||l instanceof tt?l.context:void 0}}finally{i&&clearTimeout(i),n&&((s=r.signal)==null||s.removeEventListener("abort",n))}})}};let Et=t=>Math.min(1e3*2**t,3e4),Vr=[520,503],Rt=["GET","HEAD","OPTIONS"];var Le=class extends Error{constructor(t){super(t.message),this.name="PostgrestError",this.details=t.details,this.hint=t.hint,this.code=t.code}toJSON(){return{name:this.name,message:this.message,details:this.details,hint:this.hint,code:this.code}}};function ye(t){"@babel/helpers - typeof";return ye=typeof Symbol=="function"&&typeof Symbol.iterator=="symbol"?function(e){return typeof e}:function(e){return e&&typeof Symbol=="function"&&e.constructor===Symbol&&e!==Symbol.prototype?"symbol":typeof e},ye(t)}function zr(t,e){if(ye(t)!="object"||!t)return t;var r=t[Symbol.toPrimitive];if(r!==void 0){var s=r.call(t,e||"default");if(ye(s)!="object")return s;throw TypeError("@@toPrimitive must return a primitive value.")}return(e==="string"?String:Number)(t)}function Yr(t){var e=zr(t,"string");return ye(e)=="symbol"?e:e+""}function Xr(t,e,r){return(e=Yr(e))in t?Object.defineProperty(t,e,{value:r,enumerable:!0,configurable:!0,writable:!0}):t[e]=r,t}function At(t,e){var r=Object.keys(t);if(Object.getOwnPropertySymbols){var s=Object.getOwnPropertySymbols(t);e&&(s=s.filter(function(i){return Object.getOwnPropertyDescriptor(t,i).enumerable})),r.push.apply(r,s)}return r}function ne(t){for(var e=1;e<arguments.length;e++){var r=arguments[e]==null?{}:arguments[e];e%2?At(Object(r),!0).forEach(function(s){Xr(t,s,r[s])}):Object.getOwnPropertyDescriptors?Object.defineProperties(t,Object.getOwnPropertyDescriptors(r)):At(Object(r)).forEach(function(s){Object.defineProperty(t,s,Object.getOwnPropertyDescriptor(r,s))})}return t}function Ot(t,e){return new Promise(r=>{if(e!=null&&e.aborted){r();return}let s=setTimeout(()=>{e==null||e.removeEventListener("abort",i),r()},t);function i(){clearTimeout(s),r()}e==null||e.addEventListener("abort",i)})}function Qr(t,e,r,s){return!(!s||r>=3||!Rt.includes(t)||!Vr.includes(e))}var Zr=class{constructor(t){var e,r,s,i,a;this.shouldThrowOnError=!1,this.retryEnabled=!0,this.method=t.method,this.url=t.url,this.headers=new Headers(t.headers),this.schema=t.schema,this.body=t.body,this.shouldThrowOnError=(e=t.shouldThrowOnError)!=null?e:!1,this.signal=t.signal,this.isMaybeSingle=(r=t.isMaybeSingle)!=null?r:!1,this.shouldStripNulls=(s=t.shouldStripNulls)!=null?s:!1,this.urlLengthLimit=(i=t.urlLengthLimit)!=null?i:8e3,this.retryEnabled=(a=t.retry)!=null?a:!0,t.fetch?this.fetch=t.fetch:this.fetch=fetch}throwOnError(){return this.shouldThrowOnError=!0,this}stripNulls(){if(this.headers.get("Accept")==="text/csv")throw Error("stripNulls() cannot be used with csv()");return this.shouldStripNulls=!0,this}setHeader(t,e){return this.headers=new Headers(this.headers),this.headers.set(t,e),this}retry(t){return this.retryEnabled=t,this}then(t,e){var r=this;if(this.schema===void 0||(["GET","HEAD"].includes(this.method)?this.headers.set("Accept-Profile",this.schema):this.headers.set("Content-Profile",this.schema)),this.method!=="GET"&&this.method!=="HEAD"&&this.headers.set("Content-Type","application/json"),this.shouldStripNulls){let a=this.headers.get("Accept");a==="application/vnd.pgrst.object+json"?this.headers.set("Accept","application/vnd.pgrst.object+json;nulls=stripped"):(!a||a==="application/json")&&this.headers.set("Accept","application/vnd.pgrst.array+json;nulls=stripped")}let s=this.fetch,i=(async()=>{var n,o;let a=0;for(;;){let l={};r.headers.forEach((c,u)=>{l[u]=c}),a>0&&(l["X-Retry-Count"]=String(a));let h;try{h=await s(r.url.toString(),{method:r.method,headers:l,body:JSON.stringify(r.body,(c,u)=>typeof u=="bigint"?u.toString():u),signal:r.signal})}catch(c){if((c==null?void 0:c.name)==="AbortError"||(c==null?void 0:c.code)==="ABORT_ERR"||!Rt.includes(r.method))throw c;if(r.retryEnabled&&a<3){let u=Et(a);a++,await Ot(u,r.signal);continue}throw c}if(Qr(r.method,h.status,a,r.retryEnabled)){let c=(o=(n=h.headers)==null?void 0:n.get("Retry-After"))!=null?o:null,u=c===null?Et(a):Math.max(0,parseInt(c,10)||0)*1e3;await h.text(),a++,await Ot(u,r.signal);continue}return await r.processResponse(h)}})();return this.shouldThrowOnError||(i=i.catch(a=>{var u,p,d,f,g,m;let n="",o="",l="",h=a==null?void 0:a.cause;if(h){let S=(u=h==null?void 0:h.message)!=null?u:"",v=(p=h==null?void 0:h.code)!=null?p:"";n=`${(d=a==null?void 0:a.name)!=null?d:"FetchError"}: ${a==null?void 0:a.message}`,n+=`
 
 Caused by: ${(f=h==null?void 0:h.name)!=null?f:"Error"}: ${S}`,v&&(n+=` (${v})`),h!=null&&h.stack&&(n+=`

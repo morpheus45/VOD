@@ -400,11 +400,10 @@ const PipPlayer = {
     const action = isSeries ? `get_series_info&series_id=${id}` : `get_vod_info&vod_id=${id}`;
     const apiUrl = `${creds.base}/player_api.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}&action=${action}`;
 
-    const ctrl = new AbortController();
-    const _tid = setTimeout(() => ctrl.abort(), 10000);
+    const ab = abortAfter(10000);
 
-    fetch(apiUrl, { signal: ctrl.signal, credentials: "omit" })
-      .then(r => { clearTimeout(_tid); return r.ok ? r.json() : null; })
+    fetch(apiUrl, { signal: ab.signal, credentials: "omit" })
+      .then(r => { ab.done(); return r.ok ? r.json() : null; })
       .then(d => {
         const plot = d?.info?.plot
                   || d?.info?.description
@@ -415,7 +414,7 @@ const PipPlayer = {
         if($("pip-plot")) $("pip-plot").textContent = plot || "Synopsis non renseigné par le fournisseur.";
       })
       .catch(() => {
-        clearTimeout(_tid);
+        ab.done();
         if($("pip-plot")) $("pip-plot").textContent = "Synopsis non disponible (erreur réseau).";
       });
   },
@@ -994,6 +993,29 @@ function extractArr(raw){
 //  FETCH HELPERS
 // ─────────────────────────────────────────────────────────────────
 
+/**
+ * Signal d'annulation à retardement, tolérant aux moteurs anciens.
+ *
+ * AbortController n'existe qu'à partir de Chrome 66. Le WebView AOSP des
+ * autoradios est figé en Chrome 61 : « new AbortController() » y lève une
+ * ReferenceError qui emporte toute la fonction appelante. Un appel nu dans la
+ * fiche d'un film suffisait à faire disparaître le synopsis sur PIPSILY CAR.
+ *
+ * Quand la classe manque, on rend un signal ABSENT : fetch l'ignore, la requête
+ * n'est plus annulable au bout du délai, mais la page continue de tourner.
+ * Rien n'est simulé — un faux contrôleur qui n'annule rien laisserait croire à
+ * un délai de garde qui n'existe plus.
+ *
+ * @param {number} ms  délai avant annulation
+ * @returns {{signal: (AbortSignal|undefined), done: () => void}}
+ */
+function abortAfter(ms){
+  if(typeof AbortController === "undefined") return { signal: undefined, done(){} };
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), ms);
+  return { signal: ctrl.signal, done(){ clearTimeout(tid); } };
+}
+
 async function fetchJson(url){
   try { const r = await fetch(url); return r.ok ? r.json() : null; } catch { return null; }
 }
@@ -1143,10 +1165,9 @@ async function loadEpisodes(series){
   // Fallback navigateur fetch() (fonctionne si MIXED_CONTENT_ALWAYS_ALLOW)
   if(!data){
     try {
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 12000);
-      const r = await fetch(apiUrl, { signal: controller.signal });
-      clearTimeout(tid);
+      const ab = abortAfter(12000);
+      const r  = await fetch(apiUrl, { signal: ab.signal });
+      ab.done();
       data = r.ok ? await r.json() : null;
     } catch(e) { data = null; }
   }
@@ -1393,10 +1414,9 @@ async function fetchVodPlot(item){
   // ── Option 2 : fetch standard (bloqué par CORS sur beaucoup de serveurs IPTV) ──
   else {
     try {
-      const ctrl = new AbortController();
-      const tid  = setTimeout(() => ctrl.abort(), 8000);
-      const r    = await fetch(apiUrl, { signal: ctrl.signal });
-      clearTimeout(tid);
+      const ab = abortAfter(8000);
+      const r  = await fetch(apiUrl, { signal: ab.signal });
+      ab.done();
       if(r.ok) json = await r.json();
     } catch { /* CORS ou réseau */ }
   }
