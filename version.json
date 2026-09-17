@@ -1,6 +1,6 @@
 {
-  "apk_version": 66,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v66/PIPSILY.apk",
+  "apk_version": 67,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v67/PIPSILY.apk",
   "changes": "Plus de « Flux interrompu » sur connexion lente. Le lecteur confondait un flux mort avec un flux simplement long à charger : au bout de quinze secondes de mise en tampon, il coupait et relançait une vidéo pourtant en train d'arriver, jusqu'à abandonner. Il regarde désormais si des données arrivent encore avant de couper quoi que ce soit.",
   "vpn_enabled": true,
   "tizen_version": 1,
