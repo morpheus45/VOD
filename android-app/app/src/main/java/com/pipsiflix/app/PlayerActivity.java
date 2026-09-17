@@ -31,6 +31,8 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
 import androidx.media3.ui.PlayerView;
 
+import com.pipsiflix.app.player.StallPolicy;
+
 import okhttp3.OkHttpClient;
 
 import java.util.concurrent.TimeUnit;
@@ -119,6 +121,11 @@ public class PlayerActivity extends FragmentActivity {
     private static final long STALL_TIMEOUT_MS = 15_000L;  // gel toléré avant relance
     private long lastPosMs        = -1L;
     private long lastPosChangeAt  = 0L;
+    // Le tampon dit si des OCTETS arrivent encore quand la position, elle, est
+    // figée. Sans lui, une mise en tampon un peu longue sur un lien lent était
+    // prise pour un flux mort. Voir StallPolicy.
+    private long lastBufferedMs     = -1L;
+    private long lastBufferChangeAt = 0L;
     private boolean reconnecting  = false;
     private final android.os.Handler stallHandler =
         new android.os.Handler(android.os.Looper.getMainLooper());
@@ -129,36 +136,47 @@ public class PlayerActivity extends FragmentActivity {
             // La liste peut ne pas etre encore prete : le minuteur est arme
             // dans onResume, qui peut passer avant la construction du player.
             if (epUrls == null || currentIdx < 0 || currentIdx >= epUrls.length) return;
-            // Lecture non demandée (pause utilisateur, fin) → rien à surveiller.
-            if (!player.getPlayWhenReady()) { lastPosMs = -1L; return; }
-            int st = player.getPlaybackState();
-            // ENDED = fin normale du media, rien a reparer.
-            if (st == Player.STATE_ENDED) return;
-            // IDLE alors que la lecture est DEMANDEE = le lecteur est mort sur une
-            // erreur fatale et personne ne l'a relance. C'etait le trou : on
-            // ignorait cet etat, donc l'ecran restait noir jusqu'a ce que
-            // l'utilisateur ressorte et relance lui-meme. On le traite comme un
-            // gel, avec le meme delai de tolerance.
-            if (st == Player.STATE_IDLE) {
-                long nowIdle = System.currentTimeMillis();
-                if (lastPosChangeAt == 0L) { lastPosChangeAt = nowIdle; return; }
-                if (nowIdle - lastPosChangeAt < STALL_TIMEOUT_MS) return;
-                Log.w(TAG, "Lecteur IDLE alors que la lecture est demandee — relance");
-                lastPosChangeAt = nowIdle;
-                restartStream(epUrls[currentIdx], "lecteur inactif");
+            final long now = System.currentTimeMillis();
+            final int  st  = player.getPlaybackState();
+
+            // Pause utilisateur : on oublie les repères, pour ne pas compter la
+            // pause elle-même comme un gel au moment de la reprise.
+            if (!player.getPlayWhenReady()) {
+                lastPosMs = -1L;        lastPosChangeAt    = 0L;
+                lastBufferedMs = -1L;   lastBufferChangeAt = 0L;
                 return;
             }
 
+            // La position de lecture avance-t-elle ?
             long pos = player.getCurrentPosition();
-            long now = System.currentTimeMillis();
-            if (pos != lastPosMs) { lastPosMs = pos; lastPosChangeAt = now; return; }
-            if (lastPosChangeAt == 0L) { lastPosChangeAt = now; return; }
-            if (now - lastPosChangeAt < STALL_TIMEOUT_MS) return;
+            if (pos != lastPosMs || lastPosChangeAt == 0L) { lastPosMs = pos; lastPosChangeAt = now; }
 
-            // Position figée trop longtemps alors que la lecture est demandée.
-            Log.w(TAG, "Flux gele depuis " + (now - lastPosChangeAt) + " ms — relance");
-            lastPosChangeAt = now;
-            restartStream(epUrls[currentIdx], "flux fige");
+            // Le tampon grossit-il ? C'est la seule façon de distinguer un flux
+            // mort d'un flux simplement lent : dans les deux cas la position est
+            // figée, mais seul le second continue de recevoir des octets.
+            long buffered = player.getBufferedPosition();
+            if (buffered != lastBufferedMs || lastBufferChangeAt == 0L) {
+                lastBufferedMs = buffered; lastBufferChangeAt = now;
+            }
+
+            StallPolicy.Decision decision = StallPolicy.decide(
+                true,                                 // playWhenReady, déjà filtré au-dessus
+                st == Player.STATE_IDLE,
+                st == Player.STATE_ENDED,
+                st == Player.STATE_BUFFERING,
+                now - lastPosChangeAt,
+                now - lastBufferChangeAt,
+                STALL_TIMEOUT_MS);
+
+            if (decision != StallPolicy.Decision.RESTART) return;
+
+            final String raison = (st == Player.STATE_IDLE) ? "lecteur inactif" : "flux fige";
+            Log.w(TAG, "Relance (" + raison + ") — position figee depuis "
+                     + (now - lastPosChangeAt) + " ms, tampon depuis "
+                     + (now - lastBufferChangeAt) + " ms");
+            lastPosChangeAt    = now;
+            lastBufferChangeAt = now;
+            restartStream(epUrls[currentIdx], raison);
         }
     };
 
