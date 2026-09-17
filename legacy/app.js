@@ -901,6 +901,67 @@ function abortAfter(ms) {
     clearTimeout(tid);
   } };
 }
+const _CACHE_DB = "pipsily_cache";
+const _CACHE_STORE = "catalogs";
+function _idbOpen() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB indisponible"));
+      return;
+    }
+    const rq = indexedDB.open(_CACHE_DB, 1);
+    rq.onupgradeneeded = () => {
+      const db = rq.result;
+      if (!db.objectStoreNames.contains(_CACHE_STORE)) db.createObjectStore(_CACHE_STORE);
+    };
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+    rq.onblocked = () => reject(new Error("IndexedDB bloqué"));
+  });
+}
+function _idbGet(cle) {
+  return _idbOpen().then((db) => new Promise((resolve, reject) => {
+    const rq = db.transaction(_CACHE_STORE, "readonly").objectStore(_CACHE_STORE).get(cle);
+    rq.onsuccess = () => resolve(rq.result || null);
+    rq.onerror = () => reject(rq.error);
+  }));
+}
+function _idbPut(cle, valeur) {
+  return _idbOpen().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(_CACHE_STORE, "readwrite");
+    tx.objectStore(_CACHE_STORE).put(valeur, cle);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  }));
+}
+async function fetchJsonCached(url) {
+  let cache = null;
+  try {
+    cache = await _idbGet(url);
+  } catch (e) {
+  }
+  const opts = { headers: {} };
+  if (cache && cache.etag) opts.headers["If-None-Match"] = cache.etag;
+  let r;
+  try {
+    r = await fetch(url, opts);
+  } catch (e) {
+    return cache ? cache.data : null;
+  }
+  if (r.status === 304 && cache) return cache.data;
+  if (!r.ok) return cache ? cache.data : null;
+  let data;
+  try {
+    data = await r.json();
+  } catch (e) {
+    return cache ? cache.data : null;
+  }
+  const etag = r.headers.get("ETag");
+  if (etag) _idbPut(url, { etag, data, at: Date.now() }).catch(() => {
+  });
+  return data;
+}
 async function fetchJson(url) {
   try {
     const r = await fetch(url);
@@ -3848,6 +3909,17 @@ async function boot() {
       const adminBtn = $("adminBtn");
       if (adminBtn) adminBtn.style.display = "inline-flex";
     }
+    const vpnBtn = $("vpnBtn");
+    if (vpnBtn && typeof window.AndroidBridge !== "undefined") {
+      vpnBtn.style.display = "inline-flex";
+      vpnBtn.onclick = () => {
+        try {
+          window.AndroidBridge.openVpn();
+        } catch (e) {
+          alert("Réglage VPN indisponible sur cette version de l'application.");
+        }
+      };
+    }
     (_j = (_i = window.PIPSILY_AUTH).startSessionWatcher) == null ? void 0 : _j.call(_i, S._userId);
   } else {
     console.error("[PIPSILY] auth.js indisponible — redirection vers login.html");
@@ -4054,10 +4126,11 @@ async function boot() {
   }, true);
   getEpMap();
   const [vodJson, seriesJson, liveJson, epIndex] = await Promise.all([
-    fetchJson("vod.json"),
-    fetchJson("series.json"),
-    fetchJson("live.json"),
+    fetchJsonCached("vod.json"),
+    fetchJsonCached("series.json"),
+    fetchJsonCached("live.json"),
     fetchJson("episodes_index.json")
+    // 4 Ko : rien à gagner à le mettre en cache
   ]);
   if (vodJson) {
     S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod"));
