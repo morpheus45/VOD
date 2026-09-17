@@ -8,5 +8,5 @@
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct",
   "car_version": 1003,
   "car_url": "https://github.com/morpheus45/VOD/releases/download/car-v1003/PIPSILY-CAR.apk",
-  "car_changes": "Version initiale autoradio — interface tactile, sans écran d'accueil ni démarrage automatique."
+  "car_changes": "Plus de « Flux interrompu » sur connexion lente. Le lecteur confondait un flux mort avec un flux simplement long à charger : au bout de quinze secondes de mise en tampon, il coupait et relançait une vidéo pourtant en train d'arriver, jusqu'à abandonner. Il regarde désormais si des données arrivent encore avant de couper quoi que ce soit. Le démarrage est aussi plus rapide : le catalogue n'est retéléchargé que s'il a changé."
 }
