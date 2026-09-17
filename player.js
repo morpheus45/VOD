@@ -10,6 +10,26 @@ const item = JSON.parse(sessionStorage.getItem("iptv_current_item") || "null");
 
 function $(id){ return document.getElementById(id); }
 
+/**
+ * Signal d'annulation à retardement, tolérant aux moteurs anciens.
+ *
+ * AbortController n'existe qu'à partir de Chrome 66, et le WebView AOSP des
+ * autoradios est figé en Chrome 61 : le nommer directement y lève une
+ * ReferenceError. Quand la classe manque, on rend un signal ABSENT — fetch
+ * l'ignore, la requête n'est plus annulable au bout du délai, mais la lecture
+ * continue. Même définition que dans app.js : les deux pages ne partagent aucun
+ * module, player.html ne charge que player.js.
+ *
+ * @param {number} ms  délai avant annulation
+ * @returns {{signal: (AbortSignal|undefined), done: () => void}}
+ */
+function abortAfter(ms){
+  if(typeof AbortController === "undefined") return { signal: undefined, done(){} };
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), ms);
+  return { signal: ctrl.signal, done(){ clearTimeout(tid); } };
+}
+
 function escapeHtml(s){
   return String(s ?? "").replace(/[&<>"']/g,
     c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -152,10 +172,9 @@ async function loadPlotFromApi(it){
   }
 
   try {
-    const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 8000);
-    const r    = await fetch(apiUrl.replace(/^https?:\/\//i, "http://"), { signal: ctrl.signal });
-    clearTimeout(tid);
+    const ab = abortAfter(8000);
+    const r  = await fetch(apiUrl.replace(/^https?:\/\//i, "http://"), { signal: ab.signal });
+    ab.done();
     if(!r.ok) return null;
     const d = await r.json();
     return d?.info?.plot || d?.info?.description || d?.movie_data?.plot || null;

@@ -1,3 +1,64 @@
+// ╔══════════════════════════════════════════════════════════════════════╗
+// ║  Rustines posées en tête de chaque fichier de legacy/                ║
+// ╚══════════════════════════════════════════════════════════════════════╝
+//
+// esbuild convertit la SYNTAXE vers Chrome 61. Il ne touche pas aux API : un
+// « globalThis » compile tel quel et lève une ReferenceError sur le poste.
+//
+// Le bundle supabase-js en référence au premier niveau. Résultat sur
+// l'autoradio : le fichier ne s'évalue pas, « window.supabase » reste indéfini,
+// auth.js en conclut « Supabase CDN non chargé » et toute connexion répond
+// « Service d'authentification indisponible ». Le poste avait pourtant
+// Internet — rien dans le message ne pouvait le laisser deviner.
+//
+// Ces trois rustines sont exactes et sans effet sur un moteur récent : chacune
+// ne se pose que si l'API manque vraiment.
+//
+// N'est PAS rustiné : AbortController (Chrome 66). Une version qui n'annule
+// rien donnerait l'illusion d'un délai de garde là où il n'y en a plus. Les
+// appels du dépôt le testent donc eux-mêmes avant de s'en servir.
+(function () {
+  "use strict";
+
+  // ── globalThis — Chrome 71 ───────────────────────────────────────────
+  // Le détour par un accesseur sur Object.prototype est la seule méthode qui
+  // trouve l'objet global dans tous les contextes, y compris en mode strict.
+  if (typeof globalThis !== "object") {
+    var global_;
+    try {
+      Object.defineProperty(Object.prototype, "__pipsily_global__", {
+        get: function () { return this; },
+        configurable: true
+      });
+      global_ = __pipsily_global__;
+      delete Object.prototype.__pipsily_global__;
+    } catch (e) {
+      global_ = typeof self !== "undefined" ? self
+              : typeof window !== "undefined" ? window : null;
+    }
+    if (global_) { global_.globalThis = global_; }
+  }
+
+  // ── Object.fromEntries — Chrome 73 ───────────────────────────────────
+  if (typeof Object.fromEntries !== "function") {
+    Object.fromEntries = function (entries) {
+      var out = {}, list = Array.from(entries);
+      for (var i = 0; i < list.length; i++) { out[list[i][0]] = list[i][1]; }
+      return out;
+    };
+  }
+
+  // ── Promise.prototype.finally — Chrome 63 ────────────────────────────
+  if (typeof Promise.prototype["finally"] !== "function") {
+    Promise.prototype["finally"] = function (apres) {
+      var C = this.constructor || Promise;
+      return this.then(
+        function (valeur) { return C.resolve(apres()).then(function () { return valeur; }); },
+        function (erreur) { return C.resolve(apres()).then(function () { throw erreur; }); }
+      );
+    };
+  }
+})();
 "use strict";
 const STORE = {
   favorites: "pf_favorites_v4",
@@ -314,17 +375,16 @@ const PipPlayer = {
     }
     const action = isSeries ? `get_series_info&series_id=${id}` : `get_vod_info&vod_id=${id}`;
     const apiUrl = `${creds.base}/player_api.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}&action=${action}`;
-    const ctrl = new AbortController();
-    const _tid = setTimeout(() => ctrl.abort(), 1e4);
-    fetch(apiUrl, { signal: ctrl.signal, credentials: "omit" }).then((r) => {
-      clearTimeout(_tid);
+    const ab = abortAfter(1e4);
+    fetch(apiUrl, { signal: ab.signal, credentials: "omit" }).then((r) => {
+      ab.done();
       return r.ok ? r.json() : null;
     }).then((d) => {
       var _a, _b, _c, _d, _e;
       const plot = ((_a = d == null ? void 0 : d.info) == null ? void 0 : _a.plot) || ((_b = d == null ? void 0 : d.info) == null ? void 0 : _b.description) || ((_c = d == null ? void 0 : d.info) == null ? void 0 : _c.overview) || ((_d = d == null ? void 0 : d.movie_data) == null ? void 0 : _d.plot) || ((_e = d == null ? void 0 : d.movie_data) == null ? void 0 : _e.description) || null;
       if ($("pip-plot")) $("pip-plot").textContent = plot || "Synopsis non renseigné par le fournisseur.";
     }).catch(() => {
-      clearTimeout(_tid);
+      ab.done();
       if ($("pip-plot")) $("pip-plot").textContent = "Synopsis non disponible (erreur réseau).";
     });
   },
@@ -832,6 +892,76 @@ function extractArr(raw) {
   }
   return [];
 }
+function abortAfter(ms) {
+  if (typeof AbortController === "undefined") return { signal: void 0, done() {
+  } };
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), ms);
+  return { signal: ctrl.signal, done() {
+    clearTimeout(tid);
+  } };
+}
+const _CACHE_DB = "pipsily_cache";
+const _CACHE_STORE = "catalogs";
+function _idbOpen() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB indisponible"));
+      return;
+    }
+    const rq = indexedDB.open(_CACHE_DB, 1);
+    rq.onupgradeneeded = () => {
+      const db = rq.result;
+      if (!db.objectStoreNames.contains(_CACHE_STORE)) db.createObjectStore(_CACHE_STORE);
+    };
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+    rq.onblocked = () => reject(new Error("IndexedDB bloqué"));
+  });
+}
+function _idbGet(cle) {
+  return _idbOpen().then((db) => new Promise((resolve, reject) => {
+    const rq = db.transaction(_CACHE_STORE, "readonly").objectStore(_CACHE_STORE).get(cle);
+    rq.onsuccess = () => resolve(rq.result || null);
+    rq.onerror = () => reject(rq.error);
+  }));
+}
+function _idbPut(cle, valeur) {
+  return _idbOpen().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(_CACHE_STORE, "readwrite");
+    tx.objectStore(_CACHE_STORE).put(valeur, cle);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  }));
+}
+async function fetchJsonCached(url) {
+  let cache = null;
+  try {
+    cache = await _idbGet(url);
+  } catch (e) {
+  }
+  const opts = { headers: {} };
+  if (cache && cache.etag) opts.headers["If-None-Match"] = cache.etag;
+  let r;
+  try {
+    r = await fetch(url, opts);
+  } catch (e) {
+    return cache ? cache.data : null;
+  }
+  if (r.status === 304 && cache) return cache.data;
+  if (!r.ok) return cache ? cache.data : null;
+  let data;
+  try {
+    data = await r.json();
+  } catch (e) {
+    return cache ? cache.data : null;
+  }
+  const etag = r.headers.get("ETag");
+  if (etag) _idbPut(url, { etag, data, at: Date.now() }).catch(() => {
+  });
+  return data;
+}
 async function fetchJson(url) {
   try {
     const r = await fetch(url);
@@ -949,10 +1079,9 @@ async function loadEpisodes(series) {
   }
   if (!data) {
     try {
-      const controller = new AbortController();
-      const tid = setTimeout(() => controller.abort(), 12e3);
-      const r = await fetch(apiUrl, { signal: controller.signal });
-      clearTimeout(tid);
+      const ab = abortAfter(12e3);
+      const r = await fetch(apiUrl, { signal: ab.signal });
+      ab.done();
       data = r.ok ? await r.json() : null;
     } catch (e) {
       data = null;
@@ -1178,10 +1307,9 @@ async function fetchVodPlot(item) {
     });
   } else {
     try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 8e3);
-      const r = await fetch(apiUrl, { signal: ctrl.signal });
-      clearTimeout(tid);
+      const ab = abortAfter(8e3);
+      const r = await fetch(apiUrl, { signal: ab.signal });
+      ab.done();
       if (r.ok) json = await r.json();
     } catch (e) {
     }
@@ -3781,6 +3909,17 @@ async function boot() {
       const adminBtn = $("adminBtn");
       if (adminBtn) adminBtn.style.display = "inline-flex";
     }
+    const vpnBtn = $("vpnBtn");
+    if (vpnBtn && typeof window.AndroidBridge !== "undefined") {
+      vpnBtn.style.display = "inline-flex";
+      vpnBtn.onclick = () => {
+        try {
+          window.AndroidBridge.openVpn();
+        } catch (e) {
+          alert("Réglage VPN indisponible sur cette version de l'application.");
+        }
+      };
+    }
     (_j = (_i = window.PIPSILY_AUTH).startSessionWatcher) == null ? void 0 : _j.call(_i, S._userId);
   } else {
     console.error("[PIPSILY] auth.js indisponible — redirection vers login.html");
@@ -3987,10 +4126,11 @@ async function boot() {
   }, true);
   getEpMap();
   const [vodJson, seriesJson, liveJson, epIndex] = await Promise.all([
-    fetchJson("vod.json"),
-    fetchJson("series.json"),
-    fetchJson("live.json"),
+    fetchJsonCached("vod.json"),
+    fetchJsonCached("series.json"),
+    fetchJsonCached("live.json"),
     fetchJson("episodes_index.json")
+    // 4 Ko : rien à gagner à le mettre en cache
   ]);
   if (vodJson) {
     S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod"));

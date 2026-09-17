@@ -25,6 +25,9 @@ on:
       - 'account.html'
       - 'install.html'
       - 'player.html'
+      - 'scripts/legacy-polyfills.js'
+      - 'scripts/chrome61-sandbox.js'
+      - 'scripts/check-legacy-chrome61.js'
       - '.github/workflows/build-legacy.yml'
   workflow_dispatch:
 
@@ -63,12 +66,51 @@ jobs:
           verifier 'Object.fromEntries' "demande Chrome 73+"
           verifier '.replaceAll('       "demande Chrome 85+"
           verifier 'Promise.allSettled' "demande Chrome 76+"
+          verifier 'Promise.any'        "demande Chrome 85+"
           verifier 'globalThis'         "demande Chrome 71+"
+          verifier 'Object.hasOwn'      "demande Chrome 93+"
+          verifier 'structuredClone'    "demande Chrome 98+"
+          verifier 'queueMicrotask'     "demande Chrome 71+"
+          verifier '.trimStart('        "demande Chrome 66+"
+          verifier '.trimEnd('          "demande Chrome 66+"
+          verifier '.flatMap('          "demande Chrome 69+"
           if [ "$echec" = "1" ]; then
             echo "Corrigez la source : esbuild ne peut pas régler ces cas."
             exit 1
           fi
           echo "✅ Aucune construction non transpilable"
+
+      # ─── Garde-fou : AbortController jamais nommé en direct ──────────
+      # AbortController demande Chrome 66. Le nommer sur l'autoradio lève une
+      # ReferenceError qui emporte TOUTE la fonction appelante — c'est ainsi
+      # que le synopsis disparaissait d'une fiche. Un seul point d'entrée est
+      # autorisé : abortAfter(), qui teste son existence juste avant et rend
+      # un signal absent quand elle manque.
+      - name: 🛡️ Vérifier les appels à AbortController
+        run: |
+          python3 - <<'PY'
+          import sys
+          mauvais = []
+          for nom in ("app.js", "auth.js", "player.js"):
+              lignes = open(nom, encoding="utf-8").read().split("\n")
+              for i, ligne in enumerate(lignes):
+                  if "new AbortController" not in ligne:
+                      continue
+                  nu = ligne.strip()
+                  if nu.startswith("*") or nu.startswith("//") or nu.startswith("/*"):
+                      continue   # commentaire : ceux d'abortAfter citent le cas interdit
+                  contexte = "\n".join(lignes[max(0, i - 6):i])
+                  if "function abortAfter(" in contexte and "typeof AbortController" in contexte:
+                      continue
+                  mauvais.append((nom, i + 1, ligne.strip()))
+          for nom, n, ligne in mauvais:
+              print("::error file=%s,line=%d::AbortController nommé hors de abortAfter() — demande Chrome 66+" % (nom, n))
+              print("   " + ligne)
+          if mauvais:
+              print("Remplacez par : const ab = abortAfter(ms); fetch(url, { signal: ab.signal }) ... ab.done()")
+          sys.exit(1 if mauvais else 0)
+          PY
+          echo "✅ AbortController n'est nommé que dans abortAfter()"
 
       # ─── Garde-fou : scripts INLINE des pages HTML ───
       # Ces pages ne sont PAS transpilees : elles sont servies telles quelles.
@@ -98,12 +140,17 @@ jobs:
           echo "✅ Scripts inline compatibles Chrome 61"
 
       # ─── Transpilation des sources du projet ────────────────────────
+      # --banner:js pose scripts/legacy-polyfills.js en tête de chaque fichier :
+      # esbuild convertit la syntaxe, jamais les API, et c'est par une API
+      # manquante (globalThis) que la connexion tombait sur l'autoradio.
       - name: 🔨 Transpiler app / auth / player
         run: |
           set -e
           mkdir -p legacy
+          RUSTINES="$(cat scripts/legacy-polyfills.js)"
           for f in auth.js app.js player.js; do
             npx --yes esbuild@0.25.0 "$f" --target=chrome61 --charset=utf8 \
+              --banner:js="$RUSTINES" \
               --outfile="legacy/$f" --log-level=warning
           done
 
@@ -118,6 +165,7 @@ jobs:
             -o /tmp/supabase.src.js
           test -s /tmp/supabase.src.js
           npx --yes esbuild@0.25.0 /tmp/supabase.src.js --target=chrome61 --minify \
+            --banner:js="$(cat scripts/legacy-polyfills.js)" \
             --charset=utf8 --outfile=legacy/supabase.js --log-level=warning
 
       # ─── Validation : tout doit parser en ES2018 ────────────────────
@@ -133,6 +181,15 @@ jobs:
               exit 1
             fi
           done
+
+      # ─── Validation : tout doit S'EXÉCUTER, pas seulement parser ────
+      # Le contrôle acorn ci-dessus ne voit que la syntaxe. Il validait donc un
+      # legacy/supabase.js qui levait une ReferenceError dès l'évaluation sur
+      # l'autoradio. Cette étape charge vraiment chaque page sur un moteur
+      # privé des API postérieures à Chrome 61, puis y déroule une connexion
+      # Supabase complète contre un réseau simulé.
+      - name: 🚗 Exécuter legacy/ sur un moteur Chrome 61
+        run: node scripts/check-legacy-chrome61.js
 
       - name: 📤 Commit legacy/
         run: |
