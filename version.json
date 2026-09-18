@@ -1,6 +1,6 @@
 {
-  "apk_version": 67,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v67/PIPSILY.apk",
+  "apk_version": 68,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v68/PIPSILY.apk",
   "changes": "Accès au VPN depuis les réglages : vous pouvez enfin l'arrêter ou changer de serveur sans passer par l'autre interface. Vignettes homogènes : dans TV Direct, la carte « Voir tout » étirait toute la rangée, et les rangées qui mélangent films, séries et chaînes affichaient des tailles différentes. Tout suit désormais le format de sa rangée.",
   "vpn_enabled": true,
   "tizen_version": 1,
