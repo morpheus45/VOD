@@ -298,6 +298,10 @@ html,body{
 .card.poster{width:var(--pw)}
 .card.poster img{height:var(--ph);object-fit:cover}
 .card.live img{height:var(--ch);object-fit:contain;padding:14px;background:#111}
+/* Chaine placee dans une rangee d'affiches (Poursuivre, Ma liste) : elle garde
+   la BOITE portrait de ses voisines, mais son logo reste centre et non
+   deforme, comme dans les rangees TV. */
+.card.poster.live-img img{object-fit:contain;padding:14px;background:#111}
 /* Tuiles d'applications (etagere Google TV) */
 .app-card img{height:var(--ch);object-fit:cover;background:#1c1c1c}
 .app-card.app-icon img{object-fit:contain;padding:26px;background:radial-gradient(ellipse at center,#262630,#16161c)}
@@ -662,6 +666,14 @@ html,body{
 .seeall-card .card-iw{display:flex;align-items:center;justify-content:center;
   height:var(--ph);border-radius:var(--cr);
   background:#11182b;border:1px solid rgba(120,160,255,.25)}
+/* Rangees TV Direct : les cartes sont en paysage 268x151, pas en affiche
+   portrait. Sans cette regle la carte « Voir tout » gardait la hauteur --ph
+   (258px) et etirait TOUTE la rangee, qui paraissait alors plus grande que
+   les rangees sans « Voir tout » — d'ou l'ecart visible entre France et
+   Cinema. */
+.seeall-card.live .card-iw{height:var(--ch)}
+.seeall-card.live .seeall-pill{width:38px;height:38px;border-radius:12px;font-size:20px}
+.seeall-card.live .seeall-txt{margin-top:8px}
 .seeall-inner{text-align:center;padding:8px}
 .seeall-pill{width:46px;height:46px;margin:0 auto;border-radius:14px;
   background:linear-gradient(135deg,#7B5FE8,#38A8E8);display:flex;align-items:center;
@@ -1651,6 +1663,24 @@ function setHero(item){
 }
 
 // ══════ ROWS ════════════════════════════════════════════════════════════
+// Format d'une rangee. Les cartes d'une meme rangee DOIVENT avoir la meme
+// boite, sinon la plus haute etire toute la rangee et l'ecart saute aux yeux
+// (affiche portrait 172x258 contre paysage 268x151).
+// Les rangees mixtes existent vraiment : « Poursuivre », « Ma liste » et
+// « Continuer a regarder » melangent films, series ET chaines. Le format suit
+// donc la majorite, et les intrus gardent leur traitement d'image (logo
+// centre, sans deformation) tout en prenant la meme boite que leurs voisins.
+function rowFormat(row){
+  if(row.isApps) return 'app';
+  if(row.isLive) return 'live';
+  var live=0, tot=0;
+  for(var i=0;i<row.items.length;i++){
+    var it=row.items[i];
+    if(!it||it.seeAll||it.isApp) continue;
+    tot++; if(it.isLive) live++;
+  }
+  return (tot && live*2>tot) ? 'live' : 'poster';
+}
 function renderRows(rows){
   const c=$('content');c.innerHTML='';
   rows.forEach((row,ri)=>{
@@ -1659,7 +1689,8 @@ function renderRows(rows){
     rowEl.innerHTML=`<div class="row-title"><span class="row-title-accent"></span>${esc(row.title)}</div>`;
     const items=document.createElement('div');
     items.className='row-items';items.id='ri'+ri;
-    row.items.forEach((item,ci)=>items.appendChild(mkCard(item,ri,ci,row.isLive)));
+    const fmt=rowFormat(row);
+    row.items.forEach((item,ci)=>items.appendChild(mkCard(item,ri,ci,row.isLive,fmt)));
     rowEl.appendChild(items);c.appendChild(rowEl);
   });
 }
@@ -1687,10 +1718,11 @@ function lazyImg(img,src){
 }
 
 // ══════ CARD ════════════════════════════════════════════════════════════
-function mkCard(item,ri,ci,isLive){
+function mkCard(item,ri,ci,isLive,rowFmt){
   if(item.seeAll){
     const el=document.createElement('div');
-    el.className='card poster seeall-card';
+    // Format de la rangee : paysage pour le direct, affiche pour films/series.
+    el.className='card seeall-card '+((rowFmt==='live'||(!rowFmt&&isLive))?'live':'poster');
     el.dataset.ri=ri;el.dataset.ci=ci;
     const iw=document.createElement('div');iw.className='card-iw';
     const _n=item.count||0;
@@ -1720,11 +1752,15 @@ function mkCard(item,ri,ci,isLive){
   }
   const live=isLive||item.isLive||false;
   const el=document.createElement('div');
-  el.className='card'+(live?' live':'');
+  // La BOITE suit le format de la rangee, l'IMAGE suit la nature de l'item :
+  // une chaine glissee dans une rangee d'affiches garde son logo centre sans
+  // deformation, mais prend la meme taille que ses voisines.
+  const boite = rowFmt || (live ? 'live' : 'poster');
+  el.className='card'+(boite==='live'?' live':'')+((live&&boite!=='live')?' live-img':'');
   el.dataset.ri=ri;el.dataset.ci=ci;
   const iw=document.createElement('div');iw.className='card-iw';
   // Films + séries → tuile au format affiche portrait (épouse la jaquette)
-  if(!live)el.classList.add('poster');
+  if(boite!=='live')el.classList.add('poster');
   const img=document.createElement('img');
   img.loading='lazy';
   img.onload=()=>img.classList.add('loaded');
@@ -2695,7 +2731,8 @@ function renderMyList(){
     rowEl.innerHTML=`<div class="row-title"><span class="row-title-accent"></span>${esc(row.title)}</div>`;
     const items=document.createElement('div');
     items.className='row-items';items.id='ri'+ri;
-    row.items.forEach((item,ci)=>items.appendChild(mkCard(item,ri,ci,item.isLive)));
+    const fmt=rowFormat(row);
+    row.items.forEach((item,ci)=>items.appendChild(mkCard(item,ri,ci,item.isLive,fmt)));
     rowEl.appendChild(items);c.appendChild(rowEl);
   });
 }
@@ -2753,6 +2790,20 @@ function renderSettings(){
     {label:'👤 Compte & abonnement',desc:'Plan : '+planLabel+' — voir les détails',action:'account'},
     {label:'Interface : Cosmos TV',desc:'Basculer vers l\'interface PIPSILY Xstream',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
+    {label:'🔒 VPN',desc:(function(){
+      // Le VPN se remontait a chaque lancement sans aucun moyen de l'arreter
+      // depuis Cosmos : l'ecran natif n'etait atteignable que par l'interface
+      // telephone. On expose ici le meme ecran (choix du serveur, activation).
+      try{
+        var st=window.AndroidBridge&&window.AndroidBridge.getVpnState
+          ? String(window.AndroidBridge.getVpnState()) : '';
+        if(!st) return 'Ouvrir les reglages du tunnel';
+        var p=st.split('|'), etat=p[0], serveur=p[1]||'';
+        var lisible={CONNECTED:'Connecte',CONNECTING:'Connexion...',RECONNECTING:'Reconnexion...',
+                     IDLE:'Arrete',DISABLED:'Desactive',ERROR:'Erreur',OFF:'Indisponible'}[etat]||etat;
+        return lisible+(serveur?' · '+serveur:'');
+      }catch(e){ return 'Ouvrir les reglages du tunnel'; }
+    })(),action:'vpn'},
     {label:'🔞 Contrôle parental',desc:pinOn?'Code PIN actif — modifier ou supprimer':'Aucun code — en créer un',action:'parental'},
     {label:'📱 Étagère d\'applications',desc:(function(){
       if(!storeGet('pf_show_apps',true))return 'Masquée — activer';
@@ -2794,6 +2845,11 @@ function renderSettings(){
 function activateSetting(idx){
   const items=qAll('.set-item');
   const action=items[idx]?.dataset.action;
+  if(action==='vpn'){
+    try{ window.AndroidBridge.openVpn(); }
+    catch(e){ cosToast('VPN indisponible','Mettez a jour votre application'); }
+    return;
+  }
   if(action==='iface'){try{localStorage.setItem('pf_theme','xstream');}catch(e){} location.replace('./index.html');return;}
   else if(action==='reload'){
     // Bug : reloadApp() n'existe pas dans le bridge → le bouton ne faisait RIEN,

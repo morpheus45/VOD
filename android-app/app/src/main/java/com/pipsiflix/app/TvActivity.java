@@ -965,6 +965,33 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         @JavascriptInterface
         public String getApkVersion() { return APK_VERSION; }
 
+        /**
+         * Ouvre l'ecran natif du VPN (choix du serveur, activation/desactivation).
+         *
+         * Cette methode n'existait que dans le pont de MainActivity, donc
+         * uniquement sur le chemin telephone. Sur TV, Cosmos n'avait AUCUN moyen
+         * d'atteindre ce reglage : le VPN se remontait a chaque lancement sans
+         * que l'utilisateur puisse l'arreter.
+         */
+        @JavascriptInterface
+        public void openVpn() {
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new android.content.Intent(
+                        TvActivity.this, com.pipsiflix.app.vpn.VpnActivity.class));
+                } catch (Throwable t) { Log.w(TAG, "Ecran VPN indisponible : " + t); }
+            });
+        }
+
+        /** Etat courant du VPN, pour l'afficher dans les reglages : "ETAT|libelle". */
+        @JavascriptInterface
+        public String getVpnState() {
+            com.pipsiflix.app.vpn.VpnManager m = com.pipsiflix.app.MainActivity.vpn();
+            if (m == null) return "OFF|";
+            com.pipsiflix.app.vpn.VpnServer c = m.getCurrent();
+            return m.getState().name() + "|" + (c != null ? c.label : "");
+        }
+
         @JavascriptInterface
         public String getDeviceType() { return "android_tv"; }
 
