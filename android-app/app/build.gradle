@@ -20,8 +20,8 @@ android {
         // 1003 : « Flux interrompu » sur lien lent — le chien de garde du
         // lecteur confondait un flux mort avec un flux simplement long à
         // charger, et coupait une vidéo qui arrivait. Voir StallPolicy.
-        versionCode 1003
-        versionName "1.3-car"
+        versionCode 1004
+        versionName "1.4-car"
         // Le poste est un ARMv7 : les libs arm64 seraient du poids mort sur un
         // appareil à 2 Go de RAM. On ne garde que armeabi-v7a.
         ndk { abiFilters 'armeabi-v7a' }

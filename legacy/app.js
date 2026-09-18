@@ -66,6 +66,34 @@ const STORE = {
   progress: "pf_progress_v4"
 };
 const PER_PAGE = 48;
+const _imgIO = typeof IntersectionObserver !== "undefined" ? new IntersectionObserver(function(entries, obs) {
+  entries.forEach(function(e) {
+    if (!e.isIntersecting) return;
+    const img = e.target;
+    obs.unobserve(img);
+    const src = img.getAttribute("data-src");
+    if (src) {
+      img.removeAttribute("data-src");
+      img.src = src;
+    }
+  });
+}, { rootMargin: "600px" }) : null;
+function observeLazyImgs(root) {
+  if (!root) return;
+  const imgs = root.querySelectorAll("img[data-src]");
+  for (let i = 0; i < imgs.length; i++) {
+    const img = imgs[i];
+    if (_imgIO) {
+      _imgIO.observe(img);
+    } else {
+      const s = img.getAttribute("data-src");
+      if (s) {
+        img.removeAttribute("data-src");
+        img.src = s;
+      }
+    }
+  }
+}
 const SENTINEL_M = "300px";
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
 const isSafariIOS = isIOS && /Safari/i.test(navigator.userAgent) && !/CriOS|FxiOS|OPiOS|EdgiOS/i.test(navigator.userAgent);
@@ -1170,7 +1198,7 @@ function openVodPanel(item) {
 
     <div class="sp-body">
       <div class="sp-hero">
-        ${cover ? `<img class="sp-cover" src="${esc(cover)}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<div class="sp-cover sp-nocover">🎬</div>`}
+        ${cover ? `<img class="sp-cover" data-src="${esc(cover)}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<div class="sp-cover sp-nocover">🎬</div>`}
         <div class="sp-hero-txt">
           <p class="sp-plot" id="vodPlot">${esc(plot || "Chargement du synopsis…")}</p>
         </div>
@@ -1390,7 +1418,7 @@ function buildPanelLoading(s) {
     </div>
     <div class="sp-body">
       <div class="sp-hero">
-        ${cover ? `<img class="sp-cover" src="${esc(cover)}" alt="" loading="lazy">` : `<div class="sp-cover sp-nocover">🎬</div>`}
+        ${cover ? `<img class="sp-cover" data-src="${esc(cover)}" alt="" loading="lazy">` : `<div class="sp-cover sp-nocover">🎬</div>`}
         <div class="sp-hero-txt">
           <p class="sp-plot">${esc(s.plot || "Chargement…")}</p>
           <div class="sp-loading"><span class="sp-spin"></span> Chargement des saisons…</div>
@@ -1450,7 +1478,7 @@ function renderPanel() {
     const eps = smap[sel] || [];
     const m = smeta.find((x) => String(x.num) === sel);
     const covr = (m == null ? void 0 : m.cover) && m.cover.length > 40 ? m.cover : "";
-    if (covr) epsHtml += `<div class="sp-scov"><img src="${esc(covr)}" alt="" loading="lazy"></div>`;
+    if (covr) epsHtml += `<div class="sp-scov"><img data-src="${esc(covr)}" alt="" loading="lazy"></div>`;
     if (!eps.length) {
       epsHtml += `<div class="sp-noep">Aucun épisode dans cette saison.</div>`;
     } else {
@@ -1468,7 +1496,7 @@ function renderPanel() {
             ${!hasUrl ? "disabled" : ""}
             title="${hasUrl ? esc(ep.title) : "URL non disponible"}">
 
-            ${ep.thumb ? `<img class="sp-ep-img" src="${esc(ep.thumb)}" alt="" loading="lazy">` : `<div class="sp-ep-img sp-ep-img--blank"></div>`}
+            ${ep.thumb ? `<img class="sp-ep-img" data-src="${esc(ep.thumb)}" alt="" loading="lazy">` : `<div class="sp-ep-img sp-ep-img--blank"></div>`}
 
             <div class="sp-ep-info">
               <span class="sp-ep-code">${esc(code)}</span>
@@ -1542,7 +1570,7 @@ function renderPanel() {
 
     <div class="sp-body">
       <div class="sp-hero">
-        ${s.stream_icon ? `<img class="sp-cover" src="${esc(s.stream_icon)}" alt="" loading="lazy">` : `<div class="sp-cover sp-nocover">🎬</div>`}
+        ${s.stream_icon ? `<img class="sp-cover" data-src="${esc(s.stream_icon)}" alt="" loading="lazy">` : `<div class="sp-cover sp-nocover">🎬</div>`}
         <div class="sp-hero-txt">
           <p class="sp-plot">${esc(s.plot || "Aucun synopsis disponible.")}</p>
         </div>
@@ -2667,7 +2695,7 @@ function renderGrid(reset = false) {
     const progBar = pct > 0.03 && pct < 0.97 ? `<div class="card-prog-bar"><div class="card-prog-fill" style="width:${Math.round(pct * 100)}%"></div></div>` : "";
     card.innerHTML = `
       <div class="card-media">
-        ${poster ? `<img src="${esc(poster)}" alt="" loading="lazy" onerror="this.style.display='none';var p=document.createElement('div');p.className='card-placeholder';p.textContent='${isLive ? "📡" : "🎬"}';this.parentNode.insertBefore(p,this);">` : `<div class="card-placeholder">${isLive ? "📡" : "🎬"}</div>`}
+        ${poster ? `<img data-src="${esc(poster)}" alt="" loading="lazy" onerror="this.style.display='none';var p=document.createElement('div');p.className='card-placeholder';p.textContent='${isLive ? "📡" : "🎬"}';this.parentNode.insertBefore(p,this);">` : `<div class="card-placeholder">${isLive ? "📡" : "🎬"}</div>`}
         <span class="card-badge ${badgeCls}">${badgeTxt}</span>
         ${item.quality && !isLive ? `<span class="card-qual">${esc(item.quality)}</span>` : ""}
         <button class="fav-btn ${isFav(item) ? "is-fav" : ""}" type="button" aria-label="Favori">♥</button>
@@ -2701,6 +2729,7 @@ function renderGrid(reset = false) {
     frag.appendChild(card);
   });
   grid.appendChild(frag);
+  observeLazyImgs(grid);
   $("catalogCount").textContent = `${col.length} éléments · ${grid.children.length} affichés`;
   if (reset && document.documentElement.classList.contains("is-tv") && document.activeElement === document.body) {
     (_a = grid.querySelector(".card")) == null ? void 0 : _a.focus();
@@ -2731,7 +2760,7 @@ function makeNrowCard(item) {
   const progBar = pct > 0.03 && pct < 0.97 ? `<div class="card-prog-bar"><div class="card-prog-fill" style="width:${Math.round(pct * 100)}%"></div></div>` : "";
   card.innerHTML = `
     <div class="nrow-media">
-      ${poster ? `<img src="${esc(poster)}" alt="">` : `<div class="nrow-placeholder">${isSeries ? "📺" : "🎬"}</div>`}
+      ${poster ? `<img data-src="${esc(poster)}" alt="">` : `<div class="nrow-placeholder">${isSeries ? "📺" : "🎬"}</div>`}
       ${item.quality ? `<span class="nrow-qual">${esc(item.quality)}</span>` : ""}
       <div class="nrow-overlay"><span class="nrow-play">▶</span></div>
       <button class="nrow-fav ${isFav(item) ? "is-fav" : ""}" type="button" aria-label="Favori">♥</button>
@@ -2845,6 +2874,7 @@ function renderNetflixRows() {
     });
     strip.appendChild(allTile);
     section.appendChild(strip);
+    observeLazyImgs(strip);
     return section;
   }
   function _renderBatch() {
@@ -3735,7 +3765,7 @@ function _renderPoursuivreRowInner() {
     const progBar = isInProg ? `<div class="card-prog-bar card-prog-bar--nou"><div class="card-prog-fill" style="width:${Math.round(pct * 100)}%"></div></div>` : `<div class="nou-fav-badge">❤️</div>`;
     card.innerHTML = `
       <div class="nou-media">
-        ${item.stream_icon ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<div class="nou-placeholder">${isInProg ? "▶" : "❤️"}</div>`}
+        ${item.stream_icon ? `<img data-src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<div class="nou-placeholder">${isInProg ? "▶" : "❤️"}</div>`}
         <div class="nou-overlay"><span class="nou-play">▶</span></div>
         ${progBar}
       </div>
@@ -3767,6 +3797,7 @@ function _renderPoursuivreRowInner() {
     frag.appendChild(card);
   });
   row.appendChild(frag);
+  observeLazyImgs(row);
 }
 function renderContinueRow() {
   renderPoursuivreRow();
@@ -3794,7 +3825,7 @@ function renderNouveautes() {
     const dateStr = d ? d.toLocaleDateString("fr-FR", { day: "2-digit", month: "short" }) : "";
     card.innerHTML = `
       <div class="nou-media">
-        <img src="${esc(item.stream_icon)}" alt="" loading="lazy"
+        <img data-src="${esc(item.stream_icon)}" alt="" loading="lazy"
              onerror="this.parentElement.parentElement.style.display='none'">
         ${item.quality ? `<span class="nou-qual">${esc(item.quality)}</span>` : ""}
         <div class="nou-overlay">
@@ -3820,6 +3851,7 @@ function renderNouveautes() {
     frag.appendChild(card);
   });
   row.appendChild(frag);
+  observeLazyImgs(row);
   row.addEventListener("keydown", (e) => {
     const cards = [...row.querySelectorAll(".nou-card")];
     const idx = cards.indexOf(document.activeElement);
