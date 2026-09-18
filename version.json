@@ -1,7 +1,7 @@
 {
   "apk_version": 67,
   "apk_url": "https://github.com/morpheus45/VOD/releases/download/v67/PIPSILY.apk",
-  "changes": "Plus de « Flux interrompu » sur connexion lente. Le lecteur confondait un flux mort avec un flux simplement long à charger : au bout de quinze secondes de mise en tampon, il coupait et relançait une vidéo pourtant en train d'arriver, jusqu'à abandonner. Il regarde désormais si des données arrivent encore avant de couper quoi que ce soit.",
+  "changes": "Accès au VPN depuis les réglages : vous pouvez enfin l'arrêter ou changer de serveur sans passer par l'autre interface. Vignettes homogènes : dans TV Direct, la carte « Voir tout » étirait toute la rangée, et les rangées qui mélangent films, séries et chaînes affichaient des tailles différentes. Tout suit désormais le format de sa rangée.",
   "vpn_enabled": true,
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
