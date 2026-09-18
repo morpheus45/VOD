@@ -1418,6 +1418,14 @@ function getCached(){
     if(c&&c.ts&&(Date.now()-c.ts)<CACHE_TTL&&c.vod?.length>0)return c;
   }catch{}return null;
 }
+// Budget du cache. Le stockage local plafonne autour de 5 Mo par origine.
+// L'ancienne version serialisait le catalogue ENTIER : 29 588 fiches, 10 Mo de
+// chaine. L'ecriture echouait donc a tous les coups, et l'echec etait avale par
+// un catch vide. Resultat : a chaque lancement la TV fabriquait 10 Mo en
+// memoire pour rien, puis repartait sur le chemin reseau lent. Sur une box a
+// 1,8 Go dont 63 Mo libres, ce pic suffit a faire tuer l'application par le
+// gestionnaire de memoire.
+const CACHE_MAX_BYTES = 3 * 1024 * 1024;
 function saveCache(vod,series,live){
   try{
     // Ne stocker que les champs essentiels pour limiter la taille
@@ -1426,10 +1434,30 @@ function saveCache(vod,series,live){
       url:i.url,stream_id:i.stream_id,series_id:i.series_id,
       quality:i.quality,isLive:i.isLive,plot:(i.plot||'').slice(0,200)
     }));
-    localStorage.setItem(CACHE_KEY,JSON.stringify({
-      vod:trim(vod),series:trim(series),live:trim(live),ts:Date.now()
-    }));
-  }catch(e){} // ignore si localStorage plein
+    // On mesure le cout reel d'une fiche sur un echantillon, puis on calcule
+    // combien il en tient dans le budget. Une seule serialisation complete.
+    const ech=trim(vod.slice(0,40).concat(series.slice(0,40)));
+    const parFiche=ech.length ? JSON.stringify(ech).length/ech.length : 400;
+    let n=Math.max(150, Math.floor(CACHE_MAX_BYTES/Math.max(1,parFiche)/3));
+    for(let essai=0; essai<3; essai++){
+      const payload=JSON.stringify({
+        vod:trim(vod.slice(0,n)),series:trim(series.slice(0,n)),
+        live:trim(live.slice(0,n)),ts:Date.now(),partiel:true
+      });
+      if(payload.length<=CACHE_MAX_BYTES){
+        localStorage.setItem(CACHE_KEY,payload);
+        return;
+      }
+      n=Math.floor(n/2);
+      if(n<150) break;
+    }
+    // Rien ne tient : on efface plutot que de laisser une entree perimee.
+    try{ localStorage.removeItem(CACHE_KEY); }catch(e2){}
+  }catch(e){
+    // Quota depasse ou stockage indisponible : on nettoie et on continue. Le
+    // chemin reseau prend le relais, l affichage n est pas compromis.
+    try{ localStorage.removeItem(CACHE_KEY); }catch(e2){}
+  }
 }
 
 // ══════ CONTENT LOADING ══════════════════════════════════════════════════
