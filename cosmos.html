@@ -158,8 +158,9 @@ html,body{
   color:rgba(255,255,255,.68);cursor:pointer;font-size:18px;
 }
 .nav-icon.foc{background:rgba(79,142,247,.9);color:#fff}
-#nav-voice{color:var(--accent2)}
-#nav-voice.foc{background:rgba(79,142,247,.9);color:#fff}
+#nav-vpn{color:var(--accent2)}
+#nav-vpn.vpn-on{color:#6ef7b0}
+#nav-vpn.foc{background:rgba(79,142,247,.9);color:#fff}
 #nav-settings.foc{background:rgba(79,142,247,.9);color:#fff}
 
 /* ─── VIEWS ──────────────────────────────────────────────────────────── */
@@ -763,7 +764,10 @@ html,body{
 
     <!-- Droite: icones simples (voix + params) -->
     <div id="nav-right">
-      <div id="nav-voice" class="nav-icon">🎙</div>
+      <!-- Emplacement 5 de la barre : le micro ne servait pas ici. Le bouton
+           micro de la telecommande ouvre toujours la recherche vocale, on ne
+           perd donc rien. On y met le VPN, avec son etat visible. -->
+      <div id="nav-vpn" class="nav-icon" title="VPN">🔓</div>
       <div class="nav-icon" id="nav-settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </div>
@@ -2818,20 +2822,6 @@ function renderSettings(){
     {label:'👤 Compte & abonnement',desc:'Plan : '+planLabel+' — voir les détails',action:'account'},
     {label:'Interface : Cosmos TV',desc:'Basculer vers l\'interface PIPSILY Xstream',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
-    {label:'🔒 VPN',desc:(function(){
-      // Le VPN se remontait a chaque lancement sans aucun moyen de l'arreter
-      // depuis Cosmos : l'ecran natif n'etait atteignable que par l'interface
-      // telephone. On expose ici le meme ecran (choix du serveur, activation).
-      try{
-        var st=window.AndroidBridge&&window.AndroidBridge.getVpnState
-          ? String(window.AndroidBridge.getVpnState()) : '';
-        if(!st) return 'Ouvrir les reglages du tunnel';
-        var p=st.split('|'), etat=p[0], serveur=p[1]||'';
-        var lisible={CONNECTED:'Connecte',CONNECTING:'Connexion...',RECONNECTING:'Reconnexion...',
-                     IDLE:'Arrete',DISABLED:'Desactive',ERROR:'Erreur',OFF:'Indisponible'}[etat]||etat;
-        return lisible+(serveur?' · '+serveur:'');
-      }catch(e){ return 'Ouvrir les reglages du tunnel'; }
-    })(),action:'vpn'},
     {label:'🔞 Contrôle parental',desc:pinOn?'Code PIN actif — modifier ou supprimer':'Aucun code — en créer un',action:'parental'},
     {label:'📱 Étagère d\'applications',desc:(function(){
       if(!storeGet('pf_show_apps',true))return 'Masquée — activer';
@@ -3082,7 +3072,7 @@ function managePreview(){
 function focus(){
   // Clear all focus
   qAll('.ni,.nav-icon,.fpill,.card,.btn-hero,.panel-act-btn,.panel-tab,.pep,.resume-btn,.set-item,.kbk').forEach(el=>el.classList.remove('foc'));
-  ['nav-voice','nav-settings','nav-search-outer'].forEach(id=>{const el=$(id);if(el)el.classList.remove('foc');});
+  ['nav-vpn','nav-settings','nav-search-outer'].forEach(id=>{const el=$(id);if(el)el.classList.remove('foc');});
 
   const z=S.zone;
   // Persister la position (onglet + carte) pour la restaurer si le WebView est
@@ -3093,13 +3083,13 @@ function focus(){
     })); }catch(e){}
   }
   if(z==='nav'){
-    // navIdx: 0=search(gauche), 1-4=tabs, 5=voice(droite), 6=settings(droite)
+    // navIdx: 0=search(gauche), 1-4=tabs, 5=vpn(droite), 6=settings(droite)
     if(S.navIdx===0)$('nav-search-outer').classList.add('foc');
     else{
       const navMain=qAll('#nav-pill .ni');
       const tabIdx=S.navIdx-1; // tabs 1-4 → indices 0-3
       if(tabIdx>=0&&tabIdx<=3&&navMain[tabIdx])navMain[tabIdx].classList.add('foc');
-      else if(S.navIdx===5)$('nav-voice').classList.add('foc');
+      else if(S.navIdx===5)$('nav-vpn').classList.add('foc');
       else if(S.navIdx===6)$('nav-settings').classList.add('foc');
     }
   }
@@ -3539,7 +3529,28 @@ document.addEventListener('keydown',e=>{
 document.querySelectorAll('#nav-items .ni').forEach((el,i)=>{
   el.addEventListener('click',()=>{gotoSection(el.dataset.s);});
 });
-$('nav-voice').addEventListener('click',openVoice);
+// Bouton VPN de la barre : ouvre l'ecran natif (choix du serveur, activation,
+// et regeneration du tunnel quand il se fait brider).
+function ouvrirVpn(){
+  try{ window.AndroidBridge.openVpn(); }
+  catch(e){ cosToast('VPN indisponible','Mettez a jour votre application'); }
+}
+// Etat du tunnel lisible d'un coup d'oeil : cadenas ferme et vert = actif.
+function rafraichirIconeVpn(){
+  const el=$('nav-vpn'); if(!el) return;
+  var actif=false;
+  try{
+    var st=window.AndroidBridge&&window.AndroidBridge.getVpnState
+      ? String(window.AndroidBridge.getVpnState()) : '';
+    actif=(st.split('|')[0]==='CONNECTED');
+  }catch(e){}
+  el.textContent=actif?'🔒':'🔓';
+  el.classList.toggle('vpn-on',actif);
+  el.title=actif?'VPN actif':'VPN inactif';
+}
+$('nav-vpn').addEventListener('click',ouvrirVpn);
+rafraichirIconeVpn();
+setInterval(rafraichirIconeVpn,10000);
 $('nav-search-outer').addEventListener('click',()=>gotoSection('search'));
 $('nav-settings').addEventListener('click',()=>gotoSection('settings'));
 $('nav-logo').addEventListener('click',()=>gotoSection('home'));

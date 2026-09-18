@@ -12,6 +12,12 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" />
   <style>
     *{ box-sizing:border-box; margin:0; padding:0 }
+    /* Sur TV, la selection saute de bouton en bouton et le navigateur ne fait
+       defiler que le strict minimum : l'element se retrouve colle au bord.
+       Une marge de defilement le remonte dans la page. */
+    html{ scroll-behavior:smooth; scroll-padding-top:90px; scroll-padding-bottom:90px }
+    :focus{ scroll-margin-top:90px; scroll-margin-bottom:90px }
+    body{ padding-bottom:80px }
     body{
       min-height:100vh;
       background:
@@ -595,6 +601,29 @@
     }
 
     // Pré-chargement (géré dans loadAdmin via Promise.all)
+
+    // ─── Defilement a la telecommande ──────────────────────────────────
+    // Cette page n avait AUCUNE gestion du clavier. Sur TV, les fleches ne font
+    // que deplacer la selection d un bouton a l autre : des qu il n y a plus
+    // rien de selectionnable en dessous, la page cesse de defiler et le bas
+    // devient inatteignable. Repli : si ni la selection ni le defilement n ont
+    // bouge apres la touche, on fait defiler la page nous-memes.
+    (function(){
+      var PAS = Math.max(200, Math.round(window.innerHeight * 0.6));
+      function defiler(sens){ window.scrollBy({ top: sens * PAS, behavior: "smooth" }); }
+      document.addEventListener("keydown", function(e){
+        if (e.key === "PageDown"){ e.preventDefault(); defiler(1);  return; }
+        if (e.key === "PageUp"){   e.preventDefault(); defiler(-1); return; }
+        var bas  = (e.key === "ArrowDown");
+        var haut = (e.key === "ArrowUp");
+        if (!bas && !haut) return;
+        var avant  = document.activeElement;
+        var yAvant = window.scrollY;
+        setTimeout(function(){
+          if (document.activeElement === avant && window.scrollY === yAvant) defiler(bas ? 1 : -1);
+        }, 0);
+      });
+    })();
 
     init();
   </script>
