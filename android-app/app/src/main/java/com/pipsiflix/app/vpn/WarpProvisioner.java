@@ -97,6 +97,37 @@ public final class WarpProvisioner {
      * Renvoie null en cas d'échec (réseau/API) → l'appelant gère (failover).
      * À APPELER SUR UN THREAD DE FOND (appel réseau bloquant).
      */
+    /**
+     * Oublie l'enregistrement WARP de cet appareil.
+     *
+     * Le tunnel gratuit peut se retrouver bride par Cloudflare : la poignee de
+     * main continue de reussir, mais le debit s'effondre et les donnees ne
+     * passent plus. Observe sur la TV le 18/09 : 30 Ko/s et une renegociation
+     * toutes les 15 s, alors que le meme reseau sans tunnel donnait 448 Ko/s.
+     *
+     * Supprimer le cache force getOrCreate() a demander un enregistrement NEUF,
+     * avec de nouvelles cles, donc un compte WARP different.
+     *
+     * @return true si un enregistrement existait et a ete supprime.
+     */
+    public static boolean forget(Context ctx) { return forgetIn(ctx.getFilesDir()); }
+
+    /** Vrai si un enregistrement WARP est deja en cache pour cet appareil. */
+    public static boolean hasRegistration(Context ctx) { return hasRegistrationIn(ctx.getFilesDir()); }
+
+    // Variantes sans Android, pour que la logique soit testable en JVM pure :
+    // le Context des tests unitaires est un bouchon qui leve des l'instanciation.
+    static boolean forgetIn(File filesDir) {
+        File cache = new File(filesDir, CACHE_FILE);
+        if (!cache.isFile()) return false;
+        return cache.delete();
+    }
+
+    static boolean hasRegistrationIn(File filesDir) {
+        File cache = new File(filesDir, CACHE_FILE);
+        return cache.isFile() && cache.length() > 0;
+    }
+
     public static VpnServer getOrCreate(Context ctx) {
         File cache = new File(ctx.getFilesDir(), CACHE_FILE);
         // 1. Cache présent → réutiliser.
