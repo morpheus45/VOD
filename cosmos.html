@@ -2822,6 +2822,12 @@ function renderSettings(){
     {label:'👤 Compte & abonnement',desc:'Plan : '+planLabel+' — voir les détails',action:'account'},
     {label:'Interface : Cosmos TV',desc:'Basculer vers l\'interface PIPSILY Xstream',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
+    // PIPSILY se declare ecran d'accueil : sur un appareil ou elle est le
+    // lanceur (Freebox Player POP par exemple), il n'existe AUCUN autre moyen
+    // d'atteindre les reglages Android. On ne peut meme plus se connecter au
+    // Wi-Fi. Cette entree est la sortie de secours.
+    {label:'📶 Réseau Wi-Fi (réglages Android)',desc:'Sortir vers les réglages du système',action:'syswifi'},
+    {label:'⚙ Réglages Android',desc:'Ouvrir les paramètres complets de la TV',action:'sysset'},
     {label:'🔞 Contrôle parental',desc:pinOn?'Code PIN actif — modifier ou supprimer':'Aucun code — en créer un',action:'parental'},
     {label:'📱 Étagère d\'applications',desc:(function(){
       if(!storeGet('pf_show_apps',true))return 'Masquée — activer';
@@ -2863,6 +2869,11 @@ function renderSettings(){
 function activateSetting(idx){
   const items=qAll('.set-item');
   const action=items[idx]?.dataset.action;
+  if(action==='syswifi'||action==='sysset'){
+    try{ window.AndroidBridge.openAndroidSettings(action==='syswifi'?'wifi':''); }
+    catch(e){ cosToast('Réglages indisponibles','Mettez a jour votre application'); }
+    return;
+  }
   if(action==='vpn'){
     try{ window.AndroidBridge.openVpn(); }
     catch(e){ cosToast('VPN indisponible','Mettez a jour votre application'); }

@@ -966,6 +966,42 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         public String getApkVersion() { return APK_VERSION; }
 
         /**
+         * Ouvre les reglages Android du systeme.
+         *
+         * PIPSILY se declare ecran d'accueil sur Android TV (category.HOME).
+         * Sur un appareil ou elle est le lanceur par defaut — constate sur un
+         * Freebox Player POP — il n'existe alors AUCUN moyen d'atteindre les
+         * reglages : pas de bouton Accueil qui ramene ailleurs, pas de barre
+         * systeme. L'utilisateur ne peut meme plus se connecter au Wi-Fi.
+         *
+         * @param section "wifi" pour aller droit au reseau, sinon les reglages
+         *                generaux.
+         */
+        @JavascriptInterface
+        public void openAndroidSettings(String section) {
+            final String action = "wifi".equalsIgnoreCase(section)
+                ? android.provider.Settings.ACTION_WIFI_SETTINGS
+                : android.provider.Settings.ACTION_SETTINGS;
+            runOnUiThread(() -> {
+                try {
+                    startActivity(new android.content.Intent(action)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Throwable t) {
+                    // Certains constructeurs n'exposent pas l'ecran demande :
+                    // on retombe sur les reglages generaux plutot que de ne
+                    // rien faire du tout.
+                    try {
+                        startActivity(new android.content.Intent(
+                            android.provider.Settings.ACTION_SETTINGS)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK));
+                    } catch (Throwable t2) {
+                        Log.w(TAG, "Reglages Android inaccessibles : " + t2);
+                    }
+                }
+            });
+        }
+
+        /**
          * Ouvre l'ecran natif du VPN (choix du serveur, activation/desactivation).
          *
          * Cette methode n'existait que dans le pont de MainActivity, donc
