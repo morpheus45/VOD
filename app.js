@@ -17,6 +17,45 @@ const STORE = {
 };
 
 const PER_PAGE   = 48;
+
+// ─────────────────────────────────────────────────────────────────
+//  VIGNETTES DIFFEREES
+// ─────────────────────────────────────────────────────────────────
+// loading="lazy" exige Chrome 76. L'autoradio (PIPSILY CAR) est fige en
+// Chrome 61 : il IGNORE l'attribut, donc toutes les affiches se telechargeaient
+// d'un coup au lancement — 48 pour la grille plus les rangees de l'accueil, soit
+// plus de cent connexions chiffrees simultanees a travers le tunnel WireGuard
+// logiciel d'un ARMv7. C'est ce qui rendait le demarrage interminable alors que
+// la lecture, elle, passe tres bien : un flux continu unique ne coute rien a
+// cote de cent poignees de main TLS.
+//
+// IntersectionObserver existe depuis Chrome 51 et couvre donc tous les appareils
+// cibles. Les <img> portent data-src ; la vraie source n'est posee qu'a
+// l'approche de l'ecran. Meme remede que celui applique a l'interface TV.
+const _imgIO = (typeof IntersectionObserver !== "undefined")
+  ? new IntersectionObserver(function(entries, obs){
+      entries.forEach(function(e){
+        if(!e.isIntersecting) return;
+        const img = e.target;
+        obs.unobserve(img);
+        const src = img.getAttribute("data-src");
+        if(src){ img.removeAttribute("data-src"); img.src = src; }
+      });
+    }, { rootMargin: "600px" })
+  : null;
+
+/** Active le chargement differe des <img data-src> contenues dans `root`.
+ *  Sans IntersectionObserver, on pose les sources tout de suite : jamais
+ *  d'image manquante, on perd seulement le benefice. */
+function observeLazyImgs(root){
+  if(!root) return;
+  const imgs = root.querySelectorAll("img[data-src]");
+  for(let i = 0; i < imgs.length; i++){
+    const img = imgs[i];
+    if(_imgIO){ _imgIO.observe(img); }
+    else { const s = img.getAttribute("data-src"); if(s){ img.removeAttribute("data-src"); img.src = s; } }
+  }
+}
 const SENTINEL_M = "300px";
 
 // Détection iOS / iPadOS (y compris iPad en mode desktop avec touch)
@@ -1367,7 +1406,7 @@ function openVodPanel(item){
     <div class="sp-body">
       <div class="sp-hero">
         ${cover
-          ? `<img class="sp-cover" src="${esc(cover)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+          ? `<img class="sp-cover" data-src="${esc(cover)}" alt="" loading="lazy" onerror="this.style.display='none'">`
           : `<div class="sp-cover sp-nocover">🎬</div>`}
         <div class="sp-hero-txt">
           <p class="sp-plot" id="vodPlot">${esc(plot || "Chargement du synopsis…")}</p>
@@ -1599,7 +1638,7 @@ function buildPanelLoading(s){
     <div class="sp-body">
       <div class="sp-hero">
         ${cover
-          ? `<img class="sp-cover" src="${esc(cover)}" alt="" loading="lazy">`
+          ? `<img class="sp-cover" data-src="${esc(cover)}" alt="" loading="lazy">`
           : `<div class="sp-cover sp-nocover">🎬</div>`}
         <div class="sp-hero-txt">
           <p class="sp-plot">${esc(s.plot || "Chargement…")}</p>
@@ -1671,7 +1710,7 @@ function renderPanel(){
     const m    = smeta.find(x => String(x.num)===sel);
     const covr = m?.cover && m.cover.length > 40 ? m.cover : "";
 
-    if(covr) epsHtml += `<div class="sp-scov"><img src="${esc(covr)}" alt="" loading="lazy"></div>`;
+    if(covr) epsHtml += `<div class="sp-scov"><img data-src="${esc(covr)}" alt="" loading="lazy"></div>`;
 
     if(!eps.length){
       epsHtml += `<div class="sp-noep">Aucun épisode dans cette saison.</div>`;
@@ -1693,7 +1732,7 @@ function renderPanel(){
             title="${hasUrl ? esc(ep.title) : "URL non disponible"}">
 
             ${ep.thumb
-              ? `<img class="sp-ep-img" src="${esc(ep.thumb)}" alt="" loading="lazy">`
+              ? `<img class="sp-ep-img" data-src="${esc(ep.thumb)}" alt="" loading="lazy">`
               : `<div class="sp-ep-img sp-ep-img--blank"></div>`}
 
             <div class="sp-ep-info">
@@ -1780,7 +1819,7 @@ function renderPanel(){
     <div class="sp-body">
       <div class="sp-hero">
         ${s.stream_icon
-          ? `<img class="sp-cover" src="${esc(s.stream_icon)}" alt="" loading="lazy">`
+          ? `<img class="sp-cover" data-src="${esc(s.stream_icon)}" alt="" loading="lazy">`
           : `<div class="sp-cover sp-nocover">🎬</div>`}
         <div class="sp-hero-txt">
           <p class="sp-plot">${esc(s.plot || "Aucun synopsis disponible.")}</p>
@@ -2899,7 +2938,7 @@ function renderGrid(reset = false){
     card.innerHTML = `
       <div class="card-media">
         ${poster
-          ? `<img src="${esc(poster)}" alt="" loading="lazy" onerror="this.style.display='none';var p=document.createElement('div');p.className='card-placeholder';p.textContent='${isLive?"📡":"🎬"}';this.parentNode.insertBefore(p,this);">`
+          ? `<img data-src="${esc(poster)}" alt="" loading="lazy" onerror="this.style.display='none';var p=document.createElement('div');p.className='card-placeholder';p.textContent='${isLive?"📡":"🎬"}';this.parentNode.insertBefore(p,this);">`
           : `<div class="card-placeholder">${isLive?"📡":"🎬"}</div>`}
         <span class="card-badge ${badgeCls}">${badgeTxt}</span>
         ${item.quality && !isLive ? `<span class="card-qual">${esc(item.quality)}</span>` : ""}
@@ -2936,6 +2975,7 @@ function renderGrid(reset = false){
   });
 
   grid.appendChild(frag);
+  observeLazyImgs(grid);
   $("catalogCount").textContent = `${col.length} éléments · ${grid.children.length} affichés`;
 
   // TV : après un reset (ex. clic "Voir tout" ou changement de catégorie), la
@@ -2981,7 +3021,7 @@ function makeNrowCard(item){
   card.innerHTML = `
     <div class="nrow-media">
       ${poster
-        ? `<img src="${esc(poster)}" alt="">`
+        ? `<img data-src="${esc(poster)}" alt="">`
         : `<div class="nrow-placeholder">${isSeries ? "📺" : "🎬"}</div>`}
       ${item.quality ? `<span class="nrow-qual">${esc(item.quality)}</span>` : ""}
       <div class="nrow-overlay"><span class="nrow-play">▶</span></div>
@@ -3102,6 +3142,7 @@ function renderNetflixRows(){
     });
     strip.appendChild(allTile);
     section.appendChild(strip);
+    observeLazyImgs(strip);
     return section;
   }
 
@@ -4077,7 +4118,7 @@ function _renderPoursuivreRowInner(){
     card.innerHTML = `
       <div class="nou-media">
         ${item.stream_icon
-          ? `<img src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+          ? `<img data-src="${esc(item.stream_icon)}" alt="" loading="lazy" onerror="this.style.display='none'">`
           : `<div class="nou-placeholder">${isInProg ? "▶" : "❤️"}</div>`}
         <div class="nou-overlay"><span class="nou-play">▶</span></div>
         ${progBar}
@@ -4106,6 +4147,7 @@ function _renderPoursuivreRowInner(){
     frag.appendChild(card);
   });
   row.appendChild(frag);
+  observeLazyImgs(row);
 }
 
 // Stubs de compatibilité (call sites existants)
@@ -4142,7 +4184,7 @@ function renderNouveautes(){
       : "";
     card.innerHTML = `
       <div class="nou-media">
-        <img src="${esc(item.stream_icon)}" alt="" loading="lazy"
+        <img data-src="${esc(item.stream_icon)}" alt="" loading="lazy"
              onerror="this.parentElement.parentElement.style.display='none'">
         ${item.quality ? `<span class="nou-qual">${esc(item.quality)}</span>` : ""}
         <div class="nou-overlay">
@@ -4166,6 +4208,7 @@ function renderNouveautes(){
     frag.appendChild(card);
   });
   row.appendChild(frag);
+  observeLazyImgs(row);
 
   // ── Navigation D-pad TV : flèches gauche/droite dans la rangée ──
   row.addEventListener("keydown", e => {
