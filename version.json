@@ -1,7 +1,7 @@
 {
   "apk_version": 68,
   "apk_url": "https://github.com/morpheus45/VOD/releases/download/v68/PIPSILY.apk",
-  "changes": "Accès au VPN depuis les réglages : vous pouvez enfin l'arrêter ou changer de serveur sans passer par l'autre interface. Vignettes homogènes : dans TV Direct, la carte « Voir tout » étirait toute la rangée, et les rangées qui mélangent films, séries et chaînes affichaient des tailles différentes. Tout suit désormais le format de sa rangée.",
+  "changes": "Nouveau bouton « Régénérer le tunnel » dans les réglages VPN. Si le catalogue met un temps infini à se charger, c'est que le tunnel gratuit s'est fait brider : ce bouton en crée un neuf en trente secondes, sans toucher à votre compte ni à vos favoris.",
   "vpn_enabled": true,
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
