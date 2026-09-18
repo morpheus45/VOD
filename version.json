@@ -1,6 +1,6 @@
 {
-  "apk_version": 69,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v69/PIPSILY.apk",
+  "apk_version": 70,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v70/PIPSILY.apk",
   "changes": "Sortie vers les réglages Android depuis PIPSILY : sur les appareils où l'application est l'écran d'accueil, il était impossible d'atteindre le Wi-Fi ou les paramètres. Deux entrées dans les réglages règlent ça. Le bouton VPN remplace aussi le micro en haut à droite, avec l'état du tunnel visible, et le panneau d'administration défile enfin jusqu'en bas.",
   "vpn_enabled": true,
   "tizen_version": 1,
