@@ -3931,6 +3931,10 @@ async function boot() {
       auth = { session: _sess || { user: { id: "err" } }, sub: { ok: true, plan: _adm ? "admin" : "active", unlimited: _adm, content_policy: "all" } };
     }
     if (!auth) return;
+    try {
+      if (window.AndroidBridge && window.AndroidBridge.connectVpnNow) AndroidBridge.connectVpnNow();
+    } catch (e) {
+    }
     S._userId = ((_f = (_e = auth.session) == null ? void 0 : _e.user) == null ? void 0 : _f.id) || "err";
     S._isAdmin = auth.sub.plan === "admin" || (((_h = (_g = auth.session) == null ? void 0 : _g.user) == null ? void 0 : _h.email) || "").toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL || "").toLowerCase();
     S._unlim = auth.sub.unlimited;

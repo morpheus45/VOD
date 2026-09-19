@@ -4298,6 +4298,11 @@ async function boot(){
     }
     if(!auth) return; // redirigé vers login.html ou paywall
 
+    // Session établie : le tunnel peut monter. Pas avant — un tunnel bridé
+    // faisait pendre l'appel d'authentification pour toujours, et le bouton qui
+    // le régénère est derrière cet écran. Sans effet hors APK.
+    try{ if(window.AndroidBridge && window.AndroidBridge.connectVpnNow) AndroidBridge.connectVpnNow(); }catch(e){}
+
     S._userId  = auth.session?.user?.id || "err";
     S._isAdmin = auth.sub.plan === "admin" || (auth.session?.user?.email||"").toLowerCase() === (window.PIPSILY_AUTH.ADMIN_EMAIL||"").toLowerCase();
     S._unlim   = auth.sub.unlimited;

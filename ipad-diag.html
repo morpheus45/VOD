@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>PIPSILY — diagnostic tactile</title>
+<!--
+  Page de diagnostic pour le defaut tactile sur iPad.
+
+  Ecrite volontairement en ES5 strict (var, function, pas de fleche, pas de
+  gabarit de chaine, pas de ?.) : si le Safari de l'appareil est trop ancien
+  pour l'application, cette page doit QUAND MEME s'afficher et rapporter
+  pourquoi. Aucune dependance externe, aucun reseau, aucune authentification.
+
+  Le test decisif est en bas : deux cibles identiques, l'une SANS styles de
+  survol, l'autre AVEC un enfant revele au survol — exactement comme les
+  cartes de l'application. Si la seconde demande deux touchers et la premiere
+  un seul, le comportement WebKit « premier toucher = survol » est confirme.
+-->
+<style>
+  :root{
+    --bg:#05080f; --card:#0d1424; --line:rgba(255,255,255,.12);
+    --text:#e8edf7; --dim:#93a2bd; --ok:#3ddc97; --ko:#ff6b6b; --warn:#ffc857;
+    --accent:#7b5fe8;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:rgba(123,95,232,.3) }
+  body{
+    margin:0; padding:20px 16px 60px; background:var(--bg); color:var(--text);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+  }
+  h1{ font-size:20px; margin:0 0 4px }
+  .sub{ color:var(--dim); font-size:13px; margin:0 0 20px }
+  h2{ font-size:15px; margin:26px 0 10px; color:var(--dim);
+      text-transform:uppercase; letter-spacing:.08em }
+  .bloc{ background:var(--card); border:1px solid var(--line);
+         border-radius:12px; padding:4px 14px; margin-bottom:8px }
+  .l{ display:flex; justify-content:space-between; align-items:baseline;
+      gap:12px; padding:9px 0; border-bottom:1px solid rgba(255,255,255,.06) }
+  .l:last-child{ border-bottom:none }
+  .k{ color:var(--dim); font-size:13px; flex:0 0 auto }
+  .v{ font-weight:600; text-align:right; word-break:break-word; font-size:13px }
+  .ok{ color:var(--ok) } .ko{ color:var(--ko) } .warn{ color:var(--warn) }
+
+  /* ── Les deux cibles du test decisif ── */
+  .cible{
+    position:relative; display:block; width:100%; margin:10px 0;
+    padding:26px 18px; border-radius:12px; border:2px solid var(--line);
+    background:#131c33; color:var(--text); font-size:17px; font-weight:700;
+    text-align:left; cursor:pointer; touch-action:manipulation;
+    -webkit-appearance:none; appearance:none; font-family:inherit;
+  }
+  .cible .compteur{ float:right; color:var(--accent) }
+  /* La cible « avec survol » imite les cartes : un enfant a opacity 0 que le
+     survol revele, plus une transformation. C'est ce motif precis qui piege
+     le premier toucher sur iOS. */
+  .avec .revele{
+    position:absolute; right:56px; top:50%; margin-top:-12px;
+    opacity:0; transform:scale(.5); transition:opacity .2s, transform .2s;
+    color:var(--accent); font-size:22px;
+  }
+  .avec:hover{ transform:translateY(-4px) scale(1.02); border-color:var(--accent) }
+  .avec:hover .revele{ opacity:1; transform:scale(1) }
+
+  .verdict{ margin-top:14px; padding:14px; border-radius:12px;
+            border:1px solid var(--line); background:var(--card); font-size:14px }
+  .erreurs{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px;
+            color:var(--ko); white-space:pre-wrap; word-break:break-all }
+  button.raz{ margin-top:8px; padding:12px 18px; border-radius:10px;
+              border:1px solid var(--line); background:#182444; color:var(--text);
+              font-size:14px; font-family:inherit; touch-action:manipulation }
+</style>
+</head>
+<body>
+
+<h1>PIPSILY — diagnostic tactile</h1>
+<p class="sub">Ouvre cette page sur l'iPad, fais le test du bas, puis envoie une capture.</p>
+
+<h2>Appareil</h2>
+<div class="bloc" id="env"></div>
+
+<h2>Capacites d'entree</h2>
+<div class="bloc" id="entree"></div>
+
+<h2>Moteur JavaScript</h2>
+<div class="bloc" id="js"></div>
+
+<h2>Test decisif — touche chaque barre UNE fois</h2>
+
+<button class="cible sans" id="sans" type="button">
+  Cible SANS survol <span class="compteur" id="cSans">0</span>
+</button>
+
+<button class="cible avec" id="avec" type="button">
+  Cible AVEC survol <span class="revele">&#9654;</span> <span class="compteur" id="cAvec">0</span>
+</button>
+
+<div class="verdict" id="verdict">
+  Touche chaque barre <b>une seule fois</b>. Les deux compteurs doivent passer a 1.
+</div>
+<button class="raz" id="raz" type="button">Remettre a zero</button>
+
+<h2>Erreurs JavaScript captees</h2>
+<div class="bloc"><div class="l"><span class="erreurs" id="errs">aucune</span></div></div>
+
+<script>
+/* Capter les erreurs le plus tot possible. */
+var _errs = [];
+window.onerror = function(m, f, l){
+  _errs.push(String(m) + "  (" + String(f).split("/").pop() + ":" + l + ")");
+  var e = document.getElementById("errs");
+  if (e) e.textContent = _errs.join("\n");
+  return false;
+};
+
+function ligne(hote, cle, valeur, etat){
+  var d = document.createElement("div"); d.className = "l";
+  var k = document.createElement("span"); k.className = "k"; k.textContent = cle;
+  var v = document.createElement("span");
+  v.className = "v" + (etat ? " " + etat : "");
+  v.textContent = valeur;
+  d.appendChild(k); d.appendChild(v);
+  document.getElementById(hote).appendChild(d);
+}
+
+/* ── Appareil ───────────────────────────────────────────────────────── */
+var ua = navigator.userAgent;
+var mos = ua.match(/OS (\d+)[_.](\d+)/);
+var version = mos ? (mos[1] + "." + mos[2]) : "inconnue";
+var majeure = mos ? parseInt(mos[1], 10) : 0;
+
+var standalone =
+  (window.navigator.standalone === true) ||
+  (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+
+ligne("env", "iPadOS / iOS", version, majeure && majeure < 15 ? "warn" : "ok");
+ligne("env", "Mode", standalone ? "PWA (ecran d'accueil)" : "Safari (onglet)");
+ligne("env", "Ecran", window.innerWidth + " x " + window.innerHeight +
+      " @" + (window.devicePixelRatio || 1) + "x");
+ligne("env", "Plateforme", navigator.platform + " / points tactiles " +
+      (navigator.maxTouchPoints || 0));
+ligne("env", "Service worker", ("serviceWorker" in navigator)
+      ? (navigator.serviceWorker.controller ? "actif" : "enregistre, sans controle")
+      : "absent");
+ligne("env", "UA", ua);
+
+/* ── Capacites d'entree ─────────────────────────────────────────────── */
+function mq(q){ return window.matchMedia && window.matchMedia(q).matches; }
+var hoverHover = mq("(hover: hover)");
+ligne("entree", "(hover: hover)", hoverHover ? "VRAI" : "faux",
+      hoverHover ? "ko" : "ok");
+ligne("entree", "(hover: none)", mq("(hover: none)") ? "VRAI" : "faux");
+ligne("entree", "(pointer: coarse)", mq("(pointer: coarse)") ? "VRAI" : "faux");
+ligne("entree", "ontouchstart", ("ontouchstart" in window) ? "present" : "absent");
+
+/* ── Moteur JavaScript ──────────────────────────────────────────────── */
+function supporte(code){
+  try { new Function(code); return true; } catch (e) { return false; }
+}
+var tests = [
+  ["optional chaining  ?.",   "var o={};return o?.x",              "Safari 13.1"],
+  ["nullish  ??",             "return null ?? 1",                  "Safari 13.1"],
+  ["affectation  ??=",        "var a=null;a??=1;return a",         "Safari 14.0"],
+  ["lookbehind  (?<=)",       "return /(?<=a)b/.test('ab')",       "Safari 16.4"],
+  ["champs prives  #x",       "class C{#a=1;g(){return this.#a}}", "Safari 14.1"]
+];
+for (var i = 0; i < tests.length; i++){
+  var ok = supporte(tests[i][1]);
+  ligne("js", tests[i][0] + "  (" + tests[i][2] + ")",
+        ok ? "supporte" : "NON SUPPORTE", ok ? "ok" : "ko");
+}
+ligne("js", "crypto.randomUUID  (Safari 15.4)",
+      (window.crypto && typeof crypto.randomUUID === "function") ? "supporte" : "absent",
+      (window.crypto && typeof crypto.randomUUID === "function") ? "ok" : "warn");
+
+/* ── Test decisif ───────────────────────────────────────────────────── */
+var nSans = 0, nAvec = 0, dessous = "";
+
+function surClic(quel){
+  return function(ev){
+    if (quel === "sans"){ nSans++; document.getElementById("cSans").textContent = nSans; }
+    else { nAvec++; document.getElementById("cAvec").textContent = nAvec; }
+    /* Que touche-t-on reellement a cet endroit ? Revele un voile invisible. */
+    var x = (ev.clientX != null) ? ev.clientX : 0;
+    var y = (ev.clientY != null) ? ev.clientY : 0;
+    var el = document.elementFromPoint(x, y);
+    dessous = el ? (el.tagName + (el.id ? "#" + el.id : "") +
+                    (el.className ? "." + String(el.className).split(" ").join(".") : ""))
+                 : "rien";
+    rendreVerdict();
+  };
+}
+
+function rendreVerdict(){
+  var v = document.getElementById("verdict");
+  var t = "";
+  if (nSans === 0 && nAvec === 0){
+    t = "Touche chaque barre <b>une seule fois</b>.";
+  } else if (nSans === 0 && nAvec > 0){
+    t = "<b class='ko'>La cible SANS survol ne repond pas du tout.</b> " +
+        "Le survol n'est donc pas en cause : le probleme est ailleurs.";
+  } else if (nSans > 0 && nAvec === 0){
+    t = "<b class='ko'>Confirme : seule la cible AVEC survol est sourde.</b> " +
+        "C'est bien le premier toucher avale par l'etat de survol. Le correctif pose " +
+        "sur styles.css traite exactement ce cas.";
+  } else if (nSans === nAvec){
+    t = "<b class='ok'>Les deux repondent au premier toucher.</b> " +
+        "Ni le survol ni un voile ne bloquent : si l'application reste sourde, " +
+        "la cause est dans son propre code, pas dans le tactile.";
+  } else {
+    t = "<b class='warn'>Reponses inegales</b> — SANS : " + nSans +
+        ", AVEC : " + nAvec + ". Il faut plus de touchers sur l'une que sur l'autre.";
+  }
+  if (dessous) t += "<br><span class='k'>Element reellement sous le doigt : </span>" +
+                    "<b>" + dessous + "</b>";
+  v.innerHTML = t;
+}
+
+document.getElementById("sans").addEventListener("click", surClic("sans"), false);
+document.getElementById("avec").addEventListener("click", surClic("avec"), false);
+document.getElementById("raz").addEventListener("click", function(){
+  nSans = 0; nAvec = 0; dessous = "";
+  document.getElementById("cSans").textContent = "0";
+  document.getElementById("cAvec").textContent = "0";
+  rendreVerdict();
+}, false);
+</script>
+</body>
+</html>

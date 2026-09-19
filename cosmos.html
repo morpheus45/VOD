@@ -158,8 +158,9 @@ html,body{
   color:rgba(255,255,255,.68);cursor:pointer;font-size:18px;
 }
 .nav-icon.foc{background:rgba(79,142,247,.9);color:#fff}
-#nav-voice{color:var(--accent2)}
-#nav-voice.foc{background:rgba(79,142,247,.9);color:#fff}
+#nav-vpn{color:var(--accent2)}
+#nav-vpn.vpn-on{color:#6ef7b0}
+#nav-vpn.foc{background:rgba(79,142,247,.9);color:#fff}
 #nav-settings.foc{background:rgba(79,142,247,.9);color:#fff}
 
 /* ─── VIEWS ──────────────────────────────────────────────────────────── */
@@ -298,6 +299,10 @@ html,body{
 .card.poster{width:var(--pw)}
 .card.poster img{height:var(--ph);object-fit:cover}
 .card.live img{height:var(--ch);object-fit:contain;padding:14px;background:#111}
+/* Chaine placee dans une rangee d'affiches (Poursuivre, Ma liste) : elle garde
+   la BOITE portrait de ses voisines, mais son logo reste centre et non
+   deforme, comme dans les rangees TV. */
+.card.poster.live-img img{object-fit:contain;padding:14px;background:#111}
 /* Tuiles d'applications (etagere Google TV) */
 .app-card img{height:var(--ch);object-fit:cover;background:#1c1c1c}
 .app-card.app-icon img{object-fit:contain;padding:26px;background:radial-gradient(ellipse at center,#262630,#16161c)}
@@ -662,6 +667,14 @@ html,body{
 .seeall-card .card-iw{display:flex;align-items:center;justify-content:center;
   height:var(--ph);border-radius:var(--cr);
   background:#11182b;border:1px solid rgba(120,160,255,.25)}
+/* Rangees TV Direct : les cartes sont en paysage 268x151, pas en affiche
+   portrait. Sans cette regle la carte « Voir tout » gardait la hauteur --ph
+   (258px) et etirait TOUTE la rangee, qui paraissait alors plus grande que
+   les rangees sans « Voir tout » — d'ou l'ecart visible entre France et
+   Cinema. */
+.seeall-card.live .card-iw{height:var(--ch)}
+.seeall-card.live .seeall-pill{width:38px;height:38px;border-radius:12px;font-size:20px}
+.seeall-card.live .seeall-txt{margin-top:8px}
 .seeall-inner{text-align:center;padding:8px}
 .seeall-pill{width:46px;height:46px;margin:0 auto;border-radius:14px;
   background:linear-gradient(135deg,#7B5FE8,#38A8E8);display:flex;align-items:center;
@@ -751,7 +764,10 @@ html,body{
 
     <!-- Droite: icones simples (voix + params) -->
     <div id="nav-right">
-      <div id="nav-voice" class="nav-icon">🎙</div>
+      <!-- Emplacement 5 de la barre : le micro ne servait pas ici. Le bouton
+           micro de la telecommande ouvre toujours la recherche vocale, on ne
+           perd donc rien. On y met le VPN, avec son etat visible. -->
+      <div id="nav-vpn" class="nav-icon" title="VPN">🔓</div>
       <div class="nav-icon" id="nav-settings">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </div>
@@ -966,8 +982,13 @@ const ADULT_RE  = /adult|xxx|porn|x{2,}|hentai|erotic|eroti[kq]|\bsex\b|\bsexe\b
 const LATEST_RE = /latest|nouveau/i;
 const BLANK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='132' height='185'%3E%3Crect fill='%230e0e1a' width='132' height='185'/%3E%3Ctext x='66' y='93' fill='%23222' font-size='36' text-anchor='middle' dy='.35em'%3E%F0%9F%8E%AC%3C/text%3E%3C/svg%3E";
 const STORE = {prog:'pf_progress_v4',hist:'pf_history_v4',favs:'pf_favorites_v4'};
-// nav: gauche: 0=search | tabs: 1=home,2=movies,3=shows,4=live | droite: 5=voice,6=settings
-const NAV_SECS = ['search','home','movies','shows','live','voice','settings'];
+// nav: gauche: 0=search | tabs: 1=home,2=movies,3=shows,4=live | droite: 5=vpn,6=settings
+// L'emplacement 5 portait le micro. Il porte le VPN depuis la v70, mais ce
+// tableau disait encore 'voice' : le clic souris appelait bien ouvrirVpn, alors
+// que la telecommande — seul moyen d'agir sur un televiseur — passait par ici et
+// ouvrait la recherche vocale. Le micro de la telecommande reste inchange, et la
+// touche micro du clavier de recherche aussi (kbActivate).
+const NAV_SECS = ['search','home','movies','shows','live','vpn','settings'];
 
 // ══════ STATE ════════════════════════════════════════════════════════════
 const S = {
@@ -1406,6 +1427,14 @@ function getCached(){
     if(c&&c.ts&&(Date.now()-c.ts)<CACHE_TTL&&c.vod?.length>0)return c;
   }catch{}return null;
 }
+// Budget du cache. Le stockage local plafonne autour de 5 Mo par origine.
+// L'ancienne version serialisait le catalogue ENTIER : 29 588 fiches, 10 Mo de
+// chaine. L'ecriture echouait donc a tous les coups, et l'echec etait avale par
+// un catch vide. Resultat : a chaque lancement la TV fabriquait 10 Mo en
+// memoire pour rien, puis repartait sur le chemin reseau lent. Sur une box a
+// 1,8 Go dont 63 Mo libres, ce pic suffit a faire tuer l'application par le
+// gestionnaire de memoire.
+const CACHE_MAX_BYTES = 3 * 1024 * 1024;
 function saveCache(vod,series,live){
   try{
     // Ne stocker que les champs essentiels pour limiter la taille
@@ -1414,10 +1443,30 @@ function saveCache(vod,series,live){
       url:i.url,stream_id:i.stream_id,series_id:i.series_id,
       quality:i.quality,isLive:i.isLive,plot:(i.plot||'').slice(0,200)
     }));
-    localStorage.setItem(CACHE_KEY,JSON.stringify({
-      vod:trim(vod),series:trim(series),live:trim(live),ts:Date.now()
-    }));
-  }catch(e){} // ignore si localStorage plein
+    // On mesure le cout reel d'une fiche sur un echantillon, puis on calcule
+    // combien il en tient dans le budget. Une seule serialisation complete.
+    const ech=trim(vod.slice(0,40).concat(series.slice(0,40)));
+    const parFiche=ech.length ? JSON.stringify(ech).length/ech.length : 400;
+    let n=Math.max(150, Math.floor(CACHE_MAX_BYTES/Math.max(1,parFiche)/3));
+    for(let essai=0; essai<3; essai++){
+      const payload=JSON.stringify({
+        vod:trim(vod.slice(0,n)),series:trim(series.slice(0,n)),
+        live:trim(live.slice(0,n)),ts:Date.now(),partiel:true
+      });
+      if(payload.length<=CACHE_MAX_BYTES){
+        localStorage.setItem(CACHE_KEY,payload);
+        return;
+      }
+      n=Math.floor(n/2);
+      if(n<150) break;
+    }
+    // Rien ne tient : on efface plutot que de laisser une entree perimee.
+    try{ localStorage.removeItem(CACHE_KEY); }catch(e2){}
+  }catch(e){
+    // Quota depasse ou stockage indisponible : on nettoie et on continue. Le
+    // chemin reseau prend le relais, l affichage n est pas compromis.
+    try{ localStorage.removeItem(CACHE_KEY); }catch(e2){}
+  }
 }
 
 // ══════ CONTENT LOADING ══════════════════════════════════════════════════
@@ -1651,6 +1700,24 @@ function setHero(item){
 }
 
 // ══════ ROWS ════════════════════════════════════════════════════════════
+// Format d'une rangee. Les cartes d'une meme rangee DOIVENT avoir la meme
+// boite, sinon la plus haute etire toute la rangee et l'ecart saute aux yeux
+// (affiche portrait 172x258 contre paysage 268x151).
+// Les rangees mixtes existent vraiment : « Poursuivre », « Ma liste » et
+// « Continuer a regarder » melangent films, series ET chaines. Le format suit
+// donc la majorite, et les intrus gardent leur traitement d'image (logo
+// centre, sans deformation) tout en prenant la meme boite que leurs voisins.
+function rowFormat(row){
+  if(row.isApps) return 'app';
+  if(row.isLive) return 'live';
+  var live=0, tot=0;
+  for(var i=0;i<row.items.length;i++){
+    var it=row.items[i];
+    if(!it||it.seeAll||it.isApp) continue;
+    tot++; if(it.isLive) live++;
+  }
+  return (tot && live*2>tot) ? 'live' : 'poster';
+}
 function renderRows(rows){
   const c=$('content');c.innerHTML='';
   rows.forEach((row,ri)=>{
@@ -1659,7 +1726,8 @@ function renderRows(rows){
     rowEl.innerHTML=`<div class="row-title"><span class="row-title-accent"></span>${esc(row.title)}</div>`;
     const items=document.createElement('div');
     items.className='row-items';items.id='ri'+ri;
-    row.items.forEach((item,ci)=>items.appendChild(mkCard(item,ri,ci,row.isLive)));
+    const fmt=rowFormat(row);
+    row.items.forEach((item,ci)=>items.appendChild(mkCard(item,ri,ci,row.isLive,fmt)));
     rowEl.appendChild(items);c.appendChild(rowEl);
   });
 }
@@ -1687,10 +1755,11 @@ function lazyImg(img,src){
 }
 
 // ══════ CARD ════════════════════════════════════════════════════════════
-function mkCard(item,ri,ci,isLive){
+function mkCard(item,ri,ci,isLive,rowFmt){
   if(item.seeAll){
     const el=document.createElement('div');
-    el.className='card poster seeall-card';
+    // Format de la rangee : paysage pour le direct, affiche pour films/series.
+    el.className='card seeall-card '+((rowFmt==='live'||(!rowFmt&&isLive))?'live':'poster');
     el.dataset.ri=ri;el.dataset.ci=ci;
     const iw=document.createElement('div');iw.className='card-iw';
     const _n=item.count||0;
@@ -1720,11 +1789,15 @@ function mkCard(item,ri,ci,isLive){
   }
   const live=isLive||item.isLive||false;
   const el=document.createElement('div');
-  el.className='card'+(live?' live':'');
+  // La BOITE suit le format de la rangee, l'IMAGE suit la nature de l'item :
+  // une chaine glissee dans une rangee d'affiches garde son logo centre sans
+  // deformation, mais prend la meme taille que ses voisines.
+  const boite = rowFmt || (live ? 'live' : 'poster');
+  el.className='card'+(boite==='live'?' live':'')+((live&&boite!=='live')?' live-img':'');
   el.dataset.ri=ri;el.dataset.ci=ci;
   const iw=document.createElement('div');iw.className='card-iw';
   // Films + séries → tuile au format affiche portrait (épouse la jaquette)
-  if(!live)el.classList.add('poster');
+  if(boite!=='live')el.classList.add('poster');
   const img=document.createElement('img');
   img.loading='lazy';
   img.onload=()=>img.classList.add('loaded');
@@ -2363,6 +2436,7 @@ function playMovie(item){
 // ══════ SECTION NAV — Style Google TV : tabs changent les ROWS, pas la vue ══
 // Google TV n'a pas de grid-view — chaque tab = rows differentes dans HOME VIEW
 function gotoSection(s){
+  if(s==='vpn'){ouvrirVpn();return;}
   if(s==='voice'){openVoice();return;}
   if(s==='search'){showOnlyView('search-view');S.sec='search';buildKeyboard();S.searchQuery='';renderQuery();doSearch('');S.zone='search-kb';S.kbIdx=0;focus();return;}
   if(s==='settings'){showOnlyView('settings-view');S.sec='settings';renderSettings();S.zone='settings';S.setIdx=0;focus();return;}
@@ -2370,7 +2444,7 @@ function gotoSection(s){
   qAll('.ni').forEach(el=>el.classList.remove('active'));
   const target=document.querySelector(`.ni[data-s="${s}"]`);
   if(target)target.classList.add('active');
-  const idx=['search','home','movies','shows','live','voice','settings'].indexOf(s);
+  const idx=NAV_SECS.indexOf(s);
   if(idx>=0)S.navIdx=idx;
 
   // TOUJOURS utiliser home-view — changer son contenu selon le tab (style Google TV)
@@ -2695,7 +2769,8 @@ function renderMyList(){
     rowEl.innerHTML=`<div class="row-title"><span class="row-title-accent"></span>${esc(row.title)}</div>`;
     const items=document.createElement('div');
     items.className='row-items';items.id='ri'+ri;
-    row.items.forEach((item,ci)=>items.appendChild(mkCard(item,ri,ci,item.isLive)));
+    const fmt=rowFormat(row);
+    row.items.forEach((item,ci)=>items.appendChild(mkCard(item,ri,ci,item.isLive,fmt)));
     rowEl.appendChild(items);c.appendChild(rowEl);
   });
 }
@@ -2753,6 +2828,12 @@ function renderSettings(){
     {label:'👤 Compte & abonnement',desc:'Plan : '+planLabel+' — voir les détails',action:'account'},
     {label:'Interface : Cosmos TV',desc:'Basculer vers l\'interface PIPSILY Xstream',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
+    // PIPSILY se declare ecran d'accueil : sur un appareil ou elle est le
+    // lanceur (Freebox Player POP par exemple), il n'existe AUCUN autre moyen
+    // d'atteindre les reglages Android. On ne peut meme plus se connecter au
+    // Wi-Fi. Cette entree est la sortie de secours.
+    {label:'📶 Réseau Wi-Fi (réglages Android)',desc:'Sortir vers les réglages du système',action:'syswifi'},
+    {label:'⚙ Réglages Android',desc:'Ouvrir les paramètres complets de la TV',action:'sysset'},
     {label:'🔞 Contrôle parental',desc:pinOn?'Code PIN actif — modifier ou supprimer':'Aucun code — en créer un',action:'parental'},
     {label:'📱 Étagère d\'applications',desc:(function(){
       if(!storeGet('pf_show_apps',true))return 'Masquée — activer';
@@ -2794,6 +2875,16 @@ function renderSettings(){
 function activateSetting(idx){
   const items=qAll('.set-item');
   const action=items[idx]?.dataset.action;
+  if(action==='syswifi'||action==='sysset'){
+    try{ window.AndroidBridge.openAndroidSettings(action==='syswifi'?'wifi':''); }
+    catch(e){ cosToast('Réglages indisponibles','Mettez a jour votre application'); }
+    return;
+  }
+  if(action==='vpn'){
+    try{ window.AndroidBridge.openVpn(); }
+    catch(e){ cosToast('VPN indisponible','Mettez a jour votre application'); }
+    return;
+  }
   if(action==='iface'){try{localStorage.setItem('pf_theme','xstream');}catch(e){} location.replace('./index.html');return;}
   else if(action==='reload'){
     // Bug : reloadApp() n'existe pas dans le bridge → le bouton ne faisait RIEN,
@@ -2998,7 +3089,7 @@ function managePreview(){
 function focus(){
   // Clear all focus
   qAll('.ni,.nav-icon,.fpill,.card,.btn-hero,.panel-act-btn,.panel-tab,.pep,.resume-btn,.set-item,.kbk').forEach(el=>el.classList.remove('foc'));
-  ['nav-voice','nav-settings','nav-search-outer'].forEach(id=>{const el=$(id);if(el)el.classList.remove('foc');});
+  ['nav-vpn','nav-settings','nav-search-outer'].forEach(id=>{const el=$(id);if(el)el.classList.remove('foc');});
 
   const z=S.zone;
   // Persister la position (onglet + carte) pour la restaurer si le WebView est
@@ -3009,13 +3100,13 @@ function focus(){
     })); }catch(e){}
   }
   if(z==='nav'){
-    // navIdx: 0=search(gauche), 1-4=tabs, 5=voice(droite), 6=settings(droite)
+    // navIdx: 0=search(gauche), 1-4=tabs, 5=vpn(droite), 6=settings(droite)
     if(S.navIdx===0)$('nav-search-outer').classList.add('foc');
     else{
       const navMain=qAll('#nav-pill .ni');
       const tabIdx=S.navIdx-1; // tabs 1-4 → indices 0-3
       if(tabIdx>=0&&tabIdx<=3&&navMain[tabIdx])navMain[tabIdx].classList.add('foc');
-      else if(S.navIdx===5)$('nav-voice').classList.add('foc');
+      else if(S.navIdx===5)$('nav-vpn').classList.add('foc');
       else if(S.navIdx===6)$('nav-settings').classList.add('foc');
     }
   }
@@ -3210,7 +3301,7 @@ function onKey(type){
     else if(type==='R'){S.navIdx=Math.min(6,S.navIdx+1);focus();}
     else if(type==='D'||type==='E'){
       const s=NAV_SECS[S.navIdx];
-      if(s==='voice'){openVoice();return;}
+      if(s==='vpn'){ouvrirVpn();return;}
       if(s==='search'){gotoSection('search');return;}
       if(s==='settings'){gotoSection('settings');return;}
       if(s==='home'){
@@ -3455,7 +3546,28 @@ document.addEventListener('keydown',e=>{
 document.querySelectorAll('#nav-items .ni').forEach((el,i)=>{
   el.addEventListener('click',()=>{gotoSection(el.dataset.s);});
 });
-$('nav-voice').addEventListener('click',openVoice);
+// Bouton VPN de la barre : ouvre l'ecran natif (choix du serveur, activation,
+// et regeneration du tunnel quand il se fait brider).
+function ouvrirVpn(){
+  try{ window.AndroidBridge.openVpn(); }
+  catch(e){ cosToast('VPN indisponible','Mettez a jour votre application'); }
+}
+// Etat du tunnel lisible d'un coup d'oeil : cadenas ferme et vert = actif.
+function rafraichirIconeVpn(){
+  const el=$('nav-vpn'); if(!el) return;
+  var actif=false;
+  try{
+    var st=window.AndroidBridge&&window.AndroidBridge.getVpnState
+      ? String(window.AndroidBridge.getVpnState()) : '';
+    actif=(st.split('|')[0]==='CONNECTED');
+  }catch(e){}
+  el.textContent=actif?'🔒':'🔓';
+  el.classList.toggle('vpn-on',actif);
+  el.title=actif?'VPN actif':'VPN inactif';
+}
+$('nav-vpn').addEventListener('click',ouvrirVpn);
+rafraichirIconeVpn();
+setInterval(rafraichirIconeVpn,10000);
 $('nav-search-outer').addEventListener('click',()=>gotoSection('search'));
 $('nav-settings').addEventListener('click',()=>gotoSection('settings'));
 $('nav-logo').addEventListener('click',()=>gotoSection('home'));
@@ -3576,6 +3688,10 @@ setTimeout(()=>{$('loading').hidden=true;},25000);
   if(window.PIPSILY_AUTH&&window.PIPSILY_AUTH.authGate){
     try{ const a=await window.PIPSILY_AUTH.authGate(); if(!a) return; window._cosUser=a; }
     catch(e){ console.error('[PIPSILY] authGate:', e && e.message); location.replace('./login.html'); return; }
+    // Session etablie : le tunnel peut monter. Pas avant — un tunnel bride
+    // faisait pendre l'appel d'authentification pour toujours, et le bouton qui
+    // le regenere est derriere cet ecran. Sans effet hors APK.
+    try{ if(window.AndroidBridge&&window.AndroidBridge.connectVpnNow) AndroidBridge.connectVpnNow(); }catch(e){}
   }else{
     // auth.js absent ou non exécuté : ne JAMAIS démarrer Cosmos sans écran de connexion.
     console.error('[PIPSILY] auth.js indisponible — redirection vers login.html');

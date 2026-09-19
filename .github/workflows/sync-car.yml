@@ -1,0 +1,187 @@
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║  Synchronisation de l'autoradio — main ──▶ car                    ║
+# ╚══════════════════════════════════════════════════════════════════╝
+#
+# Pourquoi ce workflow existe.
+#
+# PIPSILY CAR vit sur sa propre branche. Trois fois en septembre 2026, un
+# correctif écrit sur `main` n'a jamais atteint l'autoradio : le cycle de vie
+# du VPN, la purge des gros caches, puis le ménage des résidus de mise à jour.
+# Au 19/09 la branche accusait 19 commits de retard, dont le bouton « Régénérer
+# le tunnel » — c'est-à-dire la seule réparation possible quand le tunnel WARP
+# se fait brider.
+#
+# Désormais, tout commit de `main` touchant le code Android est reporté
+# automatiquement sur `car`, ce qui déclenche sa propre build. Les deux APK
+# avancent donc ensemble, à chaque commit.
+#
+# ── Ce qui reste PROPRE à l'autoradio ───────────────────────────────────────
+#
+# La fusion n'est pas aveugle. Les fichiers d'identité ci-dessous ne viennent
+# JAMAIS de main, même quand main les modifie :
+#
+#   • build.gradle          → applicationId com.pipsiflix.car, armeabi-v7a seul
+#   • AndroidManifest.xml   → pas de category.HOME (sinon le poste propose un
+#                             sélecteur de launcher au démarrage, voire remplace
+#                             la façade radio), pas de BootReceiver (relançait
+#                             l'appli à chaque mise du contact), pas de lanceur
+#                             Leanback, lecteur figé en `landscape`
+#   • strings.xml           → « PIPSILY CAR »
+#   • mipmap-*              → ses propres icônes
+#
+# Tout le reste — le code Java, les ressources, les workflows — est repris de
+# main. Les classes non déclarées au manifeste (TvActivity, BootReceiver) sont
+# simplement compilées sans être lançables : du code mort inoffensif, et c'est
+# le prix à payer pour que la fusion n'ait jamais à trancher.
+#
+# ── Numérotation ────────────────────────────────────────────────────────────
+#
+# Le canal CAR est à 1000+, au-dessus du canal TV/téléphone, pour que le site
+# ne propose jamais PIPSILY.apk par-dessus PIPSILY CAR. Android refusant tout
+# numéro inférieur au numéro installé, on ne peut pas aligner les deux sur la
+# même valeur : la voiture reçoit donc `1000 + numéro de main`. Un commit qui
+# produit la v73 produit la v1073 — même base, canaux distincts.
+#
+# La version n'est plus incrémentée à la main : elle est dérivée ici.
+
+name: 🔄 Synchroniser l'autoradio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/sync-car.yml'
+  workflow_dispatch:
+
+# Une seule synchronisation à la fois : deux fusions concurrentes sur la même
+# branche se marcheraient dessus.
+concurrency:
+  group: sync-car
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Reporter main sur car
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: 🔀 Fusionner main dans car, en préservant l'identité autoradio
+        id: fusion
+        run: |
+          set -e
+          git config user.name  "PIPSILY Bot"
+          git config user.email "bot@pipsily.local"
+          git fetch origin main car
+
+          # Fichiers qui restent ceux de l'autoradio, conflit ou pas.
+          IDENTITE="android-app/app/build.gradle
+          android-app/app/src/main/AndroidManifest.xml
+          android-app/app/src/main/res/values/strings.xml"
+
+          git checkout -B car origin/car
+
+          echo "::group::Fusion"
+          git merge --no-commit --no-ff origin/main || true
+
+          # 1. L'identité de l'autoradio est restaurée depuis car (HEAD pointe
+          #    encore sur le commit d'avant-fusion pendant un merge en cours).
+          for f in $IDENTITE; do
+            if git cat-file -e "HEAD:$f" 2>/dev/null; then
+              git checkout HEAD -- "$f"
+              git add -- "$f"
+              echo "identité conservée : $f"
+            fi
+          done
+          # Les icônes aussi, dossier par dossier.
+          for d in hdpi xhdpi xxhdpi xxxhdpi mdpi; do
+            rep="android-app/app/src/main/res/mipmap-$d"
+            if [ -d "$rep" ]; then
+              git checkout HEAD -- "$rep" 2>/dev/null || true
+              git add -- "$rep" 2>/dev/null || true
+            fi
+          done
+
+          # 2. Tout conflit restant est tranché en faveur de main. C'est
+          #    délibéré : hors identité, l'autoradio n'a pas de code qui lui
+          #    soit propre, et une divergence silencieuse est précisément ce
+          #    qu'on cherche à supprimer.
+          CONFLITS=$(git diff --name-only --diff-filter=U || true)
+          for f in $CONFLITS; do
+            if git cat-file -e "MERGE_HEAD:$f" 2>/dev/null; then
+              git checkout --theirs -- "$f" 2>/dev/null || git checkout MERGE_HEAD -- "$f"
+              git add -- "$f"
+              echo "repris de main : $f"
+            else
+              git rm -f -- "$f" >/dev/null 2>&1 || true
+              echo "supprimé (absent de main) : $f"
+            fi
+          done
+          echo "::endgroup::"
+
+          # 3. Numéro de version dérivé de main.
+          BASE=$(git show origin/main:android-app/app/build.gradle \
+                 | grep -oE 'versionCode[[:space:]]+[0-9]+' | grep -oE '[0-9]+')
+          if [ -z "$BASE" ]; then
+            echo "::error::versionCode introuvable dans le build.gradle de main"
+            exit 1
+          fi
+          CAR=$((1000 + BASE))
+          sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode $CAR/" \
+                 android-app/app/build.gradle
+          sed -i -E "s/versionName[[:space:]]+\"[^\"]*\"/versionName \"$BASE.0-car\"/" \
+                 android-app/app/build.gradle
+          git add android-app/app/build.gradle
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "car=$CAR"   >> "$GITHUB_OUTPUT"
+          echo "➜ autoradio aligné sur la base $BASE → versionCode $CAR"
+
+          # 4. Contrôle : l'identité a-t-elle survécu ?
+          if ! grep -q 'applicationId "com.pipsiflix.car"' android-app/app/build.gradle; then
+            echo "::error::applicationId perdu — la fusion a écrasé l'identité autoradio"
+            exit 1
+          fi
+          # Le manifeste autoradio DOCUMENTE en commentaire pourquoi
+          # category.HOME en est absent : un grep naïf tombe sur ce commentaire
+          # et croit à une régression. On retire donc les commentaires XML avant
+          # de chercher la vraie déclaration. (build-apk-car.yml fait déjà ça
+          # pour ses propres contrôles.)
+          if python3 -c "import re, io, sys; s = io.open('android-app/app/src/main/AndroidManifest.xml', encoding='utf-8').read(); sys.exit(0 if 'android.intent.category.HOME' in re.sub(r'<!--.*?-->', '', s, flags=re.S) else 1)"; then
+            echo "::error::category.HOME réapparu dans le manifeste autoradio"
+            exit 1
+          fi
+
+          if git diff --staged --quiet; then
+            echo "L'autoradio est déjà à jour — rien à reporter."
+            echo "pousse=non" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "sync: l'autoradio reprend main (base v$BASE → car v$CAR)"
+            echo "pousse=oui" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 📤 Pousser la branche car
+        if: steps.fusion.outputs.pousse == 'oui'
+        run: |
+          set -e
+          # Même précaution que sur main : une poussée concurrente ne doit pas
+          # faire échouer la synchronisation en silence.
+          for essai in 1 2 3; do
+            if git push origin car; then
+              echo "✅ autoradio synchronisé — la build CAR va démarrer"
+              exit 0
+            fi
+            echo "⚠️ poussée refusée (essai $essai) — nouvelle tentative"
+            git fetch origin car
+            git rebase origin/car || { echo "::error::rebase impossible"; exit 1; }
+            sleep 5
+          done
+          echo "::error::impossible de pousser la branche car après 3 essais"
+          exit 1
