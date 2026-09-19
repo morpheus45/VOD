@@ -110,6 +110,12 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Ménage AVANT setContentView : la WebView est inflatée par le layout et
+        // verrouille ses fichiers dès sa création. Cette purge n'existait que dans
+        // MainActivity, et y était privée — le téléviseur ne l'a jamais eue.
+        Menage.purgerCachesVolumineux(this);
+        Menage.nettoyerResidusMaj(this);
+
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
@@ -355,6 +361,10 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
 
                 final DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
                 apkDownloadId = dm.enqueue(req);
+                // Range l'identifiant : il servira a retirer l'entree du
+                // gestionnaire de telechargements au prochain lancement, la mise a
+                // jour redemarrant forcement l'application.
+                Menage.memoriserTelechargement(this, apkDownloadId);
 
                 Toast.makeText(TvActivity.this, "📥 Téléchargement en cours…", Toast.LENGTH_SHORT).show();
                 jsApkProgress(0);

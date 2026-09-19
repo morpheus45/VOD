@@ -1,7 +1,7 @@
 {
   "apk_version": 71,
   "apk_url": "https://github.com/morpheus45/VOD/releases/download/v71/PIPSILY.apk",
-  "changes": "Le VPN ne demarre plus qu'une fois la connexion faite. Quand le tunnel se faisait brider, la demande d'authentification restait sans reponse et l'ecran se figeait sur « Connexion... » sans le moindre message — et le bouton qui repare le tunnel se trouve justement derriere cet ecran : on ne pouvait plus entrer. L'authentification passe desormais en direct, le tunnel monte juste apres, avant le moindre flux. Elle abandonne aussi au bout de 25 secondes en disant pourquoi, et les messages d'erreur remontent au-dessus du bouton pour ne plus disparaitre sous le clavier du televiseur. Le bouton VPN de la barre ouvre enfin le VPN au lieu de la recherche vocale.",
+  "changes": "Menage des residus laisses par les mises a jour. L'APK telechargee — pres de 16 Mo — restait sur l'appareil indefiniment : elle n'etait effacee qu'avant le telechargement suivant, jamais apres l'installation. Elle est desormais supprimee au demarrage suivant, avec un delai de garde pour ne jamais couper une installation en cours. L'entree laissee dans le gestionnaire de telechargements Android est retiree elle aussi : son identifiant etait perdu au redemarrage, et une mise a jour redemarre forcement l'application, donc une ligne s'ajoutait a chaque version. Enfin, la purge des gros caches n'existait que sur le chemin telephone : le televiseur ne l'a jamais eue et n'avait aucun moyen de recuperer son espace. Les deux partagent maintenant le meme code.",
   "vpn_enabled": true,
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
