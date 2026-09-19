@@ -173,6 +173,20 @@ async function forgotPw(e){
 // le bouton n'etait donc jamais atteint, l'ecran restait sur « Connexion... »
 // indefiniment, et aucun message n'apparaissait. On borne l'attente pour que la
 // panne devienne visible et nommable.
+// Tant que cet ecran est affiche, on demande au conteneur Android de NE PAS
+// monter le tunnel. Sans ca, son filet de securite se declenchait au bout de
+// trois minutes — pile le temps de taper une adresse et un mot de passe a la
+// telecommande — et l'authentification repartait dans un tunnel peut-etre
+// bride. L'intervalle meurt avec la page, donc des qu'on entre dans
+// l'application le filet reprend son cours normal.
+(function(){
+  function differer(){
+    try{ if(window.AndroidBridge && window.AndroidBridge.differerVpn) AndroidBridge.differerVpn(); }catch(e){}
+  }
+  differer();
+  setInterval(differer, 60000);
+})();
+
 var DELAI_AUTH_MS = 25000;
 function avecDelai(promesse, secondes){
   // On lit bien DELAI_AUTH_MS : il etait declare et jamais utilise, donc le

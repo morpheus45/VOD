@@ -575,6 +575,13 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         super.onDestroy();
         unregisterApkReceiver();
         vpnHealth.removeCallbacks(vpnHealthTick);
+        // Le filet de securite n'etait PAS retire : apres un recreate() sur
+        // renderer mort — frequent sur les box a 2 Go — l'ancien minuteur tirait
+        // quand meme trois minutes plus tard et appelait demarrerVpn() sur une
+        // activite detruite. Le Handler etant un champ d'instance, le
+        // removeCallbacks de la nouvelle instance ne pouvait pas l'atteindre.
+        vpnHealth.removeCallbacks(vpnSecours);
+        stopApkProgressPoll();
         sInstance = null;
         if (previewPlayer != null) { previewPlayer.release(); previewPlayer = null; }
         if (previewSurface != null) { previewSurface.release(); previewSurface = null; }
@@ -710,6 +717,20 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         if (previewTexture != null) {
             previewTexture.setAlpha(0f);
             previewTexture.setVisibility(View.GONE);
+        }
+        // Le fournisseur IPTV n'autorise qu'UNE connexion simultanee. Sans
+        // eviction, OkHttp gardait les sockets de l'apercu actives jusqu'a cinq
+        // minutes : parcourir dix tuiles de la grille laissait dix connexions
+        // vivantes, puis PlayerActivity en ouvrait une onzieme et le fournisseur
+        // renvoyait 403. PlayerActivity.onDestroy fait deja exactement ca, et
+        // son commentaire decrit le meme symptome — l'apercu avait ete oublie.
+        // Sur un thread de fond : evictAll() peut fermer des sockets.
+        if (previewOkClient != null) {
+            final OkHttpClient c = previewOkClient;
+            new Thread(() -> {
+                try { c.dispatcher().cancelAll(); } catch (Throwable ignored) {}
+                try { c.connectionPool().evictAll(); } catch (Throwable ignored) {}
+            }).start();
         }
     }
 
@@ -1051,6 +1072,15 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
             runOnUiThread(TvActivity.this::demarrerVpn);
         }
 
+        /**
+         * « Je suis encore sur l'écran de connexion, ne monte pas le tunnel. »
+         * Appelé périodiquement par login.html. Voir repousserSecoursVpn().
+         */
+        @JavascriptInterface
+        public void differerVpn() {
+            runOnUiThread(TvActivity.this::repousserSecoursVpn);
+        }
+
         @JavascriptInterface
         public String getDeviceType() { return "android_tv"; }
 
@@ -1269,6 +1299,25 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         } catch (Throwable t) {
             return false;
         }
+    }
+
+    /**
+     * Repousse le filet de sécurité. L'écran de connexion l'appelle tant qu'il
+     * est affiché.
+     *
+     * Sans ça, le filet se déclenchait PENDANT la saisie : taper une adresse et
+     * un mot de passe à la télécommande prend facilement plus de trois minutes,
+     * et le tunnel montait alors sous l'utilisateur. Si l'enregistrement WARP
+     * est bridé, l'authentification repartait dans un tunnel mort — le piège
+     * même que la v71 devait supprimer. Allonger le délai n'aurait fait que le
+     * déplacer : il faut que la page repousse activement l'échéance.
+     *
+     * Sans effet une fois le tunnel demandé : on ne redescend jamais.
+     */
+    private void repousserSecoursVpn() {
+        if (vpnDemarre) return;
+        vpnHealth.removeCallbacks(vpnSecours);
+        vpnHealth.postDelayed(vpnSecours, VPN_SECOURS_MS);
     }
 
     /**
