@@ -66,6 +66,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      pousse: ${{ steps.fusion.outputs.pousse }}
+      car:    ${{ steps.fusion.outputs.car }}
 
     steps:
       - name: 📥 Checkout
@@ -184,4 +187,183 @@ jobs:
             sleep 5
           done
           echo "::error::impossible de pousser la branche car après 3 essais"
+          exit 1
+
+  # ── Build de l'autoradio, dans le MEME workflow ───────────────────────────
+  # Elle ne peut pas etre declenchee par la poussee precedente : GitHub refuse
+  # qu'un workflow en declenche un autre via le jeton par defaut, pour eviter
+  # les boucles. La synchronisation poussait donc la branche sans que rien ne
+  # se construise. On enchaine ici, ce qui supprime la dependance au
+  # declenchement. build-apk-car.yml reste en place sur la branche `car` pour
+  # les poussees humaines et le declenchement manuel.
+  build-car:
+    name: Compiler et publier PIPSILY-CAR.apk
+    needs: sync
+    if: needs.sync.outputs.pousse == 'oui'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          # La branche que le travail precedent vient de pousser.
+          ref: car
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: ☕ Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: 🔧 Chmod gradlew
+        run: chmod +x android-app/gradlew
+
+      # Garde-fou : si la branche `car` est un jour rebasée sur main sans les
+      # patchs, échouer ici plutôt que publier une version TV sous le nom CAR
+      # (HOME + démarrage auto seraient réintroduits sur l'autoradio).
+      #
+      # Le manifeste est analysé COMMENTAIRES RETIRÉS : ses commentaires citent
+      # justement les constructions interdites, pour expliquer leur absence.
+      - name: Verifier la variante CAR
+        run: |
+          set -e
+          G=android-app/app/build.gradle
+          grep -q 'applicationId "com.pipsiflix.car"' "$G"             || { echo "::error::applicationId n est pas com.pipsiflix.car"; exit 1; }
+          grep -q "abiFilters 'armeabi-v7a'" "$G"             || { echo "::error::abiFilters ARMv7 absent"; exit 1; }
+          python3 - <<'PY'
+          import re, sys
+          xml = open("android-app/app/src/main/AndroidManifest.xml", encoding="utf-8").read()
+          code = re.sub(r"<!--.*?-->", "", xml, flags=re.S)
+          interdits = {
+              "category.HOME":     "l appli se declarerait ecran d accueil du poste",
+              "LEANBACK_LAUNCHER": "icone Leanback inutile sur un autoradio",
+              "BootReceiver":      "demarrage automatique a chaque mise du contact",
+          }
+          mauvais = [(t, r) for t, r in interdits.items() if t in code]
+          for t, r in mauvais:
+              print("::error::%s present dans le manifeste : %s" % (t, r))
+          sys.exit(1 if mauvais else 0)
+          PY
+          echo "Variante CAR conforme"
+
+      - name: 📖 Lire versionCode depuis build.gradle
+        id: ver
+        run: |
+          CODE=$(grep 'versionCode' android-app/app/build.gradle | grep -oP '\d+')
+          NAME=$(grep 'versionName' android-app/app/build.gradle | grep -oP '"[^"]+"' | tr -d '"')
+          echo "code=$CODE" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "➜ versionCode=$CODE  versionName=$NAME"
+
+      # Même keystore que PIPSILY : le paquet différant, aucun conflit de signature.
+      - name: 🔑 Décoder le keystore
+        id: ks
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/release.jks
+            echo "ks_path=/tmp/release.jks" >> $GITHUB_OUTPUT
+            echo "✅ Keystore release → APK signé"
+          else
+            echo "::error::KEYSTORE_BASE64 absent — un APK debug n est pas installable par-dessus un release"
+            exit 1
+          fi
+
+      - name: 🔨 Build APK
+        working-directory: android-app
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="${{ steps.ks.outputs.ks_path }}" \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+          cp app/build/outputs/apk/release/app-release.apk PIPSILY-CAR.apk
+          ls -lh PIPSILY-CAR.apk
+
+      - name: 🏷️ Tagger le commit
+        run: |
+          TAG="car-v${{ steps.ver.outputs.code }}"
+          git tag -f $TAG
+          git push origin $TAG --force
+        continue-on-error: true
+
+      - name: 🚀 Publier la Release GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: car-v${{ steps.ver.outputs.code }}
+          name: "PIPSILY CAR v${{ steps.ver.outputs.name }}"
+          draft: false
+          prerelease: false
+          make_latest: false
+          body: |
+            ## PIPSILY CAR v${{ steps.ver.outputs.name }}
+
+            Variante autoradio — Android 12 ARMv7, écran tactile.
+            Application **séparée** de PIPSILY (paquet `com.pipsiflix.car`) :
+            les deux peuvent cohabiter sur un même appareil.
+
+            Pas de déclaration d'écran d'accueil, pas de démarrage automatique
+            au contact, pas d'icône Leanback, APK ARMv7 uniquement.
+
+            > Build ${{ github.sha }} · ${{ github.event_name }}
+          files: android-app/PIPSILY-CAR.apk
+          overwrite_files: true
+
+      # ─── Canal de MAJ : publier car_version / car_url dans version.json ──
+      # version.json vit sur main (c est lui que sert GitHub Pages). On le met
+      # à jour depuis ici, sans toucher apk_version/apk_url du canal TV.
+      - name: 📝 Publier le canal CAR dans version.json (main)
+        run: |
+          set -e
+          git config user.name  "PIPSILY Bot"
+          git config user.email "bot@pipsily.local"
+          git fetch origin main
+          git checkout -B _main_car origin/main
+          VER="${{ steps.ver.outputs.code }}" python3 - <<'PYEOF'
+          import json, os
+          ver = int(os.environ['VER'])
+          with open('version.json', encoding='utf-8') as f:
+              d = json.load(f)
+          d['car_version'] = ver
+          d['car_url'] = f'https://github.com/morpheus45/VOD/releases/download/car-v{ver}/PIPSILY-CAR.apk'
+          # car_changes n'etait JAMAIS reecrit : le conducteur lisait le
+          # changelog de la version precedente. L'autoradio suivant desormais
+          # le code de main (voir sync-car.yml), c'est le meme texte qui vaut.
+          if d.get('changes'):
+              d['car_changes'] = d['changes']
+          with open('version.json', 'w', encoding='utf-8') as f:
+              json.dump(d, f, indent=2, ensure_ascii=False)
+              f.write('\n')
+          print(f"version.json → car_version={ver}")
+          PYEOF
+          git add version.json
+          if git diff --staged --quiet; then
+            echo "Canal CAR déjà à jour — rien à commiter"
+            exit 0
+          fi
+          git commit -m "chore: PIPSILY CAR v${{ steps.ver.outputs.code }} publié [skip ci]"
+          # Course entre workflows : build-apk, build-legacy et sync-car poussent
+          # aussi sur main. Le 19/09 une poussée concurrente a fait échouer celle
+          # de build-apk : l'APK était publiée mais version.json restait en
+          # arrière, donc aucun appareil ne voyait la mise à jour. On réessaie en
+          # se rebasant, et on échoue bruyamment plutôt qu'en silence.
+          for essai in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "✅ car_version publié sur main (essai $essai)"
+              exit 0
+            fi
+            echo "⚠️ poussée refusée (essai $essai) — rebase et nouvelle tentative"
+            git fetch origin main
+            git rebase origin/main || {
+              git rebase --abort 2>/dev/null || true
+              echo "::error::rebase impossible sur version.json"
+              exit 1
+            }
+            sleep 5
+          done
+          echo "::error::car_version n'a pas pu être poussé après 3 essais"
           exit 1
