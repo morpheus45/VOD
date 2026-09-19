@@ -982,8 +982,13 @@ const ADULT_RE  = /adult|xxx|porn|x{2,}|hentai|erotic|eroti[kq]|\bsex\b|\bsexe\b
 const LATEST_RE = /latest|nouveau/i;
 const BLANK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='132' height='185'%3E%3Crect fill='%230e0e1a' width='132' height='185'/%3E%3Ctext x='66' y='93' fill='%23222' font-size='36' text-anchor='middle' dy='.35em'%3E%F0%9F%8E%AC%3C/text%3E%3C/svg%3E";
 const STORE = {prog:'pf_progress_v4',hist:'pf_history_v4',favs:'pf_favorites_v4'};
-// nav: gauche: 0=search | tabs: 1=home,2=movies,3=shows,4=live | droite: 5=voice,6=settings
-const NAV_SECS = ['search','home','movies','shows','live','voice','settings'];
+// nav: gauche: 0=search | tabs: 1=home,2=movies,3=shows,4=live | droite: 5=vpn,6=settings
+// L'emplacement 5 portait le micro. Il porte le VPN depuis la v70, mais ce
+// tableau disait encore 'voice' : le clic souris appelait bien ouvrirVpn, alors
+// que la telecommande — seul moyen d'agir sur un televiseur — passait par ici et
+// ouvrait la recherche vocale. Le micro de la telecommande reste inchange, et la
+// touche micro du clavier de recherche aussi (kbActivate).
+const NAV_SECS = ['search','home','movies','shows','live','vpn','settings'];
 
 // ══════ STATE ════════════════════════════════════════════════════════════
 const S = {
@@ -2431,6 +2436,7 @@ function playMovie(item){
 // ══════ SECTION NAV — Style Google TV : tabs changent les ROWS, pas la vue ══
 // Google TV n'a pas de grid-view — chaque tab = rows differentes dans HOME VIEW
 function gotoSection(s){
+  if(s==='vpn'){ouvrirVpn();return;}
   if(s==='voice'){openVoice();return;}
   if(s==='search'){showOnlyView('search-view');S.sec='search';buildKeyboard();S.searchQuery='';renderQuery();doSearch('');S.zone='search-kb';S.kbIdx=0;focus();return;}
   if(s==='settings'){showOnlyView('settings-view');S.sec='settings';renderSettings();S.zone='settings';S.setIdx=0;focus();return;}
@@ -2438,7 +2444,7 @@ function gotoSection(s){
   qAll('.ni').forEach(el=>el.classList.remove('active'));
   const target=document.querySelector(`.ni[data-s="${s}"]`);
   if(target)target.classList.add('active');
-  const idx=['search','home','movies','shows','live','voice','settings'].indexOf(s);
+  const idx=NAV_SECS.indexOf(s);
   if(idx>=0)S.navIdx=idx;
 
   // TOUJOURS utiliser home-view — changer son contenu selon le tab (style Google TV)
@@ -3295,7 +3301,7 @@ function onKey(type){
     else if(type==='R'){S.navIdx=Math.min(6,S.navIdx+1);focus();}
     else if(type==='D'||type==='E'){
       const s=NAV_SECS[S.navIdx];
-      if(s==='voice'){openVoice();return;}
+      if(s==='vpn'){ouvrirVpn();return;}
       if(s==='search'){gotoSection('search');return;}
       if(s==='settings'){gotoSection('settings');return;}
       if(s==='home'){
