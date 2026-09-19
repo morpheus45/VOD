@@ -34,7 +34,10 @@
       color:#7a9cc0; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none;
       transition:all .15s;
     }
-    .back-btn:hover{ background:rgba(255,255,255,.1); color:#eef4ff }
+        /* Survol sous garde : sur iOS, un premier toucher sur un element
+       porteur de :hover declenche le survol AU LIEU du clic. La passe de
+       correction de styles.css avait oublie les feuilles en ligne. */
+    @media (hover: hover){ .back-btn:hover{ background:rgba(255,255,255,.1); color:#eef4ff } }
     .page{ max-width:600px; margin:0 auto; padding:24px 16px 80px }
     .page-title{ font-size:22px; font-weight:800; margin-bottom:6px }
     .page-sub{ font-size:13px; color:#7a9cc0; margin-bottom:24px }
@@ -110,7 +113,8 @@
       border-bottom:1px solid rgba(255,255,255,.05); display:block;
     }
     .rgn-item:last-child{ border-bottom:none }
-    .rgn-item:hover,.rgn-item:focus{ background:rgba(123,95,232,.18); outline:none }
+    .rgn-item:focus{ background:rgba(123,95,232,.18); outline:none }
+    @media (hover: hover){ .rgn-item:hover{ background:rgba(123,95,232,.18); outline:none } }
     .rgn-item.active{ color:#7B5FE8; font-weight:700 }
     .rgn-item.active::after{ content:" ✓"; opacity:.7 }
     input[type=password], input[type=text]{
@@ -125,7 +129,7 @@
     .btn-primary{ background:linear-gradient(135deg,#7B5FE8,#38A8E8); color:#fff; box-shadow:0 4px 16px rgba(123,95,232,.25) }
     .btn-secondary{ background:rgba(255,255,255,.08); color:#eef4ff; border:1px solid rgba(255,255,255,.12) }
     .btn-danger{ background:rgba(123,95,232,.15); color:#ff8899; border:1px solid rgba(123,95,232,.3) }
-    .btn:hover{ opacity:.85 }
+    @media (hover: hover){ .btn:hover{ opacity:.85 } }
     .btn:active{ transform:scale(.97) }
     .btn:disabled{ opacity:.5; cursor:default; transform:none }
     .pin-row{ display:flex; gap:10px; align-items:flex-end }
@@ -138,7 +142,7 @@
     .btn-logout{ background:transparent; border:1px solid rgba(255,255,255,.12);
       color:#7a9cc0; padding:12px 32px; border-radius:12px; cursor:pointer;
       font-size:14px; font-weight:600 }
-    .btn-logout:hover{ color:#eef4ff; border-color:rgba(255,255,255,.25) }
+    @media (hover: hover){ .btn-logout:hover{ color:#eef4ff; border-color:rgba(255,255,255,.25) } }
     .loading{ text-align:center; padding:40px; color:#7a9cc0; font-size:14px }
   </style>
 </head>
@@ -336,7 +340,15 @@
       // Interface : carte visible sur TOUS les appareils (le choix s'applique partout)
       try{
         const card = document.getElementById("ifaceCard");
-        if(card){
+        // Un moteur qui ne parse pas l'optional chaining ne peut pas afficher
+        // Cosmos : son script est d'un seul tenant et rend une page vide. On
+        // n'offre donc pas le choix — c'était le piège le plus grave de
+        // l'autoradio : cette carte apparaissait EN PREMIER dans les réglages,
+        // et la choisir rendait l'application inutilisable pour de bon.
+        let _moderneIface = false;
+        try { new Function("var o = {}; return o?.x;"); _moderneIface = true; } catch(e) {}
+        if(card && !_moderneIface){ card.style.display = "none"; }
+        else if(card){
           card.style.display = "";
           card.parentNode.prepend(card);   // l'afficher EN PREMIER dans les réglages
           const sel = document.getElementById("ifaceSelect");

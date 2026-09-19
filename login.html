@@ -2,9 +2,25 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>PIPSILY - Connexion</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900" />
+  <!-- Cette page n'avait NI manifeste NI icone. Or index.html y renvoie aussitot
+       quand il n'y a pas de session : le start_url du manifeste menait donc a une
+       page qui s'echappe vers une page sans manifeste, et aucune invite
+       d'installation ne pouvait etre proposee a quelqu'un de deconnecte —
+       c'est-a-dire a tout nouveau venu. -->
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="PIPSILY" />
+  <!-- display=swap et preconnect, comme index.html : sans eux le texte de la
+       page d'entree reste invisible jusqu'a 3 s sur un lien lent. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 20% 0%,rgba(123,95,232,.18),transparent 50%),radial-gradient(ellipse at 80% 0%,rgba(56,168,232,.14),transparent 50%),#05080f;font-family:Outfit,Segoe UI,system-ui,sans-serif;color:#eef4ff;padding:20px}
@@ -19,13 +35,17 @@
     input[type=email],input[type=password]{width:100%;padding:13px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#eef4ff;font-size:15px;outline:none;transition:border-color .2s,box-shadow .2s}
     input:focus{border-color:#7B5FE8;box-shadow:0 0 0 3px rgba(123,95,232,.2)}
     .btn-primary{width:100%;padding:14px;border-radius:13px;border:none;cursor:pointer;background:linear-gradient(135deg,#7B5FE8,#38A8E8);color:#fff;font-size:15px;font-weight:700;margin-top:4px;box-shadow:0 6px 24px rgba(123,95,232,.3);transition:opacity .15s,transform .12s}
-    .btn-primary:hover{opacity:.9}.btn-primary:active{transform:scale(.97)}.btn-primary:disabled{opacity:.5;cursor:default}
+        /* Survol sous garde : sur iOS, un premier toucher sur un element
+       porteur de :hover declenche le survol AU LIEU du clic. La passe de
+       correction de styles.css avait oublie les feuilles en ligne. */
+    @media (hover: hover){ .btn-primary:hover{opacity:.9} }
+    .btn-primary:active{transform:scale(.97)}.btn-primary:disabled{opacity:.5;cursor:default}
     .msg{margin-top:14px;padding:12px 16px;border-radius:11px;font-size:13px;line-height:1.5;text-align:center;display:none}
     .msg--error{background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.3);color:#ff8899}
     .msg--success{background:rgba(100,220,140,.1);border:1px solid rgba(100,220,140,.3);color:#7ef7b0}
     .msg--info{background:rgba(56,168,232,.1);border:1px solid rgba(56,168,232,.3);color:#82b4ff}
     .forgot{display:block;text-align:center;color:#7a9cc0;font-size:12px;text-decoration:none;margin-top:14px}
-    .forgot:hover{color:#eef4ff}
+    @media (hover: hover){ .forgot:hover{color:#eef4ff} }
     .password-wrap{position:relative}
     .toggle-pw{position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;color:#7a9cc0;cursor:pointer;font-size:16px}
     .plan-label{font-size:12px;font-weight:600;color:#7a9cc0;letter-spacing:.03em;text-transform:uppercase;margin-bottom:10px}
@@ -34,7 +54,7 @@
     .plan-option input[type=radio]{position:absolute;opacity:0;width:0;height:0}
     .plan-box{display:flex;flex-direction:column;align-items:center;gap:3px;padding:14px 10px;border-radius:14px;cursor:pointer;border:2px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);transition:border-color .2s,background .2s;text-align:center}
     .plan-option input:checked + .plan-box{border-color:#7B5FE8;background:rgba(123,95,232,.12)}
-    .plan-box:hover{border-color:rgba(123,95,232,.5)}
+    @media (hover: hover){ .plan-box:hover{border-color:rgba(123,95,232,.5)} }
     .plan-name{font-size:15px;font-weight:800;color:#eef4ff}
     .plan-price{font-size:22px;font-weight:900;color:#7B5FE8;line-height:1.1}
     .plan-price span{font-size:13px;font-weight:500;color:#a0bccc}
@@ -111,6 +131,18 @@
   document.getElementById('xb').onclick=()=>{b.remove();document.body.style.paddingTop='';localStorage.setItem('pf_apk_install_dismiss',String(Date.now()+604800000))};
 })();
 const _A=window.PIPSILY_AUTH||null;let mode='login';
+// La bibliotheque Supabase vient d'un CDN tiers, injecte par document.write.
+// Bloqueur de contenu, DNS de FAI, VPN bride ou lien lent : elle peut ne jamais
+// arriver. Sans ce message, la page s'affichait parfaitement et le bouton ne
+// faisait rien — indiscernable d'une panne tactile. On le dit des le chargement
+// plutot que d'attendre une tentative de connexion.
+if(!_A || !_A.supabase){
+  try{
+    showMsg('error','Service d authentification indisponible. Verifiez votre '
+      + 'connexion, un eventuel bloqueur de publicite, ou coupez le VPN, '
+      + 'puis rechargez la page.');
+  }catch(e){}
+}
 if(_A&&_A.getSession){_A.getSession().then(s=>{if(s)location.href='./index.html'}).catch(()=>{})}
 function switchTab(m){
   mode=m;
@@ -141,9 +173,25 @@ async function forgotPw(e){
 // le bouton n'etait donc jamais atteint, l'ecran restait sur « Connexion... »
 // indefiniment, et aucun message n'apparaissait. On borne l'attente pour que la
 // panne devienne visible et nommable.
+// Tant que cet ecran est affiche, on demande au conteneur Android de NE PAS
+// monter le tunnel. Sans ca, son filet de securite se declenchait au bout de
+// trois minutes — pile le temps de taper une adresse et un mot de passe a la
+// telecommande — et l'authentification repartait dans un tunnel peut-etre
+// bride. L'intervalle meurt avec la page, donc des qu'on entre dans
+// l'application le filet reprend son cours normal.
+(function(){
+  function differer(){
+    try{ if(window.AndroidBridge && window.AndroidBridge.differerVpn) AndroidBridge.differerVpn(); }catch(e){}
+  }
+  differer();
+  setInterval(differer, 60000);
+})();
+
 var DELAI_AUTH_MS = 25000;
 function avecDelai(promesse, secondes){
-  var ms = (secondes || 25) * 1000;
+  // On lit bien DELAI_AUTH_MS : il etait declare et jamais utilise, donc le
+  // modifier ne changeait rien — piege classique pour qui reprend le fichier.
+  var ms = secondes ? secondes * 1000 : DELAI_AUTH_MS;
   return Promise.race([
     promesse,
     new Promise(function(_, rejeter){

@@ -49,7 +49,10 @@
       color:#7a9cc0; font-size:13px; font-weight:600; cursor:pointer;
       text-decoration:none; transition:all .15s;
     }
-    .back-btn:hover{ background:rgba(255,255,255,.1); color:#eef4ff }
+        /* Survol sous garde : sur iOS, un premier toucher sur un element
+       porteur de :hover declenche le survol AU LIEU du clic. La passe de
+       correction de styles.css avait oublie les feuilles en ligne. */
+    @media (hover: hover){ .back-btn:hover{ background:rgba(255,255,255,.1); color:#eef4ff } }
     .page{ max-width:900px; margin:0 auto; padding:24px 16px 80px }
     .stats-grid{
       display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
@@ -109,7 +112,7 @@
       border-radius:14px; padding:14px 16px; margin-bottom:10px;
       transition:background .15s;
     }
-    .user-card:hover{ background:rgba(255,255,255,.055) }
+    @media (hover: hover){ .user-card:hover{ background:rgba(255,255,255,.055) } }
     .user-card__top{
       display:flex; align-items:center; gap:10px; flex-wrap:wrap;
       margin-bottom:10px;
@@ -133,7 +136,7 @@
     .action-btn--red  { background:rgba(232,51,74,.15);   color:#ff8899; border:1px solid rgba(232,51,74,.3) }
     .action-btn--blue { background:rgba(59,124,244,.15);  color:#82b4ff; border:1px solid rgba(59,124,244,.3) }
     .action-btn--gold { background:rgba(56,168,232,.15);   color:#38A8E8; border:1px solid rgba(56,168,232,.3) }
-    .action-btn:hover{ opacity:.75 }
+    @media (hover: hover){ .action-btn:hover{ opacity:.75 } }
     .action-btn:disabled{ opacity:.3; cursor:default }
     /* ── Barre de recherche ── */
     .search-bar{

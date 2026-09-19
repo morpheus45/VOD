@@ -67,6 +67,28 @@ final class Menage {
      */
     static void nettoyerResidusMaj(Context ctx) {
         try {
+            SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            long idEnCours = prefs.getLong(CLE_ID_TELECHARGEMENT, -1L);
+
+            // Un telechargement en cours ne doit RIEN subir. Le garde
+            // d'anciennete seul ne suffisait pas : entre le `dest.delete()` et
+            // la premiere ecriture de DownloadManager, le fichier n'existe pas,
+            // donc il paraissait « vieux » — et on annulait la mise a jour en
+            // vol. Meme chose pour un telechargement en attente reseau depuis
+            // plus de dix minutes. Symptome : sur lien lent, la mise a jour
+            // repartait de zero a chaque lancement, sans un mot.
+            if (idEnCours > 0) {
+                try {
+                    DownloadManager dmv =
+                        (DownloadManager) ctx.getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (dmv != null && telechargementEnCours(dmv, idEnCours)) {
+                        Log.i(TAG, "Téléchargement " + idEnCours
+                                 + " en cours — aucun ménage");
+                        return;
+                    }
+                } catch (Throwable ignored) {}
+            }
+
             File f = fichierMaj(ctx);
             boolean recent = f != null && f.exists()
                 && (System.currentTimeMillis() - f.lastModified()) < DELAI_GARDE_MS;
@@ -81,18 +103,19 @@ final class Menage {
                          + (f.delete() ? "faite" : "refusée"));
             }
 
-            SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            long id = p.getLong(CLE_ID_TELECHARGEMENT, -1L);
+            long id = idEnCours;
             if (id > 0) {
                 try {
                     DownloadManager dm =
                         (DownloadManager) ctx.getSystemService(Context.DOWNLOAD_SERVICE);
-                    if (dm != null) dm.remove(id);
+                    if (dm == null) return;
+                    // L'etat a deja ete verifie en tete de methode.
+                    dm.remove(id);
                     Log.i(TAG, "Entrée de téléchargement " + id + " retirée");
                 } catch (Throwable t) {
                     Log.w(TAG, "Retrait de l'entrée de téléchargement impossible : " + t);
                 }
-                p.edit().remove(CLE_ID_TELECHARGEMENT).apply();
+                prefs.edit().remove(CLE_ID_TELECHARGEMENT).apply();
             }
         } catch (Throwable t) {
             Log.w(TAG, "Ménage des résidus de mise à jour échoué : " + t);
@@ -140,6 +163,30 @@ final class Menage {
                      + " Mo (Local Storage/login preserve)");
         } catch (Throwable t) {
             Log.w(TAG, "purge WebView echouee : " + t);
+        }
+    }
+
+    /**
+     * Le telechargement est-il encore en vol ? On interroge l'etat reel plutot
+     * que de deduire quoi que ce soit de la presence du fichier : l'identifiant
+     * est range a l'ENQUEUE, il ne dit donc rien de l'avancement.
+     */
+    private static boolean telechargementEnCours(DownloadManager dm, long id) {
+        android.database.Cursor c = null;
+        try {
+            c = dm.query(new DownloadManager.Query().setFilterById(id));
+            if (c == null || !c.moveToFirst()) return false;   // entree disparue
+            int etat = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+            return etat == DownloadManager.STATUS_PENDING
+                || etat == DownloadManager.STATUS_RUNNING
+                || etat == DownloadManager.STATUS_PAUSED;
+        } catch (Throwable t) {
+            // Dans le doute on se declare « en cours » : ne rien casser prime
+            // sur recuperer 16 Mo.
+            Log.w(TAG, "Etat du téléchargement illisible : " + t);
+            return true;
+        } finally {
+            if (c != null) { try { c.close(); } catch (Throwable ignored) {} }
         }
     }
 
