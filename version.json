@@ -1,6 +1,6 @@
 {
-  "apk_version": 72,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v72/PIPSILY.apk",
+  "apk_version": 73,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v73/PIPSILY.apk",
   "changes": "Le tunnel ne monte plus pendant que vous tapez votre mot de passe. Le filet de securite ajoute en v71 se declenchait au bout de trois minutes — pile le temps d'une saisie a la telecommande — et l'authentification repartait dans un tunnel peut-etre bride. L'ecran de connexion repousse desormais cette echeance tant qu'il est affiche. Les tuiles de la grille TV ferment enfin leurs connexions : l'apercu video en laissait une ouverte par chaine survolee, et le fournisseur, qui n'en autorise qu'une seule a la fois, coupait la lecture suivante. Le menage des mises a jour ne peut plus annuler un telechargement en cours sur connexion lente. Cote web : choisir l'interface Cosmos sur un autoradio ne rend plus l'application inutilisable, les effets de survol ne mangent plus le premier toucher sur iPad, l'icone d'installation a enfin la bonne taille, et l'ecran de connexion dit quand le service d'authentification est injoignable au lieu de rester muet.",
   "vpn_enabled": true,
   "tizen_version": 1,
