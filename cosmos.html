@@ -3688,6 +3688,10 @@ setTimeout(()=>{$('loading').hidden=true;},25000);
   if(window.PIPSILY_AUTH&&window.PIPSILY_AUTH.authGate){
     try{ const a=await window.PIPSILY_AUTH.authGate(); if(!a) return; window._cosUser=a; }
     catch(e){ console.error('[PIPSILY] authGate:', e && e.message); location.replace('./login.html'); return; }
+    // Session etablie : le tunnel peut monter. Pas avant — un tunnel bride
+    // faisait pendre l'appel d'authentification pour toujours, et le bouton qui
+    // le regenere est derriere cet ecran. Sans effet hors APK.
+    try{ if(window.AndroidBridge&&window.AndroidBridge.connectVpnNow) AndroidBridge.connectVpnNow(); }catch(e){}
   }else{
     // auth.js absent ou non exécuté : ne JAMAIS démarrer Cosmos sans écran de connexion.
     console.error('[PIPSILY] auth.js indisponible — redirection vers login.html');

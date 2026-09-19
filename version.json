@@ -1,7 +1,7 @@
 {
   "apk_version": 70,
   "apk_url": "https://github.com/morpheus45/VOD/releases/download/v70/PIPSILY.apk",
-  "changes": "Sortie vers les réglages Android depuis PIPSILY : sur les appareils où l'application est l'écran d'accueil, il était impossible d'atteindre le Wi-Fi ou les paramètres. Deux entrées dans les réglages règlent ça. Le bouton VPN remplace aussi le micro en haut à droite, avec l'état du tunnel visible, et le panneau d'administration défile enfin jusqu'en bas.",
+  "changes": "Le VPN ne demarre plus qu'une fois la connexion faite. Quand le tunnel se faisait brider, la demande d'authentification restait sans reponse et l'ecran se figeait sur « Connexion... » sans le moindre message — et le bouton qui repare le tunnel se trouve justement derriere cet ecran : on ne pouvait plus entrer. L'authentification passe desormais en direct, le tunnel monte juste apres, avant le moindre flux. Elle abandonne aussi au bout de 25 secondes en disant pourquoi, et les messages d'erreur remontent au-dessus du bouton pour ne plus disparaitre sous le clavier du televiseur. Le bouton VPN de la barre ouvre enfin le VPN au lieu de la recherche vocale.",
   "vpn_enabled": true,
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",

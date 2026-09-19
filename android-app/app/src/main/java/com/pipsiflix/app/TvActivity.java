@@ -1028,6 +1028,19 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
             return m.getState().name() + "|" + (c != null ? c.label : "");
         }
 
+        /**
+         * Monte le tunnel maintenant. La page l'appelle une fois la session
+         * établie, jamais avant : l'authentification ne doit pas traverser un
+         * tunnel éventuellement mort, sinon elle reste pendante et l'écran de
+         * connexion se fige sans le moindre message (voir le bloc VPN plus haut).
+         * Sans effet si le VPN est désactivé par préférence, et sans effet à
+         * partir du deuxième appel.
+         */
+        @JavascriptInterface
+        public void connectVpnNow() {
+            runOnUiThread(TvActivity.this::demarrerVpn);
+        }
+
         @JavascriptInterface
         public String getDeviceType() { return "android_tv"; }
 
@@ -1200,6 +1213,83 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         }
     };
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  Le tunnel ne monte plus AU LANCEMENT, mais APRES l'authentification.
+    //
+    //  Mesure du 19/09 sur le Player Freebox : tunnel actif, l'appel
+    //  d'authentification vers Supabase ne repondait JAMAIS — ni succes ni
+    //  erreur — et l'ecran restait sur « Connexion... » indefiniment ; tunnel
+    //  coupe, la meme saisie repondait en trois secondes. Le tunnel WARP etait
+    //  bride : la poignee de main reussissait encore mais les donnees ne
+    //  passaient plus (« stopped hearing back after 15 seconds » en boucle).
+    //
+    //  Le piege etait circulaire : le bouton qui regenere le tunnel vit dans
+    //  VpnActivity, atteinte depuis la barre de navigation, donc seulement une
+    //  fois connecte. Tunnel mort => connexion impossible => reparation
+    //  inatteignable. Differer le demarrage casse cette boucle.
+    //
+    //  Sans risque ici : le catalogue vient de GitHub Pages, et les seuls appels
+    //  au fournisseur (URL de flux, get_series_info) supposent une session. Rien
+    //  ne le contacte avant que le tunnel soit monte.
+    //
+    //  Filet : si personne ne signale d'authentification passe ce delai — page
+    //  ancienne resservie par le cache hors-ligne, par exemple — on demarre quand
+    //  meme, pour qu'une version depassee de la page ne laisse pas le trafic en
+    //  clair.
+    // ══════════════════════════════════════════════════════════════════════
+    private static final long VPN_SECOURS_MS = 180_000L;
+    private boolean vpnDemarre = false;
+    private final Runnable vpnSecours = new Runnable() {
+        @Override public void run() {
+            Log.i(TAG, "VPN : aucune authentification signalée en "
+                     + (VPN_SECOURS_MS / 1000) + " s — démarrage de secours");
+            demarrerVpn();
+        }
+    };
+
+    /** Le VPN est-il autorisé par les préférences locales et le drapeau distant ? */
+    private boolean vpnAutorise() {
+        try {
+            com.pipsiflix.app.vpn.VpnPrefs prefs = com.pipsiflix.app.MainActivity.vpnPrefs();
+            if (prefs == null) return false;
+            boolean remoteEnabled = getSharedPreferences("pipsily_prefs", MODE_PRIVATE)
+                .getBoolean("vpn_enabled_remote", true);
+            return com.pipsiflix.app.vpn.VpnGate.shouldEnforce(
+                prefs.isEnabled(), remoteEnabled, prefs.sessionOverride());
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * Monte réellement le tunnel. Appelé par le pont JavaScript dès que la
+     * session est établie, ou par le filet de sécurité. Idempotent : la page
+     * peut le signaler sans précaution, les appels suivants ne font rien.
+     * À APPELER SUR LE THREAD UI — startActivityForResult l'exige.
+     */
+    private void demarrerVpn() {
+        if (vpnDemarre) return;
+        vpnDemarre = true;
+        vpnHealth.removeCallbacks(vpnSecours);
+
+        if (!vpnAutorise()) {
+            Log.i(TAG, "VPN désactivé par préférence — démarrage ignoré");
+            return;
+        }
+        com.pipsiflix.app.vpn.VpnManager m = com.pipsiflix.app.MainActivity.vpn();
+        if (m == null) { Log.w(TAG, "VPN : gestionnaire absent"); return; }
+
+        // Consentement Android : demandé sans rien bloquer. S'il est refusé ou
+        // ignoré, la TV continue de fonctionner sans VPN.
+        android.content.Intent prep = android.net.VpnService.prepare(this);
+        if (prep != null) {
+            try { startActivityForResult(prep, REQ_TV_VPN_CONSENT); }
+            catch (Throwable t) { Log.w(TAG, "Consentement VPN impossible : " + t); }
+        } else {
+            new Thread(() -> connectVpn(m)).start();
+        }
+    }
+
     private void startVpnWatch() {
         com.pipsiflix.app.vpn.VpnPrefs prefs;
         final com.pipsiflix.app.vpn.VpnManager m;
@@ -1212,10 +1302,7 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
         }
         if (m == null || prefs == null) return;
 
-        boolean remoteEnabled = getSharedPreferences("pipsily_prefs", MODE_PRIVATE)
-            .getBoolean("vpn_enabled_remote", true);
-        if (!com.pipsiflix.app.vpn.VpnGate.shouldEnforce(
-                prefs.isEnabled(), remoteEnabled, prefs.sessionOverride())) {
+        if (!vpnAutorise()) {
             Log.i(TAG, "VPN désactivé par préférence — surveillance non démarrée");
             return;
         }
@@ -1239,15 +1326,12 @@ public class TvActivity extends FragmentActivity implements TextureView.SurfaceT
             if (st == com.pipsiflix.app.vpn.VpnManager.State.CONNECTED) vpnRetries = 0;
         });
 
-        // Consentement Android : demandé sans rien bloquer. S'il est refusé ou
-        // ignoré, la TV continue de fonctionner sans VPN.
-        android.content.Intent prep = android.net.VpnService.prepare(this);
-        if (prep != null) {
-            try { startActivityForResult(prep, REQ_TV_VPN_CONSENT); }
-            catch (Throwable t) { Log.w(TAG, "Consentement VPN impossible : " + t); }
-        } else {
-            new Thread(() -> connectVpn(m)).start();
-        }
+        // On arme la surveillance, mais on NE CONNECTE PAS ici : c'est
+        // connectVpnNow(), appelé dès que la session est établie, qui monte le
+        // tunnel. onHealthTick() sort immédiatement tant que l'état n'est pas
+        // CONNECTED, l'armer d'avance est donc sans effet.
+        vpnHealth.removeCallbacks(vpnSecours);
+        vpnHealth.postDelayed(vpnSecours, VPN_SECOURS_MS);
         vpnHealth.removeCallbacks(vpnHealthTick);
         vpnHealth.postDelayed(vpnHealthTick, VPN_TICK_MS);
     }
