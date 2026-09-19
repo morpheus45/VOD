@@ -10,7 +10,15 @@
                || /\bTV\b/.test(navigator.userAgent)
                || window.PIPSILY_NATIVE === 'android_tv';
       var _theme = localStorage.getItem('pf_theme');
-      if(_theme==='cosmos' || (_theme===null && _isTV)){ location.replace('./cosmos.html'); }
+      // Ne jamais envoyer vers Cosmos un moteur incapable de le parser : son
+      // script est d'un seul tenant et emploie l'optional chaining, donc il
+      // rend une page vide sans échappatoire (voir le bloc de tête de
+      // cosmos.html). On efface aussi un choix devenu piégeux.
+      var _moderne = false;
+      try { new Function("var o = {}; return o?.x;"); _moderne = true; } catch(e) {}
+      if(!_moderne){
+        if(_theme==='cosmos'){ try{ localStorage.removeItem('pf_theme'); }catch(e){} }
+      }else if(_theme==='cosmos' || (_theme===null && _isTV)){ location.replace('./cosmos.html'); }
     }catch(e){}
   </script>
   <meta charset="UTF-8" />

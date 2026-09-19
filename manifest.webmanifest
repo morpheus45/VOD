@@ -6,12 +6,18 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "background_color": "#05080f",
   "theme_color": "#0f172a",
   "orientation": "any",
   "lang": "fr",
-  "categories": ["entertainment", "multimedia"],
+  "categories": [
+    "entertainment",
+    "multimedia"
+  ],
   "icons": [
     {
       "src": "./icons/icon-192.png",
@@ -26,13 +32,13 @@
       "purpose": "any"
     },
     {
-      "src": "./icons/icon-192.png",
+      "src": "./icons/icon-maskable-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "./icons/icon-512.png",
+      "src": "./icons/icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

@@ -10,6 +10,22 @@
 (function(){
   var moderne = false;
   try { new Function("var o = {}; return o?.x;"); moderne = true; } catch (e) {}
+
+  // ── Sortie de secours, et c'est le SEUL endroit d'où elle puisse partir ──
+  // Cosmos tient dans un unique bloc de script de ~2800 lignes qui emploie
+  // l'optional chaining. Un moteur qui ne le parse pas — le WebView AOSP des
+  // autoradios, figé en Chrome 61 — n'affiche rien du tout. Et les deux issues
+  // prévues (le garde hors-TV, le retour vers Xstream des réglages) sont dans
+  // ce même bloc mort : l'application restait inutilisable à chaque lancement,
+  // sans aucun moyen d'en sortir, jusqu'à effacer les données de l'appli.
+  // Ce bloc-ci est en ES5 : il s'exécute partout, donc on sort d'ici. Effacer
+  // pf_theme répare aussi un appareil déjà bloqué, dès son prochain lancement.
+  if (!moderne) {
+    try { localStorage.removeItem('pf_theme'); } catch (e) {}
+    location.replace('./index.html');
+    return;
+  }
+
   var srcs = moderne
     ? ["https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.114.0/dist/umd/supabase.min.js", "./auth.js"]
     : ["legacy/supabase.js", "legacy/auth.js"];

@@ -28,7 +28,7 @@
       color: #7a9cc0; font-size: 13px; font-weight: 600; text-decoration: none;
       transition: all .15s;
     }
-    .topbar-back:hover { background: rgba(255,255,255,.09); color: #eef4ff; }
+    @media (hover: hover){ .topbar-back:hover{ background: rgba(255,255,255,.09); color: #eef4ff; } }
 
     /* ── Hero ── */
     .hero {
@@ -67,7 +67,7 @@
       color: #7a9cc0; font-size: 13px; font-weight: 600;
       transition: all .2s; white-space: nowrap; user-select: none;
     }
-    .tab:hover { border-color: rgba(123,95,232,.4); color: #eef4ff; }
+    @media (hover: hover){ .tab:hover{ border-color: rgba(123,95,232,.4); color: #eef4ff; } }
     .tab.active {
       background: linear-gradient(135deg,rgba(123,95,232,.18),rgba(56,168,232,.12));
       border-color: #7B5FE8; color: #eef4ff;
@@ -132,7 +132,7 @@
       color: #7a9cc0; font-size: 13px; font-weight: 600; cursor: pointer;
       text-align: center; transition: all .2s;
     }
-    .method-btn:hover { border-color: rgba(123,95,232,.4); color: #eef4ff; }
+    @media (hover: hover){ .method-btn:hover{ border-color: rgba(123,95,232,.4); color: #eef4ff; } }
     .method-btn.active { border-color: #7B5FE8; color: #eef4ff; background: rgba(123,95,232,.1); }
     .method-panel { display: none; }
     .method-panel.active { display: block; }
@@ -145,7 +145,7 @@
       color: #fff; text-decoration: none; font-weight: 700; font-size: 15px;
       transition: opacity .2s;
     }
-    .dl-btn:hover { opacity: .85; }
+    @media (hover: hover){ .dl-btn:hover{ opacity: .85; } }
     .dl-btn-ghost {
       display: inline-flex; align-items: center; gap: 10px;
       padding: 12px 22px; border-radius: 14px; margin-top: 10px;
@@ -153,7 +153,7 @@
       color: #8aabcc; text-decoration: none; font-weight: 600; font-size: 14px;
       transition: all .2s;
     }
-    .dl-btn-ghost:hover { border-color: rgba(255,255,255,.3); color: #eef4ff; }
+    @media (hover: hover){ .dl-btn-ghost:hover{ border-color: rgba(255,255,255,.3); color: #eef4ff; } }
     .btn-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 4px; }
 
     /* ── Compat ── */
@@ -179,7 +179,7 @@
       text-align: left; cursor: pointer; display: flex;
       justify-content: space-between; align-items: center; gap: 12px;
     }
-    .faq-q:hover { color: #b4a0f0; }
+    @media (hover: hover){ .faq-q:hover{ color: #b4a0f0; } }
     .faq-arrow { flex-shrink: 0; transition: transform .25s; font-size: 11px; color: #4a6080; }
     .faq-item.open .faq-arrow { transform: rotate(180deg); }
     .faq-a { max-height: 0; overflow: hidden; transition: max-height .3s ease; color: #8aabcc; font-size: 13px; line-height: 1.7; }

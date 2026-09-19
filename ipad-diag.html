@@ -13,10 +13,10 @@
   pour l'application, cette page doit QUAND MEME s'afficher et rapporter
   pourquoi. Aucune dependance externe, aucun reseau, aucune authentification.
 
-  Le test decisif est en bas : deux cibles identiques, l'une SANS styles de
-  survol, l'autre AVEC un enfant revele au survol — exactement comme les
-  cartes de l'application. Si la seconde demande deux touchers et la premiere
-  un seul, le comportement WebKit « premier toucher = survol » est confirme.
+  Le test decisif est en bas : trois cibles identiques — sans survol, avec
+  survol nu, et avec survol sous @media (hover: hover) comme le correctif
+  deploye. On compte les touchend SEPAREMENT des clics : un ecart prouve
+  l'avalement du premier toucher sans dependre de qui tient l'iPad.
 -->
 <style>
   :root{
@@ -62,6 +62,20 @@
   .avec:hover{ transform:translateY(-4px) scale(1.02); border-color:var(--accent) }
   .avec:hover .revele{ opacity:1; transform:scale(1) }
 
+  /* Troisieme cible : le MEME motif, mais corrige — survol sous garde, comme
+     styles.css depuis le 19/09. Les deux premieres montrent que le motif nu est
+     fautif ; celle-ci est la seule qui puisse prouver que le correctif, lui,
+     fonctionne. C'est precisement la question restee ouverte. */
+  .corrige .revele{
+    position:absolute; right:56px; top:50%; margin-top:-12px;
+    opacity:0; transform:scale(.5); transition:opacity .2s, transform .2s;
+    color:var(--ok); font-size:22px;
+  }
+  @media (hover: hover){
+    .corrige:hover{ transform:translateY(-4px) scale(1.02); border-color:var(--ok) }
+    .corrige:hover .revele{ opacity:1; transform:scale(1) }
+  }
+
   .verdict{ margin-top:14px; padding:14px; border-radius:12px;
             border:1px solid var(--line); background:var(--card); font-size:14px }
   .erreurs{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px;
@@ -86,6 +100,8 @@
 <div class="bloc" id="js"></div>
 
 <h2>Test decisif — touche chaque barre UNE fois</h2>
+<p class="sub">Si une barre ne reagit pas, <b>ne retouche pas</b> : la page
+le detecte quand meme, et un second toucher fausserait le verdict.</p>
 
 <button class="cible sans" id="sans" type="button">
   Cible SANS survol <span class="compteur" id="cSans">0</span>
@@ -95,8 +111,12 @@
   Cible AVEC survol <span class="revele">&#9654;</span> <span class="compteur" id="cAvec">0</span>
 </button>
 
+<button class="cible corrige" id="corrige" type="button">
+  Cible AVEC survol CORRIGE <span class="revele">&#9654;</span> <span class="compteur" id="cCorrige">0</span>
+</button>
+
 <div class="verdict" id="verdict">
-  Touche chaque barre <b>une seule fois</b>. Les deux compteurs doivent passer a 1.
+  Touche chaque barre <b>une seule fois</b>.
 </div>
 <button class="raz" id="raz" type="button">Remettre a zero</button>
 
@@ -174,54 +194,94 @@ ligne("js", "crypto.randomUUID  (Safari 15.4)",
       (window.crypto && typeof crypto.randomUUID === "function") ? "ok" : "warn");
 
 /* ── Test decisif ───────────────────────────────────────────────────── */
-var nSans = 0, nAvec = 0, dessous = "";
+/* On compte les touchend SEPAREMENT des clics. Sans ca, le verdict pouvait
+   mentir : l'utilisateur touche la cible fautive, rien ne se passe, il
+   retouche par reflexe — les deux compteurs finissent egaux et la page
+   annoncait « tout va bien » alors que le defaut venait de se produire sous
+   ses yeux. Un ecart touchend > clic prouve l'avalement sans dependre de la
+   discipline de qui tient l'iPad. */
+var CIBLES = ["sans", "avec", "corrige"];
+var clics = { sans: 0, avec: 0, corrige: 0 };
+var touchers = { sans: 0, avec: 0, corrige: 0 };
+var dessous = "";
+
+function majCompteur(quel){
+  var id = "c" + quel.charAt(0).toUpperCase() + quel.slice(1);
+  var el = document.getElementById(id);
+  if (!el) return;
+  var t = touchers[quel], c = clics[quel];
+  el.textContent = (t > c) ? (c + " / " + t + " touchers") : String(c);
+  el.style.color = (t > c) ? "#ff6b6b" : "";
+}
+
+function surTouche(quel){
+  return function(){ touchers[quel]++; majCompteur(quel); rendreVerdict(); };
+}
 
 function surClic(quel){
   return function(ev){
-    if (quel === "sans"){ nSans++; document.getElementById("cSans").textContent = nSans; }
-    else { nAvec++; document.getElementById("cAvec").textContent = nAvec; }
-    /* Que touche-t-on reellement a cet endroit ? Revele un voile invisible. */
+    clics[quel]++;
     var x = (ev.clientX != null) ? ev.clientX : 0;
     var y = (ev.clientY != null) ? ev.clientY : 0;
     var el = document.elementFromPoint(x, y);
-    dessous = el ? (el.tagName + (el.id ? "#" + el.id : "") +
-                    (el.className ? "." + String(el.className).split(" ").join(".") : ""))
-                 : "rien";
+    dessous = el ? (el.tagName + (el.id ? "#" + el.id : "")) : "rien";
+    majCompteur(quel);
     rendreVerdict();
   };
 }
 
+function avale(quel){ return touchers[quel] > clics[quel]; }
+
 function rendreVerdict(){
   var v = document.getElementById("verdict");
+  var total = touchers.sans + touchers.avec + touchers.corrige
+            + clics.sans + clics.avec + clics.corrige;
   var t = "";
-  if (nSans === 0 && nAvec === 0){
-    t = "Touche chaque barre <b>une seule fois</b>.";
-  } else if (nSans === 0 && nAvec > 0){
-    t = "<b class='ko'>La cible SANS survol ne repond pas du tout.</b> " +
-        "Le survol n'est donc pas en cause : le probleme est ailleurs.";
-  } else if (nSans > 0 && nAvec === 0){
-    t = "<b class='ko'>Confirme : seule la cible AVEC survol est sourde.</b> " +
-        "C'est bien le premier toucher avale par l'etat de survol. Le correctif pose " +
-        "sur styles.css traite exactement ce cas.";
-  } else if (nSans === nAvec){
-    t = "<b class='ok'>Les deux repondent au premier toucher.</b> " +
-        "Ni le survol ni un voile ne bloquent : si l'application reste sourde, " +
-        "la cause est dans son propre code, pas dans le tactile.";
+  if (total === 0){
+    t = "Touche chaque barre <b>une seule fois</b>. Si rien ne se passe, " +
+        "<b>ne retouche pas</b> tout de suite : la page le détecte quand même.";
+  } else if (avale("avec") && !avale("sans")){
+    t = "<b class='ko'>Confirmé : le premier toucher est avalé par l'état de survol.</b> " +
+        "La cible sans survol répond, celle avec survol non.";
+    if (touchers.corrige > 0){
+      t += avale("corrige")
+        ? " <b class='ko'>Et le correctif ne suffit pas :</b> la cible corrigée est avalée aussi."
+        : " <b class='ok'>Et le correctif fonctionne :</b> la cible corrigée, elle, répond du premier coup.";
+    } else {
+      t += " Touche maintenant la troisième barre : c'est elle qui dira si le correctif marche.";
+    }
+  } else if (avale("sans") && avale("avec")){
+    t = "<b class='ko'>Les deux cibles sont avalées</b> — le survol n'est pas seul en cause, " +
+        "quelque chose intercepte les touchers plus en amont.";
+  } else if (touchers.sans === 0 && touchers.avec === 0 && touchers.corrige === 0){
+    t = "<b class='warn'>Aucun toucher détecté</b> — seuls des clics sont arrivés. " +
+        "Tu utilises une souris ou un pavé, pas le doigt.";
+  } else if (clics.sans > 0 && clics.avec > 0){
+    t = "<b class='ok'>Tout répond au premier toucher.</b> Ni le survol ni un voile ne bloquent : " +
+        "si l'application reste sourde, la cause est ailleurs — regarde le CDN Supabase.";
   } else {
-    t = "<b class='warn'>Reponses inegales</b> — SANS : " + nSans +
-        ", AVEC : " + nAvec + ". Il faut plus de touchers sur l'une que sur l'autre.";
+    t = "Continue : touche chaque barre une fois.";
   }
-  if (dessous) t += "<br><span class='k'>Element reellement sous le doigt : </span>" +
-                    "<b>" + dessous + "</b>";
+  t += "<br><span class='k'>Survol disponible ((hover: hover)) : </span><b>" +
+       (hoverHover ? "VRAI — le correctif ne s'applique PAS ici" : "faux") + "</b>";
+  if (dessous) t += "<br><span class='k'>Sous le doigt : </span><b>" + dessous + "</b>";
   v.innerHTML = t;
 }
 
-document.getElementById("sans").addEventListener("click", surClic("sans"), false);
-document.getElementById("avec").addEventListener("click", surClic("avec"), false);
+for (var ci = 0; ci < CIBLES.length; ci++){
+  (function(quel){
+    var el = document.getElementById(quel);
+    if (!el) return;
+    el.addEventListener("click", surClic(quel), false);
+    el.addEventListener("touchend", surTouche(quel), false);
+  })(CIBLES[ci]);
+}
+
 document.getElementById("raz").addEventListener("click", function(){
-  nSans = 0; nAvec = 0; dessous = "";
-  document.getElementById("cSans").textContent = "0";
-  document.getElementById("cAvec").textContent = "0";
+  for (var i = 0; i < CIBLES.length; i++){
+    clics[CIBLES[i]] = 0; touchers[CIBLES[i]] = 0; majCompteur(CIBLES[i]);
+  }
+  dessous = "";
   rendreVerdict();
 }, false);
 </script>
