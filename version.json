@@ -1,6 +1,6 @@
 {
-  "apk_version": 71,
-  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v71/PIPSILY.apk",
+  "apk_version": 72,
+  "apk_url": "https://github.com/morpheus45/VOD/releases/download/v72/PIPSILY.apk",
   "changes": "Menage des residus laisses par les mises a jour. L'APK telechargee — pres de 16 Mo — restait sur l'appareil indefiniment : elle n'etait effacee qu'avant le telechargement suivant, jamais apres l'installation. Elle est desormais supprimee au demarrage suivant, avec un delai de garde pour ne jamais couper une installation en cours. L'entree laissee dans le gestionnaire de telechargements Android est retiree elle aussi : son identifiant etait perdu au redemarrage, et une mise a jour redemarre forcement l'application, donc une ligne s'ajoutait a chaque version. Enfin, la purge des gros caches n'existait que sur le chemin telephone : le televiseur ne l'a jamais eue et n'avait aucun moyen de recuperer son espace. Les deux partagent maintenant le meme code.",
   "vpn_enabled": true,
   "tizen_version": 1,
