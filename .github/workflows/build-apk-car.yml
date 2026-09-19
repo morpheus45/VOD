@@ -149,6 +149,11 @@ jobs:
               d = json.load(f)
           d['car_version'] = ver
           d['car_url'] = f'https://github.com/morpheus45/VOD/releases/download/car-v{ver}/PIPSILY-CAR.apk'
+          # car_changes n'etait JAMAIS reecrit : le conducteur lisait le
+          # changelog de la version precedente. L'autoradio suivant desormais
+          # le code de main (voir sync-car.yml), c'est le meme texte qui vaut.
+          if d.get('changes'):
+              d['car_changes'] = d['changes']
           with open('version.json', 'w', encoding='utf-8') as f:
               json.dump(d, f, indent=2, ensure_ascii=False)
               f.write('\n')
@@ -157,8 +162,27 @@ jobs:
           git add version.json
           if git diff --staged --quiet; then
             echo "Canal CAR déjà à jour — rien à commiter"
-          else
-            git commit -m "chore: PIPSILY CAR v${{ steps.ver.outputs.code }} publié [skip ci]"
-            git push origin _main_car:main
-            echo "✅ car_version publié sur main"
+            exit 0
           fi
+          git commit -m "chore: PIPSILY CAR v${{ steps.ver.outputs.code }} publié [skip ci]"
+          # Course entre workflows : build-apk, build-legacy et sync-car poussent
+          # aussi sur main. Le 19/09 une poussée concurrente a fait échouer celle
+          # de build-apk : l'APK était publiée mais version.json restait en
+          # arrière, donc aucun appareil ne voyait la mise à jour. On réessaie en
+          # se rebasant, et on échoue bruyamment plutôt qu'en silence.
+          for essai in 1 2 3; do
+            if git push origin HEAD:main; then
+              echo "✅ car_version publié sur main (essai $essai)"
+              exit 0
+            fi
+            echo "⚠️ poussée refusée (essai $essai) — rebase et nouvelle tentative"
+            git fetch origin main
+            git rebase origin/main || {
+              git rebase --abort 2>/dev/null || true
+              echo "::error::rebase impossible sur version.json"
+              exit 1
+            }
+            sleep 5
+          done
+          echo "::error::car_version n'a pas pu être poussé après 3 essais"
+          exit 1
