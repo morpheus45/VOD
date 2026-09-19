@@ -149,6 +149,18 @@ jobs:
             echo "version.json déjà à jour — rien à commiter"
           else
             git commit -m "chore: APK v${{ steps.ver.outputs.code }} publié [skip ci]"
-            git push
-            echo "✅ version.json mis à jour"
+            # Course entre workflows : un commit touchant à la fois android-app/**
+            # et app.js déclenche AUSSI « Build legacy », qui pousse sur main de
+            # son côté. Le 19/09, sa poussée est arrivée pendant ce build : le
+            # push était rejeté, l'APK v71 se retrouvait publiée alors que
+            # version.json restait à 70 — donc aucune mise à jour automatique sur
+            # les appareils. On se rebase avant de pousser, et on réessaie.
+            for essai in 1 2 3; do
+              git pull --rebase --autostash origin main && git push && {
+                echo "✅ version.json mis à jour (essai $essai)"; exit 0; }
+              echo "⚠️ poussée refusée (essai $essai) — nouvelle tentative"
+              sleep 5
+            done
+            echo "::error::version.json n'a pas pu être poussé après 3 essais"
+            exit 1
           fi
