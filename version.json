@@ -6,7 +6,7 @@
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct",
-  "car_version": 1004,
-  "car_url": "https://github.com/morpheus45/VOD/releases/download/car-v1004/PIPSILY-CAR.apk",
+  "car_version": 1072,
+  "car_url": "https://github.com/morpheus45/VOD/releases/download/car-v1072/PIPSILY-CAR.apk",
   "car_changes": "Menage des residus laisses par les mises a jour. L'APK telechargee — pres de 16 Mo — restait sur l'appareil indefiniment : elle n'etait effacee qu'avant le telechargement suivant, jamais apres l'installation. Elle est desormais supprimee au demarrage suivant, avec un delai de garde pour ne jamais couper une installation en cours. L'entree laissee dans le gestionnaire de telechargements Android est retiree elle aussi : son identifiant etait perdu au redemarrage, et une mise a jour redemarre forcement l'application, donc une ligne s'ajoutait a chaque version. Enfin, la purge des gros caches n'existait que sur le chemin telephone : le televiseur ne l'a jamais eue et n'avait aucun moyen de recuperer son espace. Les deux partagent maintenant le meme code."
 }
