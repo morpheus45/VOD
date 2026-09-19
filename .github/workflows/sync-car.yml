@@ -149,7 +149,12 @@ jobs:
             echo "::error::applicationId perdu — la fusion a écrasé l'identité autoradio"
             exit 1
           fi
-          if grep -q 'category.HOME' android-app/app/src/main/AndroidManifest.xml; then
+          # Le manifeste autoradio DOCUMENTE en commentaire pourquoi
+          # category.HOME en est absent : un grep naïf tombe sur ce commentaire
+          # et croit à une régression. On retire donc les commentaires XML avant
+          # de chercher la vraie déclaration. (build-apk-car.yml fait déjà ça
+          # pour ses propres contrôles.)
+          if python3 -c "import re, io, sys; s = io.open('android-app/app/src/main/AndroidManifest.xml', encoding='utf-8').read(); sys.exit(0 if 'android.intent.category.HOME' in re.sub(r'<!--.*?-->', '', s, flags=re.S) else 1)"; then
             echo "::error::category.HOME réapparu dans le manifeste autoradio"
             exit 1
           fi
