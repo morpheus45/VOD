@@ -22,6 +22,9 @@ public final class VpnManager {
      */
     public interface Reconnector { void reconnect(); }
 
+    /** Horloge injectable : les tests n'ont pas à attendre le délai de grâce. */
+    public interface Clock { long nowMs(); }
+
     private static final long STALE_HANDSHAKE_SEC = 180;
 
     private final WgBackend backend;
@@ -39,6 +42,13 @@ public final class VpnManager {
     private VpnServer current = null;
     // volatile : posé depuis le thread UI, lu depuis le tick de santé.
     private volatile Reconnector reconnector = null;
+    private volatile Clock clock = System::currentTimeMillis;
+    // Date de la dernière montée du tunnel : sert à accorder un délai de grâce
+    // à la poignée de main, que le tick prenait pour une preuve de mort.
+    private volatile long connectedAtMs = 0L;
+    // Relances enchaînées sans poignée de main fraîche. Remis à zéro dès qu'une
+    // poignée de main saine est observée. Borne la boucle de reconnexion.
+    private volatile int consecutiveReconnects = 0;
 
     public VpnManager(WgBackend backend, String selfPackage) {
         this.backend = backend; this.selfPackage = selfPackage;
@@ -50,6 +60,7 @@ public final class VpnManager {
     public VpnServer getCurrent() { return current; }
     public void setServers(List<VpnServer> s) { this.servers = new ArrayList<>(s); }
     public void setReconnector(Reconnector r) { this.reconnector = r; }
+    public void setClock(Clock c) { this.clock = c; }
     public List<VpnServer> getServers() { return new ArrayList<>(servers); }
 
     private void set(State s) { state = s; for (Listener l : listeners) l.onState(s, current); }
@@ -59,6 +70,10 @@ public final class VpnManager {
         try {
             Config augmented = ConfigAugmenter.augment(s.config, selfPackage);
             backend.up(augmented);
+            // up() rend la main dès que l'interface est montée : la poignée de
+            // main, elle, n'est pas encore faite. On note l'instant pour que le
+            // tick de santé lui laisse le temps de s'établir.
+            connectedAtMs = clock.nowMs();
             set(State.CONNECTED);
         } catch (Exception e) { set(State.ERROR); }
     }
@@ -75,13 +90,37 @@ public final class VpnManager {
 
     public void onHealthTick() {
         if (state != State.CONNECTED) return;
-        if (!backend.isUp() || backend.lastHandshakeAgeSec() > STALE_HANDSHAKE_SEC) {
-            set(State.RECONNECTING);
-            // Puis on DEMANDE réellement la relance. La reconnexion elle-même est
-            // faite par l'appelant sur un thread de fond (elle fait du réseau) ;
-            // ce tick, lui, tourne sur le thread UI.
-            Reconnector r = reconnector;
-            if (r != null) r.reconnect();
+
+        final long ageSec = backend.lastHandshakeAgeSec();
+        // Une poignée de main saine prouve que le tunnel vit : on repart d'un
+        // budget de relances plein.
+        if (ageSec <= STALE_HANDSHAKE_SEC) consecutiveReconnects = 0;
+
+        final long depuisConnexionSec = Math.max(0L, (clock.nowMs() - connectedAtMs) / 1000L);
+
+        switch (HealthPolicy.decide(backend.isUp(), ageSec, depuisConnexionSec,
+                                    consecutiveReconnects, STALE_HANDSHAKE_SEC,
+                                    HealthPolicy.DEFAULT_GRACE_SEC,
+                                    HealthPolicy.DEFAULT_MAX_RECONNECTS)) {
+            case RECONNECT:
+                consecutiveReconnects++;
+                set(State.RECONNECTING);
+                // Puis on DEMANDE réellement la relance. La reconnexion elle-même est
+                // faite par l'appelant sur un thread de fond (elle fait du réseau) ;
+                // ce tick, lui, tourne sur le thread UI.
+                Reconnector r = reconnector;
+                if (r != null) r.reconnect();
+                break;
+            case GIVE_UP:
+                // Marteler ne sert plus à rien : on rend la main à l'utilisateur,
+                // qui se voit proposer réessayer / changer de serveur / continuer
+                // sans VPN. Mieux qu'une boucle sans fin.
+                set(State.ERROR);
+                break;
+            case OK:
+            case WAIT:
+            default:
+                break;
         }
     }
 }
