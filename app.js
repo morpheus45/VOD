@@ -32,14 +32,57 @@ const PER_PAGE   = 48;
 // IntersectionObserver existe depuis Chrome 51 et couvre donc tous les appareils
 // cibles. Les <img> portent data-src ; la vraie source n'est posee qu'a
 // l'approche de l'ecran. Meme remede que celui applique a l'interface TV.
+// Détection « poste bas de gamme » (WebView figé Chrome 61 = PIPSILY CAR). Le
+// test COMPILE de l'optional chaining : s'il échoue, moteur ancien. La chaîne
+// n'est PAS transformée par esbuild → le test reste valable dans le bundle legacy.
+let _LOWEND = false;
+try { new Function("var _o = {}; return _o?.x;"); } catch(e){ _LOWEND = true; }
+
+// Vignette allégée : sur le poste, on demande à TMDB une image w185 (~10 Ko) au
+// lieu du poster 600x900 (~80 Ko) — moins d'octets dans le tunnel VPN, moins de
+// décodage, moins de RAM. Aucun effet sur les autres appareils ni sur fiche/lecteur.
+function _thumbUrl(u){
+  if(!_LOWEND || !u) return u;
+  return u.replace(/(\/\/image\.tmdb\.org\/t\/p\/)[^/]+\//, "$1w185/");
+}
+
+// File d'attente d'images : sur le poste, limite le nombre de téléchargements/
+// décodages SIMULTANÉS. Le WebView Chrome 61 ignore loading="lazy" et lançait
+// 100+ poignées TLS d'un coup à travers le WireGuard logiciel de l'ARMv7 → c'est
+// ce qui rendait le chargement des vignettes interminable. Les autres appareils
+// gardent le comportement direct (_IMG_MAX très élevé).
+const _imgQueue = [];
+let _imgActive = 0;
+const _IMG_MAX = _LOWEND ? 4 : 9999;
+function _pumpImgQueue(){
+  while(_imgActive < _IMG_MAX && _imgQueue.length){
+    const img = _imgQueue.shift();
+    if(!img || !img.isConnected) continue;   // tuile déjà retirée du DOM
+    const src = img.getAttribute("data-src");
+    if(!src) continue;
+    img.removeAttribute("data-src");
+    _imgActive++;
+    const done = function(){ _imgActive--; _pumpImgQueue(); };
+    img.addEventListener("load",  done, { once: true });
+    img.addEventListener("error", done, { once: true });
+    img.src = _thumbUrl(src);
+  }
+}
+function _applyLazy(img){
+  const src = img.getAttribute("data-src");
+  if(!src) return;
+  if(!_LOWEND){ img.removeAttribute("data-src"); img.src = _thumbUrl(src); return; }
+  _imgQueue.push(img);
+  _pumpImgQueue();
+}
+
 const _imgIO = (typeof IntersectionObserver !== "undefined")
   ? new IntersectionObserver(function(entries, obs){
       entries.forEach(function(e){
         if(!e.isIntersecting) return;
         const img = e.target;
         obs.unobserve(img);
-        const src = img.getAttribute("data-src");
-        if(src){ img.removeAttribute("data-src"); img.src = src; }
+        _applyLazy(img);
       });
     }, { rootMargin: "600px" })
   : null;
@@ -53,7 +96,7 @@ function observeLazyImgs(root){
   for(let i = 0; i < imgs.length; i++){
     const img = imgs[i];
     if(_imgIO){ _imgIO.observe(img); }
-    else { const s = img.getAttribute("data-src"); if(s){ img.removeAttribute("data-src"); img.src = s; } }
+    else { _applyLazy(img); }
   }
 }
 const SENTINEL_M = "300px";
@@ -906,6 +949,7 @@ function toggleFav(item){
   else favs.unshift({ key, item, at: Date.now() });
   _cacheF = favs.slice(0, 500);             // mettre à jour le cache
   storeSet(STORE.favorites, _cacheF);
+  _favVersion++;                            // invalide le cache filtered() (vue « Favoris »)
   const fav = isFav(item);
   document.querySelectorAll(`.card[data-key="${CSS.escape(key)}"] .fav-btn`).forEach(b => {
     b.classList.toggle("is-fav", fav);
@@ -2226,7 +2270,49 @@ function appPolicyFilter(list){
 }
 // </content-policy>
 
+// ── Perf navigation : tri rapide + mémoïsation de filtered() ──────────
+// Sur l'ARMv7 du poste, re-copier + re-trier ~19 000 items à chaque render ET à
+// chaque cran de scroll (loadMore rappelle filtered()) rendait la navigation
+// poussive. On mémoïse le résultat par clé d'état, et on trie via Intl.Collator
+// (bien plus rapide que String.localeCompare appelé par paire).
+const _COLL = (typeof Intl !== "undefined" && Intl.Collator)
+  ? new Intl.Collator(undefined, { sensitivity: "base", numeric: true })
+  : null;
+function _cmpTitle(a, b){ return _COLL ? _COLL.compare(a || "", b || "") : String(a || "").localeCompare(b || ""); }
+
+let _catalogVersion = 0;   // ++ à chaque (re)chargement du catalogue
+let _favVersion     = 0;   // ++ à chaque changement de favoris
+let _fCacheKey = null, _fCacheVal = null;
+function _filterKey(){
+  let adult = 0;
+  try { adult = sessionStorage.getItem("pipsily_adult_unlocked") ? 1 : 0; } catch(e){}
+  return [
+    S.type, S.cat, S.search, S.quality, S.sort, S.region,
+    document.documentElement.classList.contains("is-tv") ? 1 : 0,
+    adult, _catalogVersion, _favVersion
+  ].join("§");
+}
 function filtered(){
+  const k = _filterKey();
+  if(_fCacheVal && k === _fCacheKey) return _fCacheVal;
+  const v = _computeFiltered();
+  _fCacheKey = _filterKey();   // recalcul APRÈS : _computeFiltered peut réajuster S.cat (verrou adulte)
+  _fCacheVal = v;
+  return v;
+}
+
+// Liste des catégories mémoïsée (recalculée sinon à chaque render() sur ~19 000 items).
+let _catsCache = { key: null, val: null };
+function _categoriesFor(type){
+  const key = type + "§" + _catalogVersion;
+  if(_catsCache.key === key) return _catsCache.val;
+  const all  = type === "vod" ? S.vod : type === "series" ? S.series : S.live;
+  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
+  _catsCache = { key: key, val: cats };
+  return cats;
+}
+
+function _computeFiltered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
   // VOSTFR toujours masqué
   items = items.filter(x => !_isVostfr(x));
@@ -2253,9 +2339,9 @@ function filtered(){
   // Qualité non applicable au live
   if(S.quality && S.type !== "live") items = items.filter(x => x.quality === S.quality);
   if(S.sort === "category")
-    items.sort((a,b) => a.category_name.localeCompare(b.category_name)||a.title.localeCompare(b.title));
+    items.sort((a,b) => _cmpTitle(a.category_name, b.category_name) || _cmpTitle(a.title, b.title));
   else if(S.sort !== "recent")
-    items.sort((a,b) => a.title.localeCompare(b.title));
+    items.sort((a,b) => _cmpTitle(a.title, b.title));
 
   // ── Live : filtre régional (préférence utilisateur, index auto-construit) ──
   // Logique : si une variante régionale correspond → on la montre.
@@ -3214,8 +3300,7 @@ function render(){
     );
   }
 
-  const all  = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const cats = [...new Set(all.map(x => x.category_name).filter(Boolean))].sort();
+  const cats = _categoriesFor(S.type);
   // Exclure les catégories adultes du <select> pour éviter le contournement du filtre 🔞
   const catsForSelect = cats.filter(c => !_isAdultCat(c) && !/vostfr/i.test(c));
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
@@ -4595,6 +4680,7 @@ async function boot(){
       }
     }
 
+    _catalogVersion++;               // invalide les caches filtered() / catégories
     return !!(S.vod.length || S.series.length || S.live.length);
   }
 
