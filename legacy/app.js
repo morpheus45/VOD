@@ -1006,6 +1006,14 @@ async function fetchText(url) {
     return null;
   }
 }
+async function fetchJsonBoot(url, tries = 4) {
+  for (let i = 0; i < tries; i++) {
+    const data = await fetchJsonCached(url);
+    if (data) return data;
+    if (i < tries - 1) await new Promise((res) => setTimeout(res, 500 * (i + 1)));
+  }
+  return null;
+}
 let _epMap = null;
 let _epMapPromise = null;
 const _loadedChunks = {};
@@ -4161,49 +4169,49 @@ async function boot() {
     }
   }, true);
   getEpMap();
-  const [vodJson, seriesJson, liveJson, epIndex] = await Promise.all([
-    fetchJsonCached("vod.json"),
-    fetchJsonCached("series.json"),
-    fetchJsonCached("live.json"),
-    fetchJson("episodes_index.json")
-    // 4 Ko : rien à gagner à le mettre en cache
-  ]);
-  if (vodJson) {
-    S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod"));
-  } else {
-    const vodM3u = await fetchText("vod.m3u");
-    if (vodM3u) {
-      S.vod = appPolicyFilter(parseM3U(vodM3u, "vod"));
+  async function loadCatalog() {
+    const [vodJson, seriesJson, liveJson, epIndex] = await Promise.all([
+      fetchJsonBoot("vod.json"),
+      fetchJsonBoot("series.json"),
+      fetchJsonBoot("live.json"),
+      fetchJson("episodes_index.json")
+      // 4 Ko : rien à gagner à le mettre en cache
+    ]);
+    if (vodJson) {
+      S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod"));
+    } else {
+      const vodM3u = await fetchText("vod.m3u");
+      if (vodM3u) {
+        S.vod = appPolicyFilter(parseM3U(vodM3u, "vod"));
+      }
     }
-  }
-  if (seriesJson) {
-    S.series = appPolicyFilter(normalizeItems(extractArr(seriesJson), "series"));
-  } else {
-    const seriesM3u = await fetchText("series.m3u");
-    if (seriesM3u) {
-      S.series = appPolicyFilter(parseM3U(seriesM3u, "series"));
+    if (seriesJson) {
+      S.series = appPolicyFilter(normalizeItems(extractArr(seriesJson), "series"));
+    } else {
+      const seriesM3u = await fetchText("series.m3u");
+      if (seriesM3u) {
+        S.series = appPolicyFilter(parseM3U(seriesM3u, "series"));
+      }
     }
-  }
-  if (liveJson) {
-    const liveItems = extractArr(liveJson);
-    S._liveRegionIdx = null;
-    S.live = appPolicyFilter(liveItems.map((x, i) => ({
-      // normalisation
-      id: x.id || x.stream_id || String(i),
-      stream_id: x.stream_id || x.id || String(i),
-      title: x.title || x.name || "Sans titre",
-      category_id: x.category_id || "",
-      category_name: x.category_name || "Autre",
-      stream_icon: x.stream_icon || x.image || "",
-      stream_url: x.stream_url || x.url || "",
-      url: x.stream_url || x.url || "",
-      plot: "",
-      type: "live",
-      quality: ""
-    })));
-    if (S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
-  }
-  {
+    if (liveJson) {
+      const liveItems = extractArr(liveJson);
+      S._liveRegionIdx = null;
+      S.live = appPolicyFilter(liveItems.map((x, i) => ({
+        // normalisation
+        id: x.id || x.stream_id || String(i),
+        stream_id: x.stream_id || x.id || String(i),
+        title: x.title || x.name || "Sans titre",
+        category_id: x.category_id || "",
+        category_name: x.category_name || "Autre",
+        stream_icon: x.stream_icon || x.image || "",
+        stream_url: x.stream_url || x.url || "",
+        url: x.stream_url || x.url || "",
+        plot: "",
+        type: "live",
+        quality: ""
+      })));
+      if (S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
+    }
     const el = document.getElementById("lastUpdateDate");
     if (el) {
       if (epIndex == null ? void 0 : epIndex.generated) {
@@ -4215,7 +4223,9 @@ async function boot() {
         el.textContent = "Catalogue à jour";
       }
     }
+    return !!(S.vod.length || S.series.length || S.live.length);
   }
+  const _catalogOk = await loadCatalog();
   {
     const _ctx = (() => {
       try {
@@ -4239,6 +4249,21 @@ async function boot() {
   }
   renderNouveautes();
   render();
+  if (!_catalogOk) {
+    console.warn("[PIPSILY] catalogue vide au démarrage — auto-réparation réseau activée");
+    let _healed = false;
+    const _heal = async () => {
+      if (_healed) return;
+      if (await loadCatalog()) {
+        _healed = true;
+        window.removeEventListener("online", _heal);
+        renderNouveautes();
+        render();
+      }
+    };
+    window.addEventListener("online", _heal);
+    [3e3, 7e3, 14e3, 22e3].forEach((ms) => setTimeout(_heal, ms));
+  }
   if (document.documentElement.classList.contains("is-tv")) {
     setTimeout(() => {
       const btn = document.querySelector(".nav-btn.active") || document.querySelector(".nav-btn");
