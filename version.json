@@ -6,7 +6,7 @@
   "tizen_version": 1,
   "tizen_url": "https://github.com/morpheus45/VOD/releases/download/tv-v1/PIPSILY-TV-signed.wgt",
   "tizen_changes": "Version initiale Samsung TV — Films, Séries, TV en direct",
-  "car_version": 1074,
-  "car_url": "https://github.com/morpheus45/VOD/releases/download/car-v1074/PIPSILY-CAR.apk",
+  "car_version": 1075,
+  "car_url": "https://github.com/morpheus45/VOD/releases/download/car-v1075/PIPSILY-CAR.apk",
   "car_changes": "Le VPN ne se reconnecte plus en boucle. Au démarrage, le tunnel était déclaré prêt avant que la poignée de main soit faite ; cinq secondes plus tard la surveillance prenait cette absence pour une panne et relançait — ce qui détruisait la poignée de main en cours, et recommençait sans fin. Elle laisse désormais le tunnel s'établir, et si vraiment il n'y arrive pas, elle vous propose une issue au lieu de boucler."
 }
