@@ -1527,13 +1527,41 @@ async function loadContent(){
       setTimeout(refreshContentSilently,2500);
       return;
     }
-    // 2) Premier lancement ou cache expire : fetch reseau
-    const d=await fetchContentData();
+    // 2) Premier lancement ou cache expire : fetch reseau.
+    //    Reseau pas pret au demarrage (boitier/TV lance avant le Wi-Fi) : on
+    //    reessaie avec backoff avant d'abandonner, sinon l'accueil restait vide
+    //    (seuls favoris/reprendre) jusqu'a un "Rafraichir" manuel.
+    let d=await fetchContentData();
+    for(let i=0; !d && i<3; i++){
+      await new Promise(r=>setTimeout(r,800*(i+1)));  // 0,8s / 1,6s / 2,4s
+      d=await fetchContentData();
+    }
     if(d){
       saveCache(d.allVod,d.allSeries,d.liveRaw);
       buildContent(d.allVod,d.allSeries,d.liveRaw);
+    } else {
+      installContentSelfHeal();  // auto-reparation quand la connexion revient
     }
   }finally{$('loading').hidden=true;}
+}
+
+// Auto-reparation : le catalogue n'a pas pu etre charge au demarrage (reseau
+// absent). On relance des que la connexion revient (evenement "online") + des
+// essais espaces, puis on construit l'accueil — plus besoin de "Rafraichir".
+let _contentHealed=false;
+function installContentSelfHeal(){
+  const heal=async()=>{
+    if(_contentHealed)return;
+    const d=await fetchContentData();
+    if(d&&(d.allVod.length||d.allSeries.length||d.liveRaw.length)){
+      _contentHealed=true;
+      window.removeEventListener('online',heal);
+      saveCache(d.allVod,d.allSeries,d.liveRaw);
+      buildContent(d.allVod,d.allSeries,d.liveRaw);
+    }
+  };
+  window.addEventListener('online',heal);
+  [3000,7000,14000,22000].forEach(ms=>setTimeout(heal,ms));
 }
 
 // Rafraichit le contenu sans spinner ni perturber la navigation.

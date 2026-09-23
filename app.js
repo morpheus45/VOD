@@ -1152,6 +1152,19 @@ async function fetchText(url){
   try { const r = await fetch(url); return r.ok ? r.text() : null; } catch { return null; }
 }
 
+// Réessaie un chargement JSON au démarrage quand le réseau n'est pas encore
+// prêt (boîtiers/TV qui lancent l'appli AVANT que le Wi-Fi soit monté). Sans
+// ça, un échec réseau au boot laissait le catalogue vide jusqu'à un
+// « Rafraîchir » manuel — seuls les favoris/en-cours (localStorage) s'affichaient.
+async function fetchJsonBoot(url, tries = 4){
+  for(let i = 0; i < tries; i++){
+    const data = await fetchJsonCached(url);
+    if(data) return data;
+    if(i < tries - 1) await new Promise(res => setTimeout(res, 500 * (i + 1))); // 0,5s · 1s · 1,5s
+  }
+  return null;
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  BASE ÉPISODES PRÉ-GÉNÉRÉE (episodes_part*.json)
 // ─────────────────────────────────────────────────────────────────
@@ -4524,50 +4537,52 @@ async function boot(){
   // ── Pré-chargement de l'index épisodes (1 Ko, non bloquant) ──
   getEpMap();  // charge episodes_map.json en avance (1 Ko seulement)
 
-  // ── Chargement VOD + Séries + Live + index en parallèle ──
-  const [vodJson, seriesJson, liveJson, epIndex] = await Promise.all([
-    fetchJsonCached("vod.json"),
-    fetchJsonCached("series.json"),
-    fetchJsonCached("live.json"),
-    fetchJson("episodes_index.json")   // 4 Ko : rien à gagner à le mettre en cache
-  ]);
+  // ── Chargement catalogue (VOD + Séries + Live + date) ──────────────
+  // Isolé dans une fonction ré-exécutable pour l'auto-réparation réseau :
+  // si le catalogue arrive vide (réseau pas prêt au démarrage), on relance.
+  async function loadCatalog(){
+    const [vodJson, seriesJson, liveJson, epIndex] = await Promise.all([
+      fetchJsonBoot("vod.json"),
+      fetchJsonBoot("series.json"),
+      fetchJsonBoot("live.json"),
+      fetchJson("episodes_index.json")   // 4 Ko : rien à gagner à le mettre en cache
+    ]);
 
-  if(vodJson){ S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod")); }
-  else {
-    const vodM3u = await fetchText("vod.m3u");
-    if(vodM3u){ S.vod = appPolicyFilter(parseM3U(vodM3u, "vod")); }
-  }
+    if(vodJson){ S.vod = appPolicyFilter(normalizeItems(extractArr(vodJson), "vod")); }
+    else {
+      const vodM3u = await fetchText("vod.m3u");
+      if(vodM3u){ S.vod = appPolicyFilter(parseM3U(vodM3u, "vod")); }
+    }
 
-  if(seriesJson){ S.series = appPolicyFilter(normalizeItems(extractArr(seriesJson), "series")); }
-  else {
-    const seriesM3u = await fetchText("series.m3u");
-    if(seriesM3u){ S.series = appPolicyFilter(parseM3U(seriesM3u, "series")); }
-  }
+    if(seriesJson){ S.series = appPolicyFilter(normalizeItems(extractArr(seriesJson), "series")); }
+    else {
+      const seriesM3u = await fetchText("series.m3u");
+      if(seriesM3u){ S.series = appPolicyFilter(parseM3U(seriesM3u, "series")); }
+    }
 
-  if(liveJson){
-    // Les items live ont déjà type:"live" dans le JSON — normalisation légère
-    const liveItems = extractArr(liveJson);
-    S._liveRegionIdx = null; // reset index quand les données live changent
-    S.live = appPolicyFilter(liveItems.map((x, i) => ({  // normalisation
-      id           : x.id || x.stream_id || String(i),
-      stream_id    : x.stream_id || x.id || String(i),
-      title        : x.title || x.name || "Sans titre",
-      category_id  : x.category_id || "",
-      category_name: x.category_name || "Autre",
-      stream_icon  : x.stream_icon || x.image || "",
-      stream_url   : x.stream_url || x.url || "",
-      url          : x.stream_url || x.url || "",
-      plot         : "",
-      type         : "live",
-      quality      : ""
-    })));
-    // Construire l'index régional immédiatement → peupler pipsily_available_regions
-    // pour que les pills de région soient disponibles dès le premier affichage du live.
-    if(S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
-  }
+    if(liveJson){
+      // Les items live ont déjà type:"live" dans le JSON — normalisation légère
+      const liveItems = extractArr(liveJson);
+      S._liveRegionIdx = null; // reset index quand les données live changent
+      S.live = appPolicyFilter(liveItems.map((x, i) => ({  // normalisation
+        id           : x.id || x.stream_id || String(i),
+        stream_id    : x.stream_id || x.id || String(i),
+        title        : x.title || x.name || "Sans titre",
+        category_id  : x.category_id || "",
+        category_name: x.category_name || "Autre",
+        stream_icon  : x.stream_icon || x.image || "",
+        stream_url   : x.stream_url || x.url || "",
+        url          : x.stream_url || x.url || "",
+        plot         : "",
+        type         : "live",
+        quality      : ""
+      })));
+      // Construire l'index régional immédiatement → peupler pipsily_available_regions
+      // pour que les pills de région soient disponibles dès le premier affichage du live.
+      if(S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
+    }
 
-  // ── Afficher date dernière mise à jour dans la barre fixe ──
-  {
+    // ── Afficher date dernière mise à jour dans la barre fixe ──
     const el = document.getElementById("lastUpdateDate");
     if(el){
       if(epIndex?.generated){
@@ -4579,7 +4594,11 @@ async function boot(){
         el.textContent = "Catalogue à jour";
       }
     }
+
+    return !!(S.vod.length || S.series.length || S.live.length);
   }
+
+  const _catalogOk = await loadCatalog();
 
   // ── Restaurer la section si on revient du lecteur ──────────────────
   {
@@ -4602,6 +4621,26 @@ async function boot(){
 
   renderNouveautes();
   render();
+
+  // ── Auto-réparation : catalogue vide au démarrage (réseau pas prêt) ──
+  // Symptôme : seuls les favoris/en-cours (localStorage) s'affichaient et il
+  // fallait « Rafraîchir » à la main. On relance dès que la connexion revient
+  // (événement « online ») + quelques essais espacés, puis on re-rend.
+  if(!_catalogOk){
+    console.warn("[PIPSILY] catalogue vide au démarrage — auto-réparation réseau activée");
+    let _healed = false;
+    const _heal = async () => {
+      if(_healed) return;
+      if(await loadCatalog()){
+        _healed = true;
+        window.removeEventListener("online", _heal);
+        renderNouveautes();
+        render();
+      }
+    };
+    window.addEventListener("online", _heal);
+    [3000, 7000, 14000, 22000].forEach(ms => setTimeout(_heal, ms));
+  }
 
   // ── TV : focus initial sur le bouton actif (Films) après 1er render ──
   if(document.documentElement.classList.contains("is-tv")){
