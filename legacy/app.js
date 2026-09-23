@@ -66,16 +66,53 @@ const STORE = {
   progress: "pf_progress_v4"
 };
 const PER_PAGE = 48;
+let _LOWEND = false;
+try {
+  new Function("var _o = {}; return _o?.x;");
+} catch (e) {
+  _LOWEND = true;
+}
+function _thumbUrl(u) {
+  if (!_LOWEND || !u) return u;
+  return u.replace(/(\/\/image\.tmdb\.org\/t\/p\/)[^/]+\//, "$1w185/");
+}
+const _imgQueue = [];
+let _imgActive = 0;
+const _IMG_MAX = _LOWEND ? 4 : 9999;
+function _pumpImgQueue() {
+  while (_imgActive < _IMG_MAX && _imgQueue.length) {
+    const img = _imgQueue.shift();
+    if (!img || !img.isConnected) continue;
+    const src = img.getAttribute("data-src");
+    if (!src) continue;
+    img.removeAttribute("data-src");
+    _imgActive++;
+    const done = function() {
+      _imgActive--;
+      _pumpImgQueue();
+    };
+    img.addEventListener("load", done, { once: true });
+    img.addEventListener("error", done, { once: true });
+    img.src = _thumbUrl(src);
+  }
+}
+function _applyLazy(img) {
+  const src = img.getAttribute("data-src");
+  if (!src) return;
+  if (!_LOWEND) {
+    img.removeAttribute("data-src");
+    img.src = _thumbUrl(src);
+    return;
+  }
+  _imgQueue.push(img);
+  _pumpImgQueue();
+}
 const _imgIO = typeof IntersectionObserver !== "undefined" ? new IntersectionObserver(function(entries, obs) {
   entries.forEach(function(e) {
     if (!e.isIntersecting) return;
     const img = e.target;
     obs.unobserve(img);
-    const src = img.getAttribute("data-src");
-    if (src) {
-      img.removeAttribute("data-src");
-      img.src = src;
-    }
+    _applyLazy(img);
   });
 }, { rootMargin: "600px" }) : null;
 function observeLazyImgs(root) {
@@ -86,11 +123,7 @@ function observeLazyImgs(root) {
     if (_imgIO) {
       _imgIO.observe(img);
     } else {
-      const s = img.getAttribute("data-src");
-      if (s) {
-        img.removeAttribute("data-src");
-        img.src = s;
-      }
+      _applyLazy(img);
     }
   }
 }
@@ -821,6 +854,7 @@ function toggleFav(item) {
   else favs.unshift({ key, item, at: Date.now() });
   _cacheF = favs.slice(0, 500);
   storeSet(STORE.favorites, _cacheF);
+  _favVersion++;
   const fav = isFav(item);
   document.querySelectorAll(`.card[data-key="${CSS.escape(key)}"] .fav-btn`).forEach((b) => {
     b.classList.toggle("is-fav", fav);
@@ -1908,7 +1942,50 @@ function appPolicyFilter(list) {
   if (!A || !A.contentFilter) return list || [];
   return A.contentFilter(list, "category_name", S._contentPolicy);
 }
+const _COLL = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator(void 0, { sensitivity: "base", numeric: true }) : null;
+function _cmpTitle(a, b) {
+  return _COLL ? _COLL.compare(a || "", b || "") : String(a || "").localeCompare(b || "");
+}
+let _catalogVersion = 0;
+let _favVersion = 0;
+let _fCacheKey = null, _fCacheVal = null;
+function _filterKey() {
+  let adult = 0;
+  try {
+    adult = sessionStorage.getItem("pipsily_adult_unlocked") ? 1 : 0;
+  } catch (e) {
+  }
+  return [
+    S.type,
+    S.cat,
+    S.search,
+    S.quality,
+    S.sort,
+    S.region,
+    document.documentElement.classList.contains("is-tv") ? 1 : 0,
+    adult,
+    _catalogVersion,
+    _favVersion
+  ].join("§");
+}
 function filtered() {
+  const k = _filterKey();
+  if (_fCacheVal && k === _fCacheKey) return _fCacheVal;
+  const v = _computeFiltered();
+  _fCacheKey = _filterKey();
+  _fCacheVal = v;
+  return v;
+}
+let _catsCache = { key: null, val: null };
+function _categoriesFor(type) {
+  const key = type + "§" + _catalogVersion;
+  if (_catsCache.key === key) return _catsCache.val;
+  const all = type === "vod" ? S.vod : type === "series" ? S.series : S.live;
+  const cats = [...new Set(all.map((x) => x.category_name).filter(Boolean))].sort();
+  _catsCache = { key, val: cats };
+  return cats;
+}
+function _computeFiltered() {
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
   items = items.filter((x) => !_isVostfr(x));
   if (S.cat === "__ADULT__") {
@@ -1931,9 +2008,9 @@ function filtered() {
   }
   if (S.quality && S.type !== "live") items = items.filter((x) => x.quality === S.quality);
   if (S.sort === "category")
-    items.sort((a, b) => a.category_name.localeCompare(b.category_name) || a.title.localeCompare(b.title));
+    items.sort((a, b) => _cmpTitle(a.category_name, b.category_name) || _cmpTitle(a.title, b.title));
   else if (S.sort !== "recent")
-    items.sort((a, b) => a.title.localeCompare(b.title));
+    items.sort((a, b) => _cmpTitle(a.title, b.title));
   if (S.type === "live" && S.region) {
     if (!S._liveRegionIdx) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
     const { regionSet } = S._liveRegionIdx;
@@ -2926,8 +3003,7 @@ function render() {
       (p) => p.classList.toggle("quality-pill--active", p.dataset.q === S.quality)
     );
   }
-  const all = S.type === "vod" ? S.vod : S.type === "series" ? S.series : S.live;
-  const cats = [...new Set(all.map((x) => x.category_name).filter(Boolean))].sort();
+  const cats = _categoriesFor(S.type);
   const catsForSelect = cats.filter((c) => !_isAdultCat(c) && !/vostfr/i.test(c));
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` + catsForSelect.map((c) => `<option value="${esc(c)}"${c === S.cat ? " selected" : ""}>${esc(displayCat(c))}</option>`).join("");
   renderCatPills(cats);
@@ -4223,6 +4299,7 @@ async function boot() {
         el.textContent = "Catalogue à jour";
       }
     }
+    _catalogVersion++;
     return !!(S.vod.length || S.series.length || S.live.length);
   }
   const _catalogOk = await loadCatalog();
