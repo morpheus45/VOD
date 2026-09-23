@@ -16,6 +16,7 @@ import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -429,7 +430,28 @@ public class MainActivity extends AppCompatActivity {
         // Bridge JavaScript ↔ Java
         webView.addJavascriptInterface(new PipsilyBridge(), "AndroidBridge");
 
+        // Cache disque des vignettes TMDB (poste lent) : prépare le dossier + élague.
+        ImageCache.init(this);
+
         webView.setWebViewClient(new WebViewClient() {
+            // ── Cache disque des SEULES vignettes TMDB ───────────────────
+            //   Le WebView reste en LOAD_NO_CACHE (donc les MAJ web arrivent
+            //   toujours) ; ici on sert les affiches TMDB (immuables) depuis le
+            //   disque de l'app au lieu de les re-télécharger à chaque session via
+            //   le VPN. FAIL-SAFE : toute erreur, méthode ≠ GET, ou tout autre hôte
+            //   → null → chargement normal du WebView. La vidéo n'est pas concernée.
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                try {
+                    if (request == null || request.getUrl() == null) return null;
+                    String method = request.getMethod();
+                    if (method != null && !"GET".equalsIgnoreCase(method)) return null;
+                    String u = request.getUrl().toString();
+                    if (u.startsWith("https://image.tmdb.org/")) return ImageCache.get(u);
+                } catch (Throwable ignored) {}
+                return null;
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
