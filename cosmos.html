@@ -346,6 +346,8 @@ html,body{
 #filter-bar{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0 4px}
 #filter-bar::-webkit-scrollbar{display:none}
 /* iOS ne délivre le clic d'un div au document que s'il est « cliquable » */
+#tap-back{display:none}
+@media (hover:none) and (pointer:coarse){#tap-back{display:flex;position:fixed;left:28px;bottom:28px;z-index:150;width:88px;height:88px;border-radius:50%;border:0;background:rgba(20,20,40,.85);color:#fff;font-size:56px;line-height:1;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(0,0,0,.5);cursor:pointer}}
 .card,.btn-hero,.panel-act-btn,.panel-tab,.pep,.resume-btn,.set-item,.kbk,.qp-item,.cp-item,.fpill,.ni{cursor:pointer;touch-action:manipulation}
 .fpill{
   flex-shrink:0;padding:5px 16px;border-radius:999px;
@@ -732,6 +734,7 @@ html,body{
 </div>
 
 <div id="app">
+  <button id="tap-back" type="button" aria-label="Retour">‹</button>
 
   <div id="nav-scrim"></div>
 
@@ -3659,6 +3662,9 @@ const TAP_ZONES=[ // [élément touché, zone, index dans S, liste de référenc
 $('app').addEventListener('click',e=>{
   // detail 0 = clic synthétisé par OK/Entrée : déjà traité par onKey, pas de doublon
   if(_toastZone||!e.detail||!e.target.closest)return;
+  // Retour au doigt (pas de touche Retour sur iPad) : ✕ de la fiche, bouton ‹
+  if(e.target.closest('.panel-close-btn')){closePanel();return;}
+  if(e.target.closest('#tap-back')){if(String(S.zone).indexOf('panel-')===0)closePanel();else onKey('B');return;}
   for(const [sel,zone,key,list] of TAP_ZONES){
     const el=e.target.closest(sel);if(!el)continue;
     if(zone==='row'){S.rowIdx=+el.dataset.ri;S.cardIdx=+el.dataset.ci;}
