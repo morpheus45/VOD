@@ -127,6 +127,7 @@ const S = {
   search    : "",
   quality   : "",
   region    : localStorage.getItem("pipsily_region") || "",
+  country   : "",          // pays des chaînes TV ("" = tous) — fixé au chargement du live
   _liveRegionIdx: null,   // construit une fois, resetté si live recharge
   sort      : "title",
   shown     : { vod: 0, series: 0, live: 0 },
@@ -1164,7 +1165,10 @@ function _idbPut(cle, valeur){
  * @param {string} url  fichier de catalogue, servi par le même domaine
  * @returns {Promise<any|null>}  le JSON, ou null si rien n'est disponible
  */
-async function fetchJsonCached(url){
+// Identifiants Xtream de l'admin appliqués aux URL des catalogues (xtream.js).
+const _xf = d => (window.PF_XT ? window.PF_XT.fix(d) : d);
+async function fetchJsonCached(url){ return _xf(await _fetchJsonCachedRaw(url)); }
+async function _fetchJsonCachedRaw(url){
   let cache = null;
   try { cache = await _idbGet(url); } catch(e) { /* pas de cache : on continue */ }
 
@@ -1190,10 +1194,10 @@ async function fetchJsonCached(url){
 }
 
 async function fetchJson(url){
-  try { const r = await fetch(url); return r.ok ? r.json() : null; } catch { return null; }
+  try { const r = await fetch(url); return r.ok ? _xf(await r.json()) : null; } catch { return null; }
 }
 async function fetchText(url){
-  try { const r = await fetch(url); return r.ok ? r.text() : null; } catch { return null; }
+  try { const r = await fetch(url); return r.ok ? _xf(await r.text()) : null; } catch { return null; }
 }
 
 // Réessaie un chargement JSON au démarrage quand le réseau n'est pas encore
@@ -2287,7 +2291,7 @@ function _filterKey(){
   let adult = 0;
   try { adult = sessionStorage.getItem("pipsily_adult_unlocked") ? 1 : 0; } catch(e){}
   return [
-    S.type, S.cat, S.search, S.quality, S.sort, S.region,
+    S.type, S.cat, S.search, S.quality, S.sort, S.region, S.country,
     document.documentElement.classList.contains("is-tv") ? 1 : 0,
     adult, _catalogVersion, _favVersion
   ].join("§");
@@ -2314,6 +2318,8 @@ function _categoriesFor(type){
 
 function _computeFiltered(){
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
+  // Live : pays choisi (les chaînes sans code pays restent toujours visibles)
+  if(S.type === "live" && window.PF_XT) items = PF_XT.filterLive(items, _xCode, S.country);
   // VOSTFR toujours masqué
   items = items.filter(x => !_isVostfr(x));
   if(S.cat === "__ADULT__"){
@@ -2507,6 +2513,12 @@ function _computeFiltered(){
       if(pa !== pb) return pa - pb;             // hors TNT → ordre catégorie
       return a.title.localeCompare(b.title);    // puis alphabétique (ordre stable)
     });
+  }
+
+  // ── Live, tous pays : regroupés par pays, France d'abord, ordre interne conservé ──
+  if(S.type === "live" && !S.country && window.PF_XT){
+    const _ck = x => { const c = PF_XT.country(x.category_name); return c === "FR" ? "" : (c || "~"); };
+    items = items.map((x, i) => [x, i]).sort((a, b) => _ck(a[0]).localeCompare(_ck(b[0])) || a[1] - b[1]).map(p => p[0]);
   }
 
   // Filtre favoris uniquement (bouton ❤️ dans la barre)
@@ -3300,7 +3312,9 @@ function render(){
     );
   }
 
-  const cats = _categoriesFor(S.type);
+  const cats = S.type === "live" && S.country && window.PF_XT
+    ? _categoriesFor("live").filter(c => { const k = PF_XT.country(c); return !k || k === S.country; })
+    : _categoriesFor(S.type);
   // Exclure les catégories adultes du <select> pour éviter le contournement du filtre 🔞
   const catsForSelect = cats.filter(c => !_isAdultCat(c) && !/vostfr/i.test(c));
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` +
@@ -3326,6 +3340,17 @@ function render(){
 //  PILLS RÉGION (onglet TV Live)
 // ─────────────────────────────────────────────────────────────────
 
+// Pays des chaînes TV : « Tous les pays » + un bouton par code (FR, UK…), en tête
+// de la barre des régions — les régions françaises ne s'affichent qu'en France.
+function _xCode(x){ return window.PF_XT ? PF_XT.country(x.category_name) : ""; }
+function _countryPillsHtml(){
+  const list = window.PF_XT ? PF_XT.countries(S.live, _xCode) : [];
+  if(!list.length) return "";
+  return `<button class="quality-pill ${!S.country ? "quality-pill--active" : ""}" data-ctry="">🌍 Tous les pays</button>` +
+    list.map(c => `<button class="quality-pill ${c === S.country ? "quality-pill--active" : ""}" data-ctry="${esc(c)}">${esc(PF_XT.label(c))}</button>`).join("") +
+    `<span class="pill-sep" aria-hidden="true" style="flex:0 0 1px;align-self:stretch;margin:4px 6px;background:rgba(255,255,255,.18)"></span>`;
+}
+
 function _renderRegionPills(container){
   if(!container) return;
   container.hidden = false;
@@ -3336,14 +3361,18 @@ function _renderRegionPills(container){
 
   const cur = S.region.toLowerCase();
 
-  // Pill "Tout" + une pill par région détectée
-  container.innerHTML =
-    `<button class="quality-pill ${!S.region ? "quality-pill--active" : ""}" data-rgn="">🌍 Tout</button>` +
+  // Pays, puis pill "Tout" + une pill par région détectée (France uniquement)
+  const showRegions = !S.country || S.country === "FR";
+  container.innerHTML = _countryPillsHtml() + (!showRegions ? "" :
+    `<button class="quality-pill ${!S.region ? "quality-pill--active" : ""}" data-rgn="">📍 Toutes régions</button>` +
     regions.map(r => {
       const lc = r.toLowerCase();
       return `<button class="quality-pill ${lc === cur ? "quality-pill--active" : ""}" data-rgn="${esc(lc)}">${esc(r.charAt(0).toUpperCase()+r.slice(1))}</button>`;
-    }).join("");
+    }).join(""));
 
+  container.querySelectorAll("[data-ctry]").forEach(btn => {
+    btn.onclick = () => { S.country = btn.dataset.ctry; PF_XT.setCountry(S.country); S.cat = ""; render(); };
+  });
   // Gestionnaire de clic sur chaque pill
   container.querySelectorAll("[data-rgn]").forEach(btn => {
     btn.onclick = () => {
@@ -4665,6 +4694,7 @@ async function boot(){
       // Construire l'index régional immédiatement → peupler pipsily_available_regions
       // pour que les pills de région soient disponibles dès le premier affichage du live.
       if(S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
+      if(window.PF_XT) S.country = PF_XT.getCountry(PF_XT.countries(S.live, _xCode));
     }
 
     // ── Afficher date dernière mise à jour dans la barre fixe ──

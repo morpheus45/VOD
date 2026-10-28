@@ -276,6 +276,7 @@
       window._allSessions = sessions;
       window._allPayments = payments;
       renderAdmin(users, payments, devices, sessions);
+      loadXtream();
     }
 
     function fmtDate(iso){ if(!iso) return "—"; return new Date(iso).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"}) }
@@ -345,6 +346,20 @@
             <button class="btn btn-primary" onclick="createAccount()">Créer</button>
           </div>
           <div class="msg" id="createMsg"></div>
+        </div>
+
+        <!-- Serveur Xtream : identifiants utilisés par toutes les interfaces -->
+        <div class="card">
+          <div class="card-title">Serveur Xtream</div>
+          <div class="form-create">
+            <input id="xtUrl" placeholder="URL du serveur (ex. http://serveur.com)" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            <input id="xtPort" placeholder="Port (ex. 80) — facultatif" inputmode="numeric" autocomplete="off" />
+            <input id="xtUser" placeholder="Identifiant" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            <input id="xtPass" placeholder="Mot de passe" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            <button class="btn btn-primary" onclick="saveXtream()">Enregistrer</button>
+            <button class="btn" onclick="resetXtream()">Revenir aux identifiants d'origine</button>
+          </div>
+          <div class="msg" id="xtMsg"></div>
         </div>
 
         <!-- Abonnés -->
@@ -586,6 +601,30 @@
       } catch(err){
         alert("Erreur : " + err.message);
       }
+    }
+
+    // ── Serveur Xtream (table app_config, clé "xtream") ──
+    const XT_IDS = { url:"xtUrl", port:"xtPort", user:"xtUser", pass:"xtPass" };
+    async function loadXtream(){
+      const { data } = await A.supabase.from("app_config").select("value").eq("key","xtream").maybeSingle();
+      const v = (data && data.value) || {};
+      for(const k in XT_IDS){ const el = document.getElementById(XT_IDS[k]); if(el) el.value = v[k] || ""; }
+    }
+    async function saveXtream(){
+      const v = {}, msg = document.getElementById("xtMsg");
+      for(const k in XT_IDS) v[k] = document.getElementById(XT_IDS[k]).value.trim();
+      if(!v.url || !v.user || !v.pass){ showMsg(msg,"error","URL, identifiant et mot de passe requis."); return; }
+      if(v.port && !/^\d{1,5}$/.test(v.port)){ showMsg(msg,"error","Le port ne contient que des chiffres."); return; }
+      const { error } = await A.supabase.from("app_config").upsert({ key:"xtream", value:v, updated_at:new Date().toISOString() });
+      showMsg(msg, error ? "error" : "success", error ? "Erreur : " + error.message
+        : "✓ Enregistré — chaque appareil l'applique à sa prochaine ouverture.");
+    }
+    async function resetXtream(){
+      if(!confirm("Revenir aux identifiants d'origine du catalogue ?")) return;
+      const msg = document.getElementById("xtMsg");
+      const { error } = await A.supabase.from("app_config").delete().eq("key","xtream");
+      if(!error) for(const k in XT_IDS) document.getElementById(XT_IDS[k]).value = "";
+      showMsg(msg, error ? "error" : "success", error ? "Erreur : " + error.message : "✓ Identifiants d'origine rétablis.");
     }
 
     function showMsg(el, type, text){

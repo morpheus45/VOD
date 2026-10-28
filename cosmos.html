@@ -33,6 +33,7 @@
     document.write('<scr' + 'ipt src="' + srcs[i] + '"></scr' + 'ipt>');
 })();
 </script>
+<script src="xtream.js?v=1"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <script>
@@ -344,6 +345,8 @@ html,body{
 #grid-title{font-size:13px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
 #filter-bar{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0 4px}
 #filter-bar::-webkit-scrollbar{display:none}
+/* iOS ne délivre le clic d'un div au document que s'il est « cliquable » */
+.card,.btn-hero,.panel-act-btn,.panel-tab,.pep,.resume-btn,.set-item,.kbk,.qp-item,.cp-item,.fpill,.ni{cursor:pointer;touch-action:manipulation}
 .fpill{
   flex-shrink:0;padding:5px 16px;border-radius:999px;
   background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
@@ -814,6 +817,7 @@ html,body{
             <button class="btn-hero btn-play">▶ Lecture</button>
             <button class="btn-hero btn-info">⊕ Détails</button>
             <button class="btn-hero btn-fav">♡ Ma liste</button>
+            <button class="btn-hero btn-ctry" hidden>🌍 Pays</button>
           </div>
         </div>
         <div id="hero-dots"></div>
@@ -988,8 +992,12 @@ html,body{
 'use strict';
 // ══════ CONFIG ══════════════════════════════════════════════════════════
 const GH  = './';
-const API = 'http://goldenlink.live/player_api.php';
-const U   = 'E5G5E39', P = 'RE88M4E';
+// Identifiants Xtream : ceux de l'admin s'ils existent (xtream.js), sinon d'origine.
+const _XC = (window.PF_XT && PF_XT.cfg()) || null;
+const XB  = _XC ? PF_XT.base(_XC) : 'http://goldenlink.live';
+const API = XB+'/player_api.php';
+const U   = _XC ? _XC.user : 'E5G5E39', P = _XC ? _XC.pass : 'RE88M4E';
+const _xf = d => (window.PF_XT ? PF_XT.fix(d) : d);
 // TMDB — s inscrire gratuitement sur themoviedb.org pour une cle personnelle
 const TMDB_KEY = storeGet('tmdb_key','') || '2dca580c2a14b55200e784d157207b4d';
 const TMDB_IMG = 'https://image.tmdb.org/t/p/';
@@ -1311,7 +1319,7 @@ function bridgeFetchAsync(url){
             if(raw!==null&&raw!==undefined&&raw!==''){
               clearInterval(poll);
               let p=null;try{p=JSON.parse(raw);}catch(e){}
-              resolve(p);return;
+              resolve(_xf(p));return;
             }
           }catch(e){}
           if(n>60){clearInterval(poll);resolve(null);} // 9s timeout
@@ -1320,15 +1328,15 @@ function bridgeFetchAsync(url){
       }catch(e){}
     }
     // Fallback fetch() navigateur
-    fetch(url).then(r=>r.ok?r.json():null).catch(()=>null).then(resolve);
+    fetch(url).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>resolve(_xf(d)));
   });
 }
 // Legacy sync fallback (conserve pour episodes API)
 async function bridgeFetch(url){
   if(window.AndroidBridge?.fetchJson){
-    try{const r=AndroidBridge.fetchJson(url);if(r)return JSON.parse(r);}catch{}
+    try{const r=AndroidBridge.fetchJson(url);if(r)return _xf(JSON.parse(r));}catch{}
   }
-  try{const r=await fetch(url);return r.ok?r.json():null;}catch{return null;}
+  try{const r=await fetch(url);return r.ok?_xf(await r.json()):null;}catch{return null;}
 }
 
 // ══════ NORMALISE ════════════════════════════════════════════════════════
@@ -1374,7 +1382,7 @@ function groupLiveItems(items){
     const key=liveKey(item.title);
     if(!key)return;
     if(!groups[key]){
-      groups[key]={title:liveBase(item.title),image:item.image,category:cleanLiveCat(item.category),isLive:true,variants:[]};
+      groups[key]={title:liveBase(item.title),image:item.image,category:cleanLiveCat(item.category)+(item._ctag||''),isLive:true,variants:[]};
       order.push(key);
     }
     const g=groups[key];
@@ -1509,7 +1517,8 @@ async function fetchContentData(){
     image:ch.stream_icon||ch.image||'',
     category:cleanTitle(ch.category_name||ch.category||'Live TV'),
     plot:'',isLive:true,
-    url:ch.stream_url||ch.url||`http://goldenlink.live/live/${U}/${P}/${ch.stream_id||i}.ts`,
+    url:ch.stream_url||ch.url||`${XB}/live/${U}/${P}/${ch.stream_id||i}.ts`,
+    country:window.PF_XT?PF_XT.country(ch.category_name||ch.category||''):'',
     stream_id:ch.stream_id||String(i),
   }));
   return{allVod,allSeries,liveRaw};
@@ -1587,7 +1596,7 @@ async function refreshContentSilently(){
       // MAJ silencieuse des donnees, visible au prochain changement d'onglet
       S.allVod=nVod;S.allSeries=nSeries;
       S.allItems=[...S.allVod,...S.allSeries];
-      S.liveItems=_cosRegionFilter(groupLiveItems(policyFilter(d.liveRaw).filter(isClean)));
+      S.liveItems=_cosRegionFilter(groupLiveItems(_cosCountryFilter(S._liveRaw=policyFilter(d.liveRaw).filter(isClean))));
       const cleanItems=S.allItems.filter(i=>isClean(i)&&i.image);
       S.heroPool=shuffle(cleanItems).slice(0,80);
     }
@@ -1640,7 +1649,7 @@ function buildContent(allVod,allSeries,liveRaw){
   allVod=policyFilter(allVod); allSeries=policyFilter(allSeries);
   liveRaw=policyFilter(liveRaw);
   S.allVod=allVod;S.allSeries=allSeries;S.allItems=[...allVod,...allSeries];
-  S.liveItems=_cosRegionFilter(groupLiveItems(liveRaw.filter(isClean)));
+  S.liveItems=_cosRegionFilter(groupLiveItems(_cosCountryFilter(S._liveRaw=liveRaw.filter(isClean))));
   const cleanItems=S.allItems.filter(i=>isClean(i)&&i.image);
   S.heroPool=shuffle(cleanItems).slice(0,80);
 
@@ -2182,7 +2191,7 @@ function playPanelEp(ei){
 function epUrl(ep){
   let u=ep.stream_url||ep.url||'';
   if(!u){const id=ep.id||ep.stream_id;const ext=ep.ext||ep.container_extension||'mp4';
-    if(id)u='http://goldenlink.live/series/'+U+'/'+P+'/'+id+'.'+ext;}
+    if(id)u=XB+'/series/'+U+'/'+P+'/'+id+'.'+ext;}
   return String(u).replace(/^https?:\/\//i,'http://');
 }
 function doPlayEp(ei,startMs){
@@ -2494,6 +2503,8 @@ function gotoSection(s){
   // TOUJOURS utiliser home-view — changer son contenu selon le tab (style Google TV)
   showOnlyView('home-view');
   S.sec=s;
+  const _hc=document.querySelector('#hero-acts .btn-ctry');
+  if(_hc){_hc.hidden=(s!=='live');_hc.textContent='🌍 '+_cosCountryLabel();if(s!=='live'&&S.hBtn>2)S.hBtn=0;}
 
   if(s==='home'){
     renderTabHome();
@@ -2872,6 +2883,7 @@ function renderSettings(){
     {label:'👤 Compte & abonnement',desc:'Plan : '+planLabel+' — voir les détails',action:'account'},
     {label:'Interface : Cosmos TV',desc:'Basculer vers l\'interface PIPSILY Xstream',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
+    {label:'🌍 Pays des chaînes (TV Live)',desc:'Actuel : '+_cosCountryLabel(),action:'country'},
     // PIPSILY se declare ecran d'accueil : sur un appareil ou elle est le
     // lanceur (Freebox Player POP par exemple), il n'existe AUCUN autre moyen
     // d'atteindre les reglages Android. On ne peut meme plus se connecter au
@@ -2950,6 +2962,7 @@ function activateSetting(idx){
   }
   else if(action==='account'){openAccountInfo();}
   else if(action==='region'){openRegionPicker();}
+  else if(action==='country'){openCountryPicker();}
   else if(action==='parental'){openParental();}
   else if(action==='admin'){location.href='./admin.html';}
   else if(action==='logout'){openLogoutConfirm();}
@@ -2979,7 +2992,38 @@ function openPicker(title,sub,items,idx,onPick){
   if(S.zone!=='cos-picker')S.pickerRet=S.zone;
   S.zone='cos-picker';focus();
 }
-function closePicker(){$('cos-picker').hidden=true;S.zone='settings';renderSettings();focus();}
+function closePicker(){
+  $('cos-picker').hidden=true;
+  if(S.sec==='settings'){S.zone='settings';renderSettings();}else S.zone=S.pickerRet||'hero';   // ouvert hors réglages (TV Direct)
+  focus();
+}
+
+// ── Pays des chaînes TV (xtream.js) ─────────────────────────────────────
+// Filtre AVANT le regroupement : une chaîne peut exister en plusieurs pays.
+// « Tous les pays » : France d'abord, rayons étrangers suffixés du code pays.
+function _cosCountryFilter(list){
+  if(!window.PF_XT)return list;
+  const code=i=>i.country||'', sel=PF_XT.getCountry(PF_XT.countries(list,code));
+  const out=PF_XT.filterLive(list,code,sel);
+  out.forEach(i=>{i._ctag=(!sel&&i.country&&i.country!=='FR')?' · '+i.country:'';});
+  if(sel)return out;
+  const k=i=>i.country==='FR'?'':(i.country||'~');
+  return out.map((x,n)=>[x,n]).sort((a,b)=>k(a[0]).localeCompare(k(b[0]))||a[1]-b[1]).map(p=>p[0]);
+}
+function _cosCountryList(){return window.PF_XT&&S._liveRaw?PF_XT.countries(S._liveRaw,i=>i.country||''):[];}
+function _cosCountryLabel(){const c=window.PF_XT?PF_XT.getCountry(_cosCountryList()):'';return c?PF_XT.label(c):'Tous les pays';}
+function openCountryPicker(){
+  if(!window.PF_XT)return;
+  const list=_cosCountryList(), cur=PF_XT.getCountry(list);
+  const items=[{label:'🌍 Tous les pays',value:''}].concat(list.map(c=>({label:PF_XT.label(c),value:c})));
+  items.forEach(it=>{it.active=(it.value===cur);});
+  openPicker('🌍 Pays des chaînes TV','Ne montre que les chaînes du pays choisi.',items,Math.max(0,items.findIndex(i=>i.value===cur)),it=>{
+    PF_XT.setCountry(it.value);
+    if(S._liveRaw)S.liveItems=_cosRegionFilter(groupLiveItems(_cosCountryFilter(S._liveRaw)));
+    closePicker();
+    if(S.sec==='live')renderTabLive();
+  });
+}
 
 // ── Région ──────────────────────────────────────────────────────────────
 function openRegionPicker(){
@@ -3365,7 +3409,7 @@ function onKey(type){
     if(type==='U'){S.zone='nav';focus();}
     else if(type==='D'){if(S.rows.length){S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();}}
     else if(type==='L'){S.hBtn=Math.max(0,S.hBtn-1);focus();}
-    else if(type==='R'){S.hBtn=Math.min(2,S.hBtn+1);focus();}
+    else if(type==='R'){S.hBtn=Math.min(qAll('#hero-acts .btn-hero:not([hidden])').length-1,S.hBtn+1);focus();}
     else if(type==='E'){
       if(S.hBtn===0&&S.heroItem){
         const it=S.heroItem;
@@ -3374,6 +3418,7 @@ function onKey(type){
         else playMovie(it);
       }
       else if(S.hBtn===1&&S.heroItem){openPanel(S.heroItem);}
+      else if(S.hBtn===3){openCountryPicker();}
       else if(S.hBtn===2&&S.heroItem){
         toggleFav(S.heroItem);
         document.querySelector('#hero-acts .btn-fav').textContent=isFav(S.heroItem)?'♥ Ma liste':'♡ Ma liste';
@@ -3590,6 +3635,44 @@ document.addEventListener('keydown',e=>{
 document.querySelectorAll('#nav-items .ni').forEach((el,i)=>{
   el.addEventListener('click',()=>{gotoSection(el.dataset.s);});
 });
+// ══════ TACTILE (iPad, téléphone, souris) ══════════════════════════════════
+// Cosmos est piloté à la télécommande : cartes, boutons et listes n'avaient
+// aucun gestionnaire de clic, un toucher ne faisait rien. Un toucher place le
+// focus sur l'élément (zone + index) puis rejoue « OK » : même chemin que la
+// télécommande, aucun comportement en double. Le défilement au doigt reste natif.
+// Écouteur sur #app et NON sur document : iOS ne synthétise le clic d'un toucher
+// que si un ancêtre de l'élément écoute « click » — document ne compte pas.
+const TAP_ZONES=[ // [élément touché, zone, index dans S, liste de référence]
+  ['#grid-wrap .card','grid','gridIdx','#grid-wrap .card'],
+  ['#search-results .card','search','gridIdx','#search-results .card'],
+  ['#content .card','row'],
+  ['#hero-acts .btn-hero','hero','hBtn','#hero-acts .btn-hero'],
+  ['.panel-act-btn','panel-acts','panelActIdx','.panel-act-btn:not([hidden])'],
+  ['.panel-tab','panel-tabs','panelTabIdx','.panel-tab'],
+  ['.pep','panel-eps','panelEpIdx','.pep'],
+  ['.resume-btn','resume','resumeBtn','.resume-btn'],
+  ['.set-item','settings','setIdx','.set-item'],
+  ['.kbk','search-kb','kbIdx','.kbk'],
+  ['.qp-item','qual-picker','qualIdx','.qp-item'],
+  ['#cp-list .cp-item','cos-picker','pickerIdx','#cp-list .cp-item'],
+];
+$('app').addEventListener('click',e=>{
+  // detail 0 = clic synthétisé par OK/Entrée : déjà traité par onKey, pas de doublon
+  if(_toastZone||!e.detail||!e.target.closest)return;
+  for(const [sel,zone,key,list] of TAP_ZONES){
+    const el=e.target.closest(sel);if(!el)continue;
+    if(zone==='row'){S.rowIdx=+el.dataset.ri;S.cardIdx=+el.dataset.ci;}
+    else{const i=qAll(list).indexOf(el);if(i<0)return;S[key]=i;}
+    S.zone=zone;focus();onKey('E');return;
+  }
+  const pill=e.target.closest('#filter-bar .fpill');
+  if(pill){ // index d'élément → index de donnée (les séparateurs n'ont pas d'élément)
+    let n=qAll('#filter-bar .fpill').indexOf(pill);
+    const i=(S.filterPills||[]).findIndex(p=>!p.sep&&n--===0);
+    if(i>=0){S.zone='filter';S.filterIdx=i;onKey('E');}
+  }
+});
+
 // Bouton VPN de la barre : ouvre l'ecran natif (choix du serveur, activation,
 // et regeneration du tunnel quand il se fait brider).
 function ouvrirVpn(){

@@ -631,12 +631,28 @@ function generateLiveM3u(creds) {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
+// Identifiants saisis dans l'admin (Supabase app_config) : prioritaires sur les secrets.
+async function loadAdminCreds(){
+  const SB = "https://gwmuazostbbgroplnlql.supabase.co", AK = "sb_publishable_cNZ37Mjd57b_9nlyCvtkkA_wSIszOMR";
+  try{
+    const r = await fetch(`${SB}/rest/v1/app_config?key=eq.xtream&select=value`, { headers:{ apikey:AK, Authorization:`Bearer ${AK}` } });
+    const v = r.ok ? ((await r.json())[0] || {}).value : null;
+    if(!v || !v.url || !v.user || !v.pass) return;
+    let b = String(v.url).trim().replace(/\/+$/, "");
+    if(!/^https?:\/\//i.test(b)) b = "http://" + b;
+    if(v.port) b = b.replace(/:\d+$/, "") + ":" + String(v.port).trim();
+    Object.assign(process.env, { XTREAM_BASE:b, XTREAM_USER:v.user, XTREAM_PASS:v.pass });
+    console.log("🔑  Identifiants Xtream de l'admin utilisés");
+  }catch(e){ console.warn("   ⚠  Config admin illisible — secrets GitHub utilisés"); }
+}
+
 async function main(){
   console.log("╔══════════════════════════════════════╗");
   console.log("║  PIPSILY — Refresh données IPTV    ║");
   console.log("║  v1.1  (fix intelligent)           ║");
   console.log("╚══════════════════════════════════════╝");
 
+  await loadAdminCreds();
   const creds = getCredentials();
   console.log(`\n📡  API : ${creds.base}  (user: ${creds.username})`);
 
