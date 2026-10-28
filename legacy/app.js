@@ -140,6 +140,8 @@ const S = {
   search: "",
   quality: "",
   region: localStorage.getItem("pipsily_region") || "",
+  country: "",
+  // pays des chaînes TV ("" = tous) — fixé au chargement du live
   _liveRegionIdx: null,
   // construit une fois, resetté si live recharge
   sort: "title",
@@ -997,7 +999,11 @@ function _idbPut(cle, valeur) {
     tx.onabort = () => reject(tx.error);
   }));
 }
+const _xf = (d) => window.PF_XT ? window.PF_XT.fix(d) : d;
 async function fetchJsonCached(url) {
+  return _xf(await _fetchJsonCachedRaw(url));
+}
+async function _fetchJsonCachedRaw(url) {
   let cache = null;
   try {
     cache = await _idbGet(url);
@@ -1027,7 +1033,7 @@ async function fetchJsonCached(url) {
 async function fetchJson(url) {
   try {
     const r = await fetch(url);
-    return r.ok ? r.json() : null;
+    return r.ok ? _xf(await r.json()) : null;
   } catch (e) {
     return null;
   }
@@ -1035,7 +1041,7 @@ async function fetchJson(url) {
 async function fetchText(url) {
   try {
     const r = await fetch(url);
-    return r.ok ? r.text() : null;
+    return r.ok ? _xf(await r.text()) : null;
   } catch (e) {
     return null;
   }
@@ -1962,6 +1968,7 @@ function _filterKey() {
     S.quality,
     S.sort,
     S.region,
+    S.country,
     document.documentElement.classList.contains("is-tv") ? 1 : 0,
     adult,
     _catalogVersion,
@@ -1987,6 +1994,7 @@ function _categoriesFor(type) {
 }
 function _computeFiltered() {
   let items = S.type === "vod" ? [...S.vod] : S.type === "series" ? [...S.series] : [...S.live];
+  if (S.type === "live" && window.PF_XT) items = PF_XT.filterLive(items, _xCode, S.country);
   items = items.filter((x) => !_isVostfr(x));
   if (S.cat === "__ADULT__") {
     if (sessionStorage.getItem("pipsily_adult_unlocked")) {
@@ -2152,6 +2160,13 @@ function _computeFiltered() {
       if (pa !== pb) return pa - pb;
       return a.title.localeCompare(b.title);
     });
+  }
+  if (S.type === "live" && !S.country && window.PF_XT) {
+    const _ck = (x) => {
+      const c = PF_XT.country(x.category_name);
+      return c === "FR" ? "" : c || "~";
+    };
+    items = items.map((x, i) => [x, i]).sort((a, b) => _ck(a[0]).localeCompare(_ck(b[0])) || a[1] - b[1]).map((p) => p[0]);
   }
   if (S.favOnly) {
     if (S.type === "live") items = items.filter((g) => isFav(g));
@@ -3003,7 +3018,10 @@ function render() {
       (p) => p.classList.toggle("quality-pill--active", p.dataset.q === S.quality)
     );
   }
-  const cats = _categoriesFor(S.type);
+  const cats = S.type === "live" && S.country && window.PF_XT ? _categoriesFor("live").filter((c) => {
+    const k = PF_XT.country(c);
+    return !k || k === S.country;
+  }) : _categoriesFor(S.type);
   const catsForSelect = cats.filter((c) => !_isAdultCat(c) && !/vostfr/i.test(c));
   $("categorySelect").innerHTML = `<option value="">Toutes les catégories</option>` + catsForSelect.map((c) => `<option value="${esc(c)}"${c === S.cat ? " selected" : ""}>${esc(displayCat(c))}</option>`).join("");
   renderCatPills(cats);
@@ -3014,6 +3032,14 @@ function render() {
   if (useNetflix) renderNetflixRows();
   else renderGrid(true);
 }
+function _xCode(x) {
+  return window.PF_XT ? PF_XT.country(x.category_name) : "";
+}
+function _countryPillsHtml() {
+  const list = window.PF_XT ? PF_XT.countries(S.live, _xCode) : [];
+  if (!list.length) return "";
+  return `<button class="quality-pill ${!S.country ? "quality-pill--active" : ""}" data-ctry="">🌍 Tous les pays</button>` + list.map((c) => `<button class="quality-pill ${c === S.country ? "quality-pill--active" : ""}" data-ctry="${esc(c)}">${esc(PF_XT.label(c))}</button>`).join("") + `<span class="pill-sep" aria-hidden="true" style="flex:0 0 1px;align-self:stretch;margin:4px 6px;background:rgba(255,255,255,.18)"></span>`;
+}
 function _renderRegionPills(container) {
   if (!container) return;
   container.hidden = false;
@@ -3023,10 +3049,19 @@ function _renderRegionPills(container) {
   } catch (e) {
   }
   const cur = S.region.toLowerCase();
-  container.innerHTML = `<button class="quality-pill ${!S.region ? "quality-pill--active" : ""}" data-rgn="">🌍 Tout</button>` + regions.map((r) => {
+  const showRegions = !S.country || S.country === "FR";
+  container.innerHTML = _countryPillsHtml() + (!showRegions ? "" : `<button class="quality-pill ${!S.region ? "quality-pill--active" : ""}" data-rgn="">📍 Toutes régions</button>` + regions.map((r) => {
     const lc = r.toLowerCase();
     return `<button class="quality-pill ${lc === cur ? "quality-pill--active" : ""}" data-rgn="${esc(lc)}">${esc(r.charAt(0).toUpperCase() + r.slice(1))}</button>`;
-  }).join("");
+  }).join(""));
+  container.querySelectorAll("[data-ctry]").forEach((btn) => {
+    btn.onclick = () => {
+      S.country = btn.dataset.ctry;
+      PF_XT.setCountry(S.country);
+      S.cat = "";
+      render();
+    };
+  });
   container.querySelectorAll("[data-rgn]").forEach((btn) => {
     btn.onclick = () => {
       const val = btn.dataset.rgn;
@@ -4287,6 +4322,7 @@ async function boot() {
         quality: ""
       })));
       if (S.live.length) S._liveRegionIdx = _buildLiveRegionIdx(S.live);
+      if (window.PF_XT) S.country = PF_XT.getCountry(PF_XT.countries(S.live, _xCode));
     }
     const el = document.getElementById("lastUpdateDate");
     if (el) {
