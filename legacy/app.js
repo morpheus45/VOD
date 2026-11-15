@@ -521,7 +521,7 @@ const PipPlayer = {
     const rawUrl = (this._item.url || this._item.stream_url || "").trim();
     if (!rawUrl) return;
     if (!isIOSContext && typeof window.AndroidBridge === "undefined") {
-      window.open(rawUrl, "_blank", "noopener");
+      window.open(secureUrl(rawUrl), "_blank", "noopener");
       return;
     }
     if (typeof window.AndroidBridge !== "undefined") {
