@@ -7,7 +7,7 @@
 (function (w) {
   var SB = 'https://gwmuazostbbgroplnlql.supabase.co';
   var AK = 'sb_publishable_cNZ37Mjd57b_9nlyCvtkkA_wSIszOMR';
-  var K = 'pf_xt', KC = 'pf_live_country';
+  var K = 'pf_xt', KC = 'pf_live_country', KR = 'pf_relay';
   var REGIONS = { EU: 1, AF: 1, AS: 1, AM: 1, LATAM: 1, INT: 1, VIP: 1 };
   var RE1 = /(https?:\/\/[^\/"\s]+)\/(live|movie|series)\/([^\/"\s]+)\/([^\/"\s]+)\//g;
   var RE2 = /(https?:\/\/[^\/"\s]+)\/(player_api|get|xmltv)\.php\?username=([^&"\s]+)&password=([^&"\s]+)/g;
@@ -36,15 +36,38 @@
     if (typeof o === 'string') return fixStr(o, c);
     try { var s = JSON.stringify(o), f = fixStr(s, c); return f === s ? o : JSON.parse(f); } catch (e) { return o; }
   }
+  // Relais HTTPS (clé app_config "relay", valeur {url}) : un worker qui va
+  // chercher le flux HTTP et le ressert en HTTPS, avec CORS (relay/worker.js).
+  // Sans lui, un navigateur refuse tout flux HTTP depuis la page HTTPS
+  // (contenu mixte) : rien ne se lit sur PC sans logiciel externe.
+  // L'URL enregistrée inclut le préfixe et la clé : https://x.workers.dev/p/CLE
+  function relayBase() {
+    try { var r = JSON.parse(ls(KR) || 'null'); return r && r.url ? String(r.url).trim().replace(/\/+$/, '') : ''; } catch (e) { return ''; }
+  }
+  // relay(url) → URL relayée si la page est en HTTPS, le flux en HTTP et un
+  // relais configuré ; sinon l'URL inchangée. Format : base/http/hôte/chemin?query
+  function relay(u) {
+    var b = relayBase();
+    if (!b || !u) return u;
+    u = String(u);
+    if (!/^http:\/\//i.test(u) || u.indexOf(b) === 0) return u;
+    if (typeof location !== 'undefined' && location.protocol !== 'https:') return u;
+    var m = /^(https?):\/\/([^\/?#]+)([^?#]*)(\?[^#]*)?/i.exec(u);
+    if (!m) return u;
+    return b + '/' + m[1].toLowerCase() + '/' + m[2] + (m[3] || '/') + (m[4] || '');
+  }
   // Lit la config publiée par l'admin ; si elle a changé, recharge une fois
   // pour que les catalogues soient relus avec les nouveaux identifiants.
   function sync() {
     if (!w.fetch) return;
-    w.fetch(SB + '/rest/v1/app_config?key=eq.xtream&select=value', { headers: { apikey: AK, Authorization: 'Bearer ' + AK } })
+    w.fetch(SB + '/rest/v1/app_config?key=in.(xtream,relay)&select=key,value', { headers: { apikey: AK, Authorization: 'Bearer ' + AK } })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (rows) {
         if (!rows) return;                       // erreur réseau / table absente : on garde l'existant
-        var v = rows[0] && rows[0].value && rows[0].value.url ? JSON.stringify(rows[0].value) : null;
+        var xt = null, rl = null, i;
+        for (i = 0; i < rows.length; i++) { if (rows[i].key === 'xtream') xt = rows[i].value; else if (rows[i].key === 'relay') rl = rows[i].value; }
+        ls(KR, rl && rl.url ? JSON.stringify({ url: rl.url }) : null);   // lu au moment de lire un flux, pas de rechargement
+        var v = xt && xt.url ? JSON.stringify(xt) : null;
         if (v === ls(K)) return;
         ls(K, v);
         if (v === ls(K) && !w.PF_XT_NORELOAD) { try { if (sessionStorage.getItem('pf_xt_rl') === String(v)) return; sessionStorage.setItem('pf_xt_rl', String(v)); } catch (e) { return; } location.reload(); }
@@ -84,6 +107,6 @@
     return out;
   }
 
-  w.PF_XT = { cfg: cfg, base: base, fix: fix, sync: sync, KEY: K, country: country, countries: countries, label: label, getCountry: getCountry, setCountry: setCountry, filterLive: filterLive };
+  w.PF_XT = { cfg: cfg, base: base, fix: fix, sync: sync, KEY: K, country: country, countries: countries, label: label, getCountry: getCountry, setCountry: setCountry, filterLive: filterLive, relay: relay, relayBase: relayBase };
   sync();
 })(window);

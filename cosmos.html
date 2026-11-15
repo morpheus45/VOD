@@ -33,7 +33,7 @@
     document.write('<scr' + 'ipt src="' + srcs[i] + '"></scr' + 'ipt>');
 })();
 </script>
-<script src="xtream.js?v=1"></script>
+<script src="xtream.js?v=2"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <script>
@@ -404,7 +404,8 @@ html,body{
 /* ─── SETTINGS ───────────────────────────────────────────────────────── */
 #settings-view{overflow:hidden}
 .set-title{font-size:24px;font-weight:800;margin-bottom:24px;padding:20px var(--safe) 0}
-.set-list{padding:0 var(--safe);overflow-y:auto;flex:1}
+.set-list{padding:0 var(--safe) 60px;overflow-y:auto;flex:1;scrollbar-width:none}
+.set-list::-webkit-scrollbar{display:none}
 .set-item{
   padding:15px 22px;margin-bottom:10px;min-width:460px;
   border-radius:14px;background:rgba(255,255,255,.06);
@@ -1684,6 +1685,8 @@ function setBackdrop(url){
 }
 function setHero(item){
   if(!item)return;S.heroItem=item;
+  // Une chaine n'a qu'un logo : les themes peuvent le traiter autrement qu'une affiche
+  const _h=$('hero');if(_h)_h.classList.toggle('live-hero',!!item.isLive);
   const hi=$('hero-info');
   if(hi){hi.classList.remove('swap');void hi.offsetWidth;hi.classList.add('swap');}
   const backdrop=$('hero-backdrop'),poster=$('hero-poster');
@@ -2213,7 +2216,8 @@ function playItem(item,startMs){
       if(B.openVideo){ B.openVideo(url,title); return; }
     }catch(e){}
   }
-  window.location.href=url;
+  // Navigateur / iPad : relais HTTPS si l'admin en a configuré un (contenu mixte)
+  window.location.href=(window.PF_XT&&PF_XT.relay)?PF_XT.relay(url):url;
 }
 window.onAndroidPlayerClosed=function(url,posMs,durMs){
   // Après un auto-advance, l'URL renvoyée est l'épisode réellement en cours →
@@ -2821,7 +2825,7 @@ function renderSettings(){
   const planLabel=plan==='admin'?'Administrateur':plan==='unlimited'?'Illimité':(plan==='active'||plan==='standard')?'Standard':'—';
   const items=[
     {label:'👤 Compte & abonnement',desc:'Plan : '+planLabel+' — voir les détails',action:'account'},
-    {label:'Interface : Cosmos TV',desc:'Basculer vers l\'interface PIPSILY Xstream',action:'iface'},
+    {label:'Interface : '+THEME_LABEL,desc:'Choisir une autre apparence (Xstream, Cosmos TV, Nova)',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
     {label:'🌍 Pays des chaînes (TV Live)',desc:'Actuel : '+_cosCountryLabel(),action:'country'},
     // PIPSILY se declare ecran d'accueil : sur un appareil ou elle est le
@@ -2881,7 +2885,7 @@ function activateSetting(idx){
     catch(e){ cosToast('VPN indisponible','Mettez a jour votre application'); }
     return;
   }
-  if(action==='iface'){try{localStorage.setItem('pf_theme','xstream');}catch(e){} location.replace('./index.html');return;}
+  if(action==='iface'){openIfacePicker();return;}
   else if(action==='reload'){
     // Bug : reloadApp() n'existe pas dans le bridge → le bouton ne faisait RIEN,
     // d'où l'impossibilité de charger le nouveau code depuis l'app. clearCache()
@@ -2936,6 +2940,26 @@ function closePicker(){
   $('cos-picker').hidden=true;
   if(S.sec==='settings'){S.zone='settings';renderSettings();}else S.zone=S.pickerRet||'hero';   // ouvert hors réglages (TV Direct)
   focus();
+}
+
+// ── Interface (thème) ───────────────────────────────────────────────────
+// Trois apparences, même compte, mêmes favoris : Xstream (PC / mobile),
+// Cosmos TV (style Google TV) et Nova (visuel moderne). nova.html est généré
+// depuis ce fichier par scripts/build-nova.js, qui remplace THEME_CUR / THEME_LABEL.
+const THEME_CUR='cosmos', THEME_LABEL='Cosmos TV';
+const THEME_FILES={xstream:'./index.html',cosmos:'./cosmos.html',nova:'./nova.html'};
+function openIfacePicker(){
+  const items=[
+    {label:'PIPSILY Xstream — PC et mobile',value:'xstream'},
+    {label:'Cosmos TV — style Google TV',value:'cosmos'},
+    {label:'Nova — visuel moderne',value:'nova'},
+  ];
+  items.forEach(it=>{it.active=(it.value===THEME_CUR);});
+  openPicker('Interface','L\'apparence change ; le compte, les favoris et la progression restent.',items,Math.max(0,items.findIndex(i=>i.active)),it=>{
+    if(it.value===THEME_CUR){closePicker();return;}
+    try{localStorage.setItem('pf_theme',it.value);}catch(e){}
+    location.replace(THEME_FILES[it.value]||'./index.html');
+  });
 }
 
 // ── Pays des chaînes TV (xtream.js) ─────────────────────────────────────
@@ -3197,7 +3221,9 @@ function focus(){
   }
   else if(z==='settings'){
     const items=qAll('.set-item');
-    if(items[S.setIdx])items[S.setIdx].classList.add('foc');
+    // scrollIntoView manquait : la liste depasse l'ecran, les derniers reglages
+    // recevaient le focus hors champ (« je ne vois pas le bas de la page »).
+    if(items[S.setIdx]){items[S.setIdx].classList.add('foc');items[S.setIdx].scrollIntoView({block:'nearest',behavior:'smooth'});}
   }
   else if(z==='search'){
     const cards=qAll('#search-results .card');

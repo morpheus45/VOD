@@ -173,7 +173,8 @@ async function loadPlotFromApi(it){
 
   try {
     const ab = abortAfter(8000);
-    const r  = await fetch(apiUrl.replace(/^https?:\/\//i, "http://"), { signal: ab.signal });
+    const u0 = apiUrl.replace(/^https?:\/\//i, "http://");
+    const r  = await fetch((window.PF_XT && PF_XT.relay) ? PF_XT.relay(u0) : u0, { signal: ab.signal });
     ab.done();
     if(!r.ok) return null;
     const d = await r.json();
@@ -393,14 +394,18 @@ function initPlayer(){
   //  Solution : on ne tente JAMAIS la lecture dans le browser pour les URLs HTTP
   //  sur Android/TV. On ouvre directement VLC / le lecteur système.
   // ══════════════════════════════════════════════════════════════════════════
-  if((isAndroid || isTV) && isHttpUrl(rawUrl)){
+  // Relais HTTPS (admin → xtream.js) : le flux HTTP devient lisible depuis la
+  // page HTTPS sans logiciel côté utilisateur. Jamais dans l'APK : son lecteur
+  // natif lit le HTTP directement.
+  const relayed = (!isNative && window.PF_XT && PF_XT.relay) ? PF_XT.relay(rawUrl) : rawUrl;
+  if((isAndroid || isTV) && isHttpUrl(relayed)){
     setStatus("Ouverture dans le lecteur vidéo…");
     setTimeout(() => openExternalPlayer(rawUrl), 300);
     return;
   }
 
   // ── Desktop / iOS / HTTPS : lecture dans le player intégré ──
-  const url = rawUrl; // On garde l'URL telle quelle (déjà HTTPS ou contexte HTTP ok)
+  const url = relayed;
 
   const video = $("video");
   if(!video) return;

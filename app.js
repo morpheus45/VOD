@@ -485,7 +485,7 @@ const PipPlayer = {
 
     const ab = abortAfter(10000);
 
-    fetch(apiUrl, { signal: ab.signal, credentials: "omit" })
+    fetch(secureUrl(apiUrl), { signal: ab.signal, credentials: "omit" })
       .then(r => { ab.done(); return r.ok ? r.json() : null; })
       .then(d => {
         const plot = d?.info?.plot
@@ -878,11 +878,17 @@ function _refreshCardProgress(playedItem){
   });
 }
 
-// Upgrade HTTP → HTTPS si la page est servie en HTTPS (évite mixed content sur Android)
+// Flux HTTP depuis une page HTTPS : le navigateur le bloque (contenu mixte).
+// 1) relais HTTPS configuré dans l'admin (xtream.js) → le flux passe par lui,
+//    lecture dans le navigateur sans logiciel externe ;
+// 2) sinon upgrade http→https (échoue sur les serveurs IPTV sans TLS, l'appelant
+//    retente alors l'URL d'origine).
 function secureUrl(url){
   if(!url) return url;
-  if(location.protocol === "https:" && /^http:\/\//i.test(url))
+  if(location.protocol === "https:" && /^http:\/\//i.test(url)){
+    if(window.PF_XT && PF_XT.relay){ const r = PF_XT.relay(url); if(r !== url) return r; }
     return url.replace(/^http:\/\//i, "https://");
+  }
   return url;
 }
 

@@ -17,8 +17,9 @@
       var _moderne = false;
       try { new Function("var o = {}; return o?.x;"); _moderne = true; } catch(e) {}
       if(!_moderne){
-        if(_theme==='cosmos'){ try{ localStorage.removeItem('pf_theme'); }catch(e){} }
-      }else if(_theme==='cosmos' || (_theme===null && _isTV)){ location.replace('./cosmos.html'); }
+        if(_theme==='cosmos' || _theme==='nova'){ try{ localStorage.removeItem('pf_theme'); }catch(e){} }
+      }else if(_theme==='nova'){ location.replace('./nova.html'); }
+      else if(_theme==='cosmos' || (_theme===null && _isTV)){ location.replace('./cosmos.html'); }
     }catch(e){}
   </script>
   <meta charset="UTF-8" />
@@ -270,7 +271,7 @@
 
   </div>
 
-  <script src="xtream.js?v=1"></script>
+  <script src="xtream.js?v=2"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" onerror="console.warn('HLS.js indisponible')"></script>
   <!--
     Chargement adapté au moteur du navigateur.
