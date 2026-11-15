@@ -195,7 +195,15 @@ html,body{
 #hero{
   height:540px;flex-shrink:0;
   position:relative;overflow:hidden;
+  transition:height .25s cubic-bezier(.23,1,.32,1);
 }
+/* Parcours des rangees (2e rangee et au-dela) : le hero se replie pour que
+   les cartes aient la place, et se redeploie au retour en haut. */
+#home-view.browse #hero{height:220px}
+#home-view.browse #hero-info{opacity:0;transform:translateY(16px);pointer-events:none;animation:none}
+#home-view.browse #hero-poster{opacity:0}
+#hero-info{transition:opacity .2s cubic-bezier(.23,1,.32,1),transform .25s cubic-bezier(.23,1,.32,1)}
+@media (prefers-reduced-motion:reduce){#hero,#hero-info,#hero-poster{transition:none}}
 /* Backdrop image (plein ecran, sombre) — double couche pour crossfade fluide */
 .hero-bd{
   position:absolute;inset:0;z-index:0;
@@ -218,7 +226,7 @@ html,body{
   width:260px;height:390px;border-radius:14px;object-fit:cover;display:none;
   box-shadow:0 8px 60px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.08),
              0 0 80px rgba(var(--hc),.35);
-  transition:box-shadow 1.5s ease;
+  transition:box-shadow 1.5s ease,opacity .2s cubic-bezier(.23,1,.32,1);
 }
 #hero-poster.vis{display:block}
 #hero-info{
@@ -258,13 +266,6 @@ html,body{
 .btn-info{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.25)}
 .btn-fav {background:rgba(255,255,255,.09);color:rgba(255,255,255,.8);border:1px solid rgba(255,255,255,.18)}
 .btn-hero.foc{box-shadow:0 0 0 3px #fff,0 0 20px rgba(79,142,247,.6);transform:scale(1.05)}
-#hero-dots{
-  position:absolute;bottom:10px;left:50%;transform:translateX(-50%);
-  display:flex;gap:6px;z-index:3;
-}
-.h-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.3);transition:all .2s}
-.h-dot.active{width:20px;border-radius:3px;background:rgba(255,255,255,.88)}
-
 /* ─── CONTENT ROWS ───────────────────────────────────────────────────── */
 #content{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding-bottom:24px}
 #content::-webkit-scrollbar{display:none}
@@ -806,7 +807,7 @@ html,body{
         <div id="hero-backdrop" class="hero-bd"></div>
         <div id="hero-backdrop2" class="hero-bd"></div>
         <div id="hero-bg-grad"></div>
-        <img id="hero-poster" crossorigin="anonymous" src="" alt="">
+        <img id="hero-poster" src="" alt="">
         <div id="hero-info">
           <div id="hero-badges">
             <span class="hbadge hb-i" id="hb-score"></span>
@@ -823,7 +824,6 @@ html,body{
             <button class="btn-hero btn-ctry" hidden>🌍 Pays</button>
           </div>
         </div>
-        <div id="hero-dots"></div>
       </div>
       <div id="content"></div>
     </div>
@@ -847,11 +847,6 @@ html,body{
         <div id="filter-bar"></div>
       </div>
       <div id="grid-wrap"></div>
-    </div>
-
-    <!-- MA LISTE (Google TV: Bibliothèque) -->
-    <div id="mylist-view" class="view" hidden>
-      <div id="mylist-content"></div>
     </div>
 
     <!-- SETTINGS -->
@@ -1020,8 +1015,8 @@ const NAV_SECS = ['search','home','movies','shows','live','vpn','settings'];
 // ══════ STATE ════════════════════════════════════════════════════════════
 const S = {
   sec:'home', zone:'hero',
-  navIdx:0,
-  hBtn:0, heroItem:null, heroPool:[], heroTimer:null, heroDots:0, heroDotIdx:0,
+  navIdx:1,   // onglet Accueil
+  hBtn:0, heroItem:null, heroPool:[], heroTimer:null,
   rows:[], rowIdx:0, cardIdx:0,
   gridItems:[], gridAll:[],
   gridFilter:'', gridQuality:'', gridFavOnly:false, gridSort:'title',
@@ -1075,6 +1070,10 @@ function pctOf(e){
   if(e.pct!=null)return e.pct>1?Math.min(100,e.pct):e.pct*100;
   return 0;
 }
+// Position de reprise en ms : les entrees anciennes de Cosmos sont en ms,
+// celles de Xstream (et desormais de Cosmos) en secondes — aucune lecture ne
+// depasse 100 000 s (27 h), un tel nombre est donc forcement des ms.
+function resumeMs(e){const t=(e&&e.t)||0;return t>100000?t:t*1000;}
 function progPct(i){
   if(!i)return 0;
   // Séries : progression du dernier épisode vu (clés `series_id||SxxExx`, comme Xstream)
@@ -1306,35 +1305,7 @@ function inferQuality(src){
 }
 
 // ══════ NETWORK ══════════════════════════════════════════════════════════
-// Fetch ASYNCHRONE — Java stocke le resultat, JS poll getAsyncResult() toutes les 150ms
-window._onFetchReady=function(){}; // conserve pour compatibilite Java
-function bridgeFetchAsync(url){
-  return new Promise(resolve=>{
-    if(window.AndroidBridge?.fetchJsonAsync&&window.AndroidBridge?.getAsyncResult){
-      const id='f'+Date.now().toString(36)+Math.random().toString(36).slice(2);
-      try{
-        AndroidBridge.fetchJsonAsync(url,id);
-        let n=0;
-        const poll=setInterval(()=>{
-          n++;
-          try{
-            const raw=AndroidBridge.getAsyncResult(id);
-            if(raw!==null&&raw!==undefined&&raw!==''){
-              clearInterval(poll);
-              let p=null;try{p=JSON.parse(raw);}catch(e){}
-              resolve(_xf(p));return;
-            }
-          }catch(e){}
-          if(n>60){clearInterval(poll);resolve(null);} // 9s timeout
-        },150);
-        return;
-      }catch(e){}
-    }
-    // Fallback fetch() navigateur
-    fetch(url).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>resolve(_xf(d)));
-  });
-}
-// Legacy sync fallback (conserve pour episodes API)
+// Fetch via le pont Java (synchrone) ou fetch() navigateur
 async function bridgeFetch(url){
   if(window.AndroidBridge?.fetchJson){
     try{const r=AndroidBridge.fetchJson(url);if(r)return _xf(JSON.parse(r));}catch{}
@@ -1633,7 +1604,7 @@ let _navRestored=false;
 function restoreNavPos(){
   if(_navRestored)return; _navRestored=true;
   let p=null; try{ p=JSON.parse(localStorage.getItem('pf_cos_nav')||'null'); }catch(e){}
-  if(!p||!p.sec||p.sec==='home')return;
+  if(!p||!p.sec||p.sec==='home'||p.sec==='grid')return;   // grille : son origine est perdue au reload
   if(Date.now()-(p.ts||0)>3600000)return;              // >1h → on repart à l'accueil
   try{
     gotoSection(p.sec);                                 // re-rend l'onglet (Films/Séries/TV…)
@@ -1729,14 +1700,17 @@ function setHero(item){
     setBackdrop(item.image);
     const tmp=new Image();tmp.crossOrigin='anonymous';
     tmp.onload=()=>{poster.src=item.image;poster.classList.add('vis');extractColor(tmp,setHeroAmbient);};
-    tmp.onerror=()=>poster.classList.remove('vis');
+    // Hote sans en-tetes CORS (logos de chaines) : l'affiche s'affiche quand
+    // meme, seule la couleur d'ambiance retombe sur le bleu par defaut.
+    tmp.onerror=()=>{poster.src=item.image;poster.classList.add('vis');setHeroAmbient(66,133,244);};
     tmp.src=item.image;
   }else{poster.classList.remove('vis');setBackdrop(null);}
   const fb=document.querySelector('#hero-acts .btn-fav');
   if(fb)fb.textContent=isFav(item)?'♥ Ma liste':'♡ Ma liste';
 
-  // Enrichissement TMDB en arriere-plan (non-bloquant)
-  if(TMDB_KEY){
+  // Enrichissement TMDB en arriere-plan (non-bloquant). Jamais pour une
+  // chaine : « TF1 » trouverait un film au hasard et ecraserait le hero.
+  if(TMDB_KEY&&!item.isLive){
     const capturedItem=item;
     tmdbEnrich(item.title).then(tmdb=>{
       if(!tmdb||S.heroItem!==capturedItem)return; // item a change
@@ -2037,9 +2011,9 @@ function closePanel(){
   focus();
 }
 
+let _epMap=null;   // episodes_map.json (90 Ko) lu une seule fois par session
 async function loadSeries(sid){
-  const mapUrl=GH+'episodes_map.json';
-  const map=await bridgeFetch(mapUrl);
+  const map=_epMap||(_epMap=await bridgeFetch(GH+'episodes_map.json'));
   if(map&&map[sid]){
     const partIdx=map[sid];
     const part=await bridgeFetch(GH+`episodes_part${partIdx}.json`);
@@ -2141,7 +2115,7 @@ function renderEps(sNum){
     const div=document.createElement('div');
     div.className='pep'+(done?' done':'')+(hasUrl?'':' locked');div.dataset.ei=i;
     div.innerHTML=`
-      <img class="pep-thumb" src="${esc(ep.thumb||ep.info?.movie_image||S.panelItem.image||BLANK)}" loading="lazy" onerror="this.src='${BLANK}'">
+      <img class="pep-thumb" src="${esc(ep.thumb||ep.info?.movie_image||S.panelItem.image||BLANK)}" loading="lazy" onerror="this.onerror=null;this.src=BLANK">
       <div style="flex:1;min-width:0">
         <div class="pep-code">${esc(code)}${dur?` · ${esc(dur)}`:''}</div>
         <div class="pep-title">${esc(ep.title||ep.info?.name||('Episode '+(i+1)))}</div>
@@ -2184,7 +2158,7 @@ function playPanelEp(ei){
   const prog=getProg()[pk];
   const pct=pctOf(prog);
   if(prog&&pct>10&&pct<92){
-    S.resumeStartMs=prog.t||0;S.resumeBtn=0;
+    S.resumeStartMs=resumeMs(prog);S.resumeBtn=0;
     $('resume-sub').textContent=`${S.panelItem.title} · ${code} · ${Math.round(pct)}% vu`;
     if(S.zone!=='resume')S.resumeRet=S.zone;$('resume-modal').hidden=false;S.zone='resume';focus();return;
   }
@@ -2247,7 +2221,9 @@ window.onAndroidPlayerClosed=function(url,posMs,durMs){
   const key=(window._epUrlMap&&window._epUrlMap[url])||S.lastProgKey;
   if(key&&durMs>5000){
     const pct=Math.round((posMs/durMs)*100);
-    saveProg(key,{pct,t:posMs,d:durMs,ts:Date.now()});
+    // t/d en SECONDES, comme Xstream (app.js) : les deux interfaces d'un meme
+    // appareil lisent la meme entree, Cosmos ecrivait des millisecondes.
+    saveProg(key,{pct,t:Math.floor(posMs/1000),d:Math.floor(durMs/1000),ts:Date.now()});
     qAll(`.card[data-prog-key="${key}"]`).forEach(c=>{
       let pb=c.querySelector('.cprog');
       if(!pb&&pct>2){
@@ -2480,7 +2456,7 @@ function playMovie(item){
     const prog=getProg()[String(item.stream_id)];
     const _pct=progPct(item);
     if(_pct>10&&_pct<92){
-      S.resumeStartMs=(prog&&prog.t)||0;S.resumeBtn=0;S.resumeEpIdx=null;
+      S.resumeStartMs=resumeMs(prog);S.resumeBtn=0;S.resumeEpIdx=null;
       $('resume-sub').textContent=`${item.title} · ${Math.round(_pct)}% vu`;
       if(S.zone!=='resume')S.resumeRet=S.zone;$('resume-modal').hidden=false;S.zone='resume';focus();return;
     }
@@ -2517,8 +2493,6 @@ function gotoSection(s){
     renderTabShows();
   }else if(s==='live'){
     renderTabLive();
-  }else if(s==='mylist'){
-    renderTabMyList();
   }
 }
 
@@ -2796,43 +2770,6 @@ function renderTabLive(){
   renderRows(rows);S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();
 }
 
-function renderTabMyList(){
-  const rows=[];
-  const hist=inProgressItems();
-  if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().map(resolveItem).filter(i=>i&&isClean(i)).slice(0,40);
-  if(favs.length)rows.push({title:'Ma liste',items:favs});
-  if(!rows.length){$('content').innerHTML='<div style="padding:60px var(--safe);font-size:20px;color:var(--dim)">Rien ici — ajoutez des films avec ♡</div>';S.rows=[];return;}
-  S.rows=rows;
-  renderRows(rows);S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();
-}
-
-// ══════ MA LISTE (Google TV: Bibliothèque) ════════════════════════════════
-function renderMyList(){
-  const c=$('mylist-content');c.innerHTML='';
-  const rows=[];
-  const hist=inProgressItems();
-  if(hist.length)rows.push({title:'Reprendre la lecture',items:hist});
-  const favs=getFavs().map(resolveItem).filter(i=>i&&isClean(i)).slice(0,40);
-  if(favs.length)rows.push({title:'Ma liste',items:favs});
-  if(!rows.length){
-    c.innerHTML='<div style="padding:60px var(--safe);font-size:18px;color:var(--dim)">Rien ici pour l instant — ajoutez des films a votre liste avec ♡</div>';
-    return;
-  }
-  // Utiliser les rows globales S.rows patchees avec mylist rows
-  S.rows=rows;
-  rows.forEach((row,ri)=>{
-    const rowEl=document.createElement('div');
-    rowEl.className='row';rowEl.dataset.ri=ri;
-    rowEl.innerHTML=`<div class="row-title"><span class="row-title-accent"></span>${esc(row.title)}</div>`;
-    const items=document.createElement('div');
-    items.className='row-items';items.id='ri'+ri;
-    const fmt=rowFormat(row);
-    row.items.forEach((item,ci)=>items.appendChild(mkCard(item,ri,ci,item.isLive,fmt)));
-    rowEl.appendChild(items);c.appendChild(rowEl);
-  });
-}
-
 // ══════ SETTINGS ════════════════════════════════════════════════════════
 // Régions françaises (identique à la page Compte Xstream — parité)
 const _STATIC_REGIONS=[
@@ -2919,7 +2856,7 @@ function renderSettings(){
     {label:'Vérifier mise à jour',desc:'Télécharger et installer la dernière version',action:'update'},
     {label:'Rafraîchir le contenu',desc:'Cache actuel : '+cacheAge,action:'refresh'},
     {label:'TMDB API Key',desc:'Clé actuelle : '+tmdbKey,action:'tmdb'},
-    {label:'Version APK',desc:'v'+v+' — Google TV Perso',action:'version'},
+    {label:'Version APK',desc:'v'+v+' — PIPSILY Cosmos',action:'version'},
     {label:'Recharger l\'application',desc:'Rafraîchir l\'interface',action:'reload'},
     {label:'🚪 Se déconnecter',desc:'Changer de compte',action:'logout'}
   );
@@ -3183,6 +3120,8 @@ function focus(){
   ['nav-vpn','nav-settings','nav-search-outer'].forEach(id=>{const el=$(id);if(el)el.classList.remove('foc');});
 
   const z=S.zone;
+  // Hero replie des la 2e rangee : plus de cartes visibles pendant le parcours
+  const hv=$('home-view');if(hv)hv.classList.toggle('browse',z==='row'&&S.rowIdx>0);
   // Persister la position (onglet + carte) pour la restaurer si le WebView est
   // rechargé au retour du lecteur (sinon Cosmos repart à l'accueil = "relance").
   if(z==='row'||z==='grid'){
@@ -3395,21 +3334,18 @@ function onKey(type){
       if(s==='vpn'){ouvrirVpn();return;}
       if(s==='search'){gotoSection('search');return;}
       if(s==='settings'){gotoSection('settings');return;}
-      if(s==='home'){
-        // Bug : on ne re-rendait PAS l'accueil → depuis Films/Séries/TV, le
-        // bouton Accueil laissait le contenu de l'autre onglet. Re-render si
-        // on vient d'ailleurs, puis focus sur le hero.
-        if(S.sec!=='home')gotoSection('home');
-        S.zone='hero';S.hBtn=0;focus();
-      }
-      else{gotoSection(s);}
+      // Onglet deja affiche : on descend dans son contenu SANS le re-rendre
+      // (sinon chaque appui Bas depuis la barre tirait un nouveau hero au hasard
+      // et remettait les rangees au debut). Autre onglet : on le rend.
+      if(s===S.sec){S.zone='hero';S.hBtn=0;focus();}
+      else gotoSection(s);
     }
-    else if(type==='B'){S.zone='hero';focus();}
+    else if(type==='B'){if(S.sec==='search'||S.sec==='settings'||S.sec==='grid')gotoSection('home');else{S.zone='hero';focus();}}
     return;
   }
 
   if(z==='hero'){
-    if(type==='U'){S.zone='nav';focus();}
+    if(type==='U'){const ni=NAV_SECS.indexOf(S.sec);if(ni>0)S.navIdx=ni;S.zone='nav';focus();}   // atterrir sur l'onglet courant
     else if(type==='D'){if(S.rows.length){S.zone='row';S.rowIdx=0;S.cardIdx=0;focus();}}
     else if(type==='L'){S.hBtn=Math.max(0,S.hBtn-1);focus();}
     else if(type==='R'){S.hBtn=Math.min(qAll('#hero-acts .btn-hero:not([hidden])').length-1,S.hBtn+1);focus();}
@@ -3427,6 +3363,7 @@ function onKey(type){
         document.querySelector('#hero-acts .btn-fav').textContent=isFav(S.heroItem)?'♥ Ma liste':'♡ Ma liste';
       }
     }
+    else if(type==='B'){if(S.sec!=='home')gotoSection('home');}   // Retour depuis un onglet → Accueil
     return;
   }
 

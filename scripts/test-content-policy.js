@@ -577,6 +577,7 @@ console.log('\n== non-regression : politique all ne touche a rien ==');
       'function saveCache(){}',
       'function groupLiveItems(l){return l;}',
       'function _cosRegionFilter(l){return l;}',
+      'function _cosCountryFilter(l){return l;}',
       'function isClean(){return true;}',
       'function shuffle(a){return a.slice();}',
       'async function fetchContentData(){return CNT.raw;}',
