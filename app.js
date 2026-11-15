@@ -568,9 +568,10 @@ const PipPlayer = {
     if(!this._item) return;
     const rawUrl = (this._item.url || this._item.stream_url || "").trim();
     if(!rawUrl) return;
-    // PC navigateur : ouvrir URL originale (HTTP) dans un onglet — le navigateur peut la lire
+    // PC navigateur : via le relais HTTPS s'il existe (lisible, et sans
+    // identifiants dans la barre d'adresse) ; sinon l'URL d'origine.
     if(!isIOSContext && typeof window.AndroidBridge === "undefined"){
-      window.open(rawUrl, "_blank", "noopener");
+      window.open(secureUrl(rawUrl), "_blank", "noopener");
       return;
     }
     if(typeof window.AndroidBridge !== "undefined"){

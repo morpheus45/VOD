@@ -45,13 +45,28 @@
     try { var r = JSON.parse(ls(KR) || 'null'); return r && r.url ? String(r.url).trim().replace(/\/+$/, '') : ''; } catch (e) { return ''; }
   }
   // relay(url) → URL relayée si la page est en HTTPS, le flux en HTTP et un
-  // relais configuré ; sinon l'URL inchangée. Format : base/http/hôte/chemin?query
+  // relais configuré ; sinon l'URL inchangée.
+  //   URL Xtream (…/live|movie|series/ID/MDP/…, player_api.php?username=…) :
+  //     base/x/http/hôte/live/123.m3u8 — l'identifiant et le mot de passe sont
+  //     RETIRÉS, le relais les ajoute lui-même (XT_USER / XT_PASS). Plus rien
+  //     n'apparaît dans la barre d'adresse ni dans l'onglet Réseau.
+  //   Autre URL : base/http/hôte/chemin?query
+  var XT_RE  = /^(https?):\/\/([^\/?#]+)\/(live|movie|series)\/[^\/?#]+\/[^\/?#]+\/([^?#]+)(\?[^#]*)?$/i;
+  var API_RE = /^(https?):\/\/([^\/?#]+)\/((?:player_api|get|xmltv)\.php)\?([^#]*)$/i;
   function relay(u) {
     var b = relayBase();
     if (!b || !u) return u;
     u = String(u);
     if (!/^http:\/\//i.test(u) || u.indexOf(b) === 0) return u;
     if (typeof location !== 'undefined' && location.protocol !== 'https:') return u;
+    var x = XT_RE.exec(u);
+    if (x) return b + '/x/' + x[1].toLowerCase() + '/' + x[2] + '/' + x[3].toLowerCase() + '/' + x[4] + (x[5] || '');
+    var a = API_RE.exec(u);
+    if (a) {
+      var q = [], parts = a[4].split('&'), i;
+      for (i = 0; i < parts.length; i++) if (parts[i] && !/^(username|password)=/i.test(parts[i])) q.push(parts[i]);
+      return b + '/x/' + a[1].toLowerCase() + '/' + a[2] + '/' + a[3] + (q.length ? '?' + q.join('&') : '');
+    }
     var m = /^(https?):\/\/([^\/?#]+)([^?#]*)(\?[^#]*)?/i.exec(u);
     if (!m) return u;
     return b + '/' + m[1].toLowerCase() + '/' + m[2] + (m[3] || '/') + (m[4] || '');

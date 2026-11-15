@@ -22,8 +22,11 @@ directement, et le code l'exclut du relais.
 2. **Workers & Pages → Create → Create Worker**, nommer `pipsily-relay`,
    déployer le modèle, puis **Edit code** : remplacer tout par le contenu de
    `worker.js`, **Deploy**.
-3. **Settings → Variables and Secrets → Add** : nom `RELAY_KEY`, valeur = une
-   clé de votre choix (lettres/chiffres, ex. `k7Pq2xWz`). Déployer de nouveau.
+3. **Settings → Variables and Secrets → Add**, trois variables (type *Secret*) :
+   - `RELAY_KEY` : une clé de votre choix (lettres/chiffres, ex. `k7Pq2xWz`) ;
+   - `XT_USER` et `XT_PASS` : l'identifiant et le mot de passe Xtream (ceux de
+     la carte « Serveur Xtream » de l'admin, ou ceux d'origine du catalogue).
+   Déployer de nouveau.
 4. Vérifier : ouvrir `https://pipsily-relay.<compte>.workers.dev/` → affiche
    `PIPSILY relay OK`.
 5. Dans **PIPSILY → Admin → Relais HTTPS**, coller
@@ -33,10 +36,29 @@ directement, et le code l'exclut du relais.
 Chaque appareil applique le réglage à sa prochaine ouverture (`xtream.js` le
 lit dans `app_config`, clé `relay`). Vide = désactivé : comportement d'avant.
 
+## Identifiants jamais visibles
+
+Les URL Xtream du catalogue contiennent l'identifiant et le mot de passe
+(`/live/IDENTIFIANT/MOTDEPASSE/56988.m3u8`). Côté navigateur, `xtream.js` les
+**retire** avant d'appeler le relais, et le worker les **réinjecte** depuis ses
+variables secrètes :
+
+```
+navigateur →  https://<worker>/p/<CLE>/x/http/goldenlink.live/live/56988.m3u8
+worker     →  http://goldenlink.live/live/<XT_USER>/<XT_PASS>/56988.m3u8
+```
+
+Rien n'apparaît donc dans la barre d'adresse ni dans l'onglet Réseau. Les
+playlists réécrites suivent la même règle. Reste vrai : les fichiers de
+catalogue publiés (`vod.json`, `live.json`…) contiennent toujours ces
+identifiants, comme avant ; les cacher aussi est un chantier distinct.
+
 ## Format des URL relayées
 
 ```
-https://<worker>/p/<CLE>/http/goldenlink.live/live/U/P/56988.m3u8
+https://<worker>/p/<CLE>/x/http/goldenlink.live/live/56988.m3u8     Xtream (identifiants injectés)
+https://<worker>/p/<CLE>/http/6426720.cdn.cc/hlsr/<jeton>/seg.ts    générique (segments CDN)
+https://<worker>/p/<CLE>/status                                      {"ok":true,"xt":true}
 ```
 
 Les playlists HLS sont réécrites à la volée pour que segments et clés passent

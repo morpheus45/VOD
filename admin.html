@@ -369,7 +369,9 @@
           <p style="font-size:13px;opacity:.75;margin:0 0 10px;line-height:1.5">
             Le site est en HTTPS, les flux en HTTP : les navigateurs les bloquent. Un petit relais
             (fichier <code>relay/worker.js</code> du dépôt, à déployer sur Cloudflare Workers, gratuit)
-            les ressert en HTTPS. Collez ici son URL <strong>avec la clé</strong>, par ex.
+            les ressert en HTTPS et ajoute lui-même l'identifiant et le mot de passe Xtream
+            (variables <code>XT_USER</code> / <code>XT_PASS</code> du worker) : ils n'apparaissent plus
+            dans le navigateur. Collez ici son URL <strong>avec la clé</strong>, par ex.
             <code>https://pipsily-relay.compte.workers.dev/p/MACLE</code>. Vide = désactivé.
           </p>
           <div class="form-create">
@@ -668,11 +670,12 @@
       const url = _relayValue(), msg = document.getElementById("relayMsg");
       if(!url){ showMsg(msg,"error","Saisissez d'abord l'URL du relais."); return; }
       try{
-        const base = url.replace(/\/p\/[^/]+$/, "");
-        const r = await fetch(base + "/", { cache:"no-store" });
-        const t = await r.text();
-        if(r.ok && /relay OK/i.test(t)) showMsg(msg,"success","✓ Le relais répond. Enregistrez pour l'activer.");
-        else showMsg(msg,"error","Le relais répond « " + (t||r.status).toString().slice(0,60) + " » : vérifiez le déploiement.");
+        const r = await fetch(url + "/status", { cache:"no-store" });
+        if(r.status === 403){ showMsg(msg,"error","Le relais répond mais refuse la clé : vérifiez RELAY_KEY et la fin de l'URL."); return; }
+        const d = r.ok ? await r.json().catch(() => null) : null;
+        if(!d || !d.ok){ showMsg(msg,"error","Réponse inattendue (" + r.status + ") : vérifiez le déploiement du worker."); return; }
+        if(!d.xt){ showMsg(msg,"error","Le relais répond, mais XT_USER / XT_PASS manquent dans ses variables : les flux Xtream ne passeront pas."); return; }
+        showMsg(msg,"success","✓ Relais joignable, identifiants Xtream configurés. Enregistrez pour l'activer.");
       }catch(e){ showMsg(msg,"error","Relais injoignable : " + e.message); }
     }
     async function resetRelay(){
