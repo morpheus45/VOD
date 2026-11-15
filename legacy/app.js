@@ -439,7 +439,7 @@ const PipPlayer = {
     const action = isSeries ? `get_series_info&series_id=${id}` : `get_vod_info&vod_id=${id}`;
     const apiUrl = `${creds.base}/player_api.php?username=${encodeURIComponent(creds.username)}&password=${encodeURIComponent(creds.password)}&action=${action}`;
     const ab = abortAfter(1e4);
-    fetch(apiUrl, { signal: ab.signal, credentials: "omit" }).then((r) => {
+    fetch(secureUrl(apiUrl), { signal: ab.signal, credentials: "omit" }).then((r) => {
       ab.done();
       return r.ok ? r.json() : null;
     }).then((d) => {
@@ -799,8 +799,13 @@ function _refreshCardProgress(playedItem) {
 }
 function secureUrl(url) {
   if (!url) return url;
-  if (location.protocol === "https:" && /^http:\/\//i.test(url))
+  if (location.protocol === "https:" && /^http:\/\//i.test(url)) {
+    if (window.PF_XT && PF_XT.relay) {
+      const r = PF_XT.relay(url);
+      if (r !== url) return r;
+    }
     return url.replace(/^http:\/\//i, "https://");
+  }
   return url;
 }
 function preparePlutoUrl(url) {

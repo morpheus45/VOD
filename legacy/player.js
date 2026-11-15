@@ -230,7 +230,8 @@ async function loadPlotFromApi(it) {
   }
   try {
     const ab = abortAfter(8e3);
-    const r = await fetch(apiUrl.replace(/^https?:\/\//i, "http://"), { signal: ab.signal });
+    const u0 = apiUrl.replace(/^https?:\/\//i, "http://");
+    const r = await fetch(window.PF_XT && PF_XT.relay ? PF_XT.relay(u0) : u0, { signal: ab.signal });
     ab.done();
     if (!r.ok) return null;
     const d = await r.json();
@@ -415,12 +416,13 @@ function initPlayer() {
   }
   updateNavButtons();
   updateFavBtn();
-  if ((isAndroid || isTV) && isHttpUrl(rawUrl)) {
+  const relayed = !isNative && window.PF_XT && PF_XT.relay ? PF_XT.relay(rawUrl) : rawUrl;
+  if ((isAndroid || isTV) && isHttpUrl(relayed)) {
     setStatus("Ouverture dans le lecteur vidéo…");
     setTimeout(() => openExternalPlayer(rawUrl), 300);
     return;
   }
-  const url = rawUrl;
+  const url = relayed;
   const video = $("video");
   if (!video) return;
   destroyPlayers();
