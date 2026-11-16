@@ -122,8 +122,11 @@ export default {
       const body = JSON.stringify({ ok: true, xt: !!(env.XT_USER && env.XT_PASS) });
       return new Response(body, { status: 200, headers: { ...buildCors(), "Content-Type": "application/json" } });
     }
+    // Diagnostic : /p/<CLE>/dbg/http/<hôte>/<chemin> → statut, en-têtes et début
+    // du corps de la réponse amont (sans suivre les redirections).
+    const dbgMode = parts[2] === "dbg";
     const xMode = parts[2] === "x";
-    const base = xMode ? 3 : 2;               // index du schéma dans le chemin
+    const base = (xMode || dbgMode) ? 3 : 2;  // index du schéma dans le chemin
     const scheme = parts[base];
     if (scheme !== "http" && scheme !== "https") {
       return new Response("Bad Request", { status: 400, headers: buildCors() });
@@ -148,9 +151,17 @@ export default {
       const value = request.headers.get(name);
       if (value) headers[name] = value;
     }
-    headers["User-Agent"] = "Mozilla/5.0 (PIPSILY relay)";
+    // User-Agent du navigateur transmis tel quel (le fournisseur filtre les clients)
+    headers["User-Agent"] = request.headers.get("User-Agent") || "Mozilla/5.0 (PIPSILY relay)";
 
     try {
+      if (dbgMode) {
+        const r = await fetch(upstreamUrl, { method: "GET", headers, redirect: "manual" });
+        const h = {}; r.headers.forEach((v, k) => { h[k] = v; });
+        const txt = (await r.text()).slice(0, 300);
+        return new Response(JSON.stringify({ upstreamUrl, status: r.status, headers: h, body: txt }, null, 1),
+          { status: 200, headers: { ...buildCors(), "Content-Type": "application/json" } });
+      }
       const upstream = await fetch(upstreamUrl, { method, headers, redirect: "follow" });
 
       if (method === "HEAD") {

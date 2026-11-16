@@ -1,6 +1,6 @@
 // sw.js — PIPSILY v5.2 — coquille en RÉSEAU D'ABORD (MAJ instantanées, plus
 // besoin de vider le cache) ; assets immuables en cache d'abord.
-const CACHE = "pipsily-v254";
+const CACHE = "pipsily-v255";
 const SHELL = ["./","./index.html","./login.html","./account.html","./admin.html","./player.html","./install.html","./vitrine.html","./merci.html","./samsung-tv.html","./styles.css?v=107","./player.css","./app.js?v=187","./xtream.js?v=3","./auth.js","./player.js?v=52","./manifest.webmanifest","./logo.svg","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-maskable-192.png","./icons/icon-maskable-512.png","./cosmos.html","./nova.html","./version.json","./icons/splash/splash-750x1334.png","./icons/splash/splash-1170x2532.png","./icons/splash/splash-1179x2556.png","./icons/splash/splash-1290x2796.png","./icons/splash/splash-1320x2868.png","./icons/splash/splash-1668x2388.png","./icons/splash/splash-2048x2732.png"];
 
 // ── Installation : vider anciens caches + mettre en cache le shell ──
@@ -52,6 +52,10 @@ self.addEventListener("fetch", e => {
   if(request.method !== "GET") return;
   const url = new URL(request.url);
   const sameOrigin = url.origin === self.location.origin;
+  // Ressources externes (logos de chaînes, affiches, flux, API) : le navigateur
+  // les charge lui-même. Les faire transiter par le service worker faisait
+  // échouer les logos go4.pw (503) alors qu'ils se chargent en direct.
+  if(!sameOrigin) return;
 
   const isData  = url.pathname.endsWith(".json") || url.pathname.endsWith(".m3u");
   const isShell = request.mode === "navigate" || /\.(html|js|css)$/i.test(url.pathname);
