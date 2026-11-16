@@ -327,6 +327,7 @@
             <option value="xstream">PIPSILY Xstream (par défaut)</option>
             <option value="cosmos">Cosmos TV (style Google TV)</option>
             <option value="nova">Nova (TV, visuel moderne)</option>
+            <option value="bobine">Bobine (TV, table de montage)</option>
           </select>
           <button class="btn btn-primary" onclick="applyIface()">Appliquer</button>
           <div class="msg" id="ifaceMsg"></div>
@@ -358,7 +359,7 @@
                      || /\bTV\b/.test(navigator.userAgent)
                      || window.PIPSILY_NATIVE === "android_tv";
           // Cosmos si choisi, ou par défaut sur TOUTES les TV
-          if(sel) sel.value = _theme === "nova" ? "nova" : (_theme === "cosmos" || (_theme === null && _isTV)) ? "cosmos" : "xstream";
+          if(sel) sel.value = (_theme === "nova" || _theme === "bobine") ? _theme : (_theme === "cosmos" || (_theme === null && _isTV)) ? "cosmos" : "xstream";
         }
       }catch(e){}
 
@@ -444,7 +445,7 @@
     // ── Bascule d'interface (Xstream ↔ Cosmos TV) — n'affecte que l'apparence ──
     function applyIface(){
       const sel = document.getElementById("ifaceSelect");
-      const choice = sel && (sel.value === "cosmos" || sel.value === "nova") ? sel.value : "xstream";
+      const choice = sel && (sel.value === "cosmos" || sel.value === "nova" || sel.value === "bobine") ? sel.value : "xstream";
       try{ localStorage.setItem("pf_theme", choice); }catch(e){}
       const msg = document.getElementById("ifaceMsg");
       if(msg){ msg.style.color = "#7CE2A8"; msg.textContent = "Interface appliquée — ouverture…"; }

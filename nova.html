@@ -2609,7 +2609,7 @@ function renderSettings(){
   const planLabel=plan==='admin'?'Administrateur':plan==='unlimited'?'Illimité':(plan==='active'||plan==='standard')?'Standard':'—';
   const items=[
     {label:'👤 Compte & abonnement',desc:'Plan : '+planLabel+' — voir les détails',action:'account'},
-    {label:'Interface : '+THEME_LABEL,desc:'Choisir une autre apparence (Xstream, Cosmos TV, Nova)',action:'iface'},
+    {label:'Interface : '+THEME_LABEL,desc:'Choisir une autre apparence (Xstream, Cosmos TV, Nova, Bobine)',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
     {label:'🌍 Pays des chaînes (TV Live)',desc:'Actuel : '+_cosCountryLabel(),action:'country'},
     // PIPSILY se declare ecran d'accueil : sur un appareil ou elle est le
@@ -2731,12 +2731,13 @@ function closePicker(){
 // Cosmos TV (style Google TV) et Nova (visuel moderne). nova.html est généré
 // depuis ce fichier par scripts/build-nova.js, qui remplace THEME_CUR / THEME_LABEL.
 const THEME_CUR='nova', THEME_LABEL='Nova';
-const THEME_FILES={xstream:'./index.html',cosmos:'./cosmos.html',nova:'./nova.html'};
+const THEME_FILES={xstream:'./index.html',cosmos:'./cosmos.html',nova:'./nova.html',bobine:'./bobine.html'};
 function openIfacePicker(){
   const items=[
     {label:'PIPSILY Xstream — PC et mobile',value:'xstream'},
     {label:'Cosmos TV — style Google TV',value:'cosmos'},
     {label:'Nova — visuel moderne',value:'nova'},
+    {label:'Bobine — la table de montage',value:'bobine'},
   ];
   items.forEach(it=>{it.active=(it.value===THEME_CUR);});
   openPicker('Interface','L\'apparence change ; le compte, les favoris et la progression restent.',items,Math.max(0,items.findIndex(i=>i.active)),it=>{
