@@ -1445,6 +1445,7 @@ function buildContent(allVod,allSeries,liveRaw){
   setTimeout(restoreNavPos,50);   // restaure la position si retour d'un reload
   S.heroTimer=setInterval(()=>{
     if(S.zone!=='hero'&&S.zone!=='row')return;
+    if(THEME_LIVE_HERO&&S.zone==='row')return;   // le hero suit déjà la carte focalisée
     if(S.sec==='home'&&S.heroPool.length)setHero(S.heroPool[Math.floor(Math.random()*Math.min(S.heroPool.length,30))]);
   },30000);
 }
@@ -1466,6 +1467,15 @@ function setBackdrop(url){
     _bdActive=(nxt===b)?'b':'a';
   };
   pre.src=url;
+}
+// Thèmes « hero vivant » (Vertige) : l'écran entier devient le titre focalisé.
+// Faux dans Cosmos ; scripts/build-nova.js le passe à vrai pour ces thèmes.
+const THEME_LIVE_HERO=false;
+let _lhT=null;
+function liveHeroFocus(item){
+  if(!THEME_LIVE_HERO||!item||item.seeAll||item.isApp)return;
+  clearTimeout(_lhT);
+  _lhT=setTimeout(()=>{if(S.zone==='row'&&S.heroItem!==item)setHero(item);},260);
 }
 function setHero(item){
   if(!item)return;S.heroItem=item;
@@ -1540,7 +1550,7 @@ function renderRows(rows){
   rows.forEach((row,ri)=>{
     const rowEl=document.createElement('div');
     rowEl.className='row';rowEl.dataset.ri=ri;
-    rowEl.innerHTML=`<div class="row-title"><span class="row-title-accent"></span>${esc(row.title)}</div>`;
+    rowEl.innerHTML=`<div class="row-title" data-n="${pad2(ri+1)}"><span class="row-title-accent"></span>${esc(row.title)}</div>`;
     const items=document.createElement('div');
     items.className='row-items';items.id='ri'+ri;
     const fmt=rowFormat(row);
@@ -2609,7 +2619,7 @@ function renderSettings(){
   const planLabel=plan==='admin'?'Administrateur':plan==='unlimited'?'Illimité':(plan==='active'||plan==='standard')?'Standard':'—';
   const items=[
     {label:'👤 Compte & abonnement',desc:'Plan : '+planLabel+' — voir les détails',action:'account'},
-    {label:'Interface : '+THEME_LABEL,desc:'Choisir une autre apparence (Xstream, Cosmos TV, Nova, Bobine)',action:'iface'},
+    {label:'Interface : '+THEME_LABEL,desc:'Choisir une autre apparence (Xstream, Cosmos TV, Nova, Bobine, Vertige)',action:'iface'},
     {label:'📡 Ma région (TV Live)',desc:'Actuelle : '+(region||'Toutes les régions'),action:'region'},
     {label:'🌍 Pays des chaînes (TV Live)',desc:'Actuel : '+_cosCountryLabel(),action:'country'},
     // PIPSILY se declare ecran d'accueil : sur un appareil ou elle est le
@@ -2731,13 +2741,14 @@ function closePicker(){
 // Cosmos TV (style Google TV) et Nova (visuel moderne). nova.html est généré
 // depuis ce fichier par scripts/build-nova.js, qui remplace THEME_CUR / THEME_LABEL.
 const THEME_CUR='nova', THEME_LABEL='Nova';
-const THEME_FILES={xstream:'./index.html',cosmos:'./cosmos.html',nova:'./nova.html',bobine:'./bobine.html'};
+const THEME_FILES={xstream:'./index.html',cosmos:'./cosmos.html',nova:'./nova.html',bobine:'./bobine.html',vertige:'./vertige.html'};
 function openIfacePicker(){
   const items=[
     {label:'PIPSILY Xstream — PC et mobile',value:'xstream'},
     {label:'Cosmos TV — style Google TV',value:'cosmos'},
     {label:'Nova — visuel moderne',value:'nova'},
     {label:'Bobine — la table de montage',value:'bobine'},
+    {label:'Vertige — carrousel 3D, écran vivant',value:'vertige'},
   ];
   items.forEach(it=>{it.active=(it.value===THEME_CUR);});
   openPicker('Interface','L\'apparence change ; le compte, les favoris et la progression restent.',items,Math.max(0,items.findIndex(i=>i.active)),it=>{
@@ -2930,7 +2941,7 @@ function focus(){
 
   const z=S.zone;
   // Hero replie des la 2e rangee : plus de cartes visibles pendant le parcours
-  const hv=$('home-view');if(hv)hv.classList.toggle('browse',z==='row'&&S.rowIdx>0);
+  const hv=$('home-view');if(hv){hv.classList.toggle('browse',z==='row'&&S.rowIdx>0);hv.classList.toggle('inrow',z==='row');}
   // Persister la position (onglet + carte) pour la restaurer si le WebView est
   // rechargé au retour du lecteur (sinon Cosmos repart à l'accueil = "relance").
   if(z==='row'||z==='grid'){
@@ -2957,16 +2968,23 @@ function focus(){
     scrollToRow();
     const row=S.rows[S.rowIdx];if(!row)return;
     const items=$('ri'+S.rowIdx)?.querySelectorAll('.card');
+    // Repères pour les thèmes (sans effet sur Cosmos) : rangée courante, et
+    // distance de chaque carte à la carte focalisée (--d signée, --a absolue).
+    qAll('#content .row.cur').forEach(r=>r.classList.remove('cur'));
+    const _cr=$('content')?.querySelector(`.row[data-ri="${S.rowIdx}"]`);if(_cr)_cr.classList.add('cur');
+    if(items)items.forEach((c,i)=>{const d=Math.max(-7,Math.min(7,i-S.cardIdx));c.style.setProperty('--d',d);c.style.setProperty('--a',Math.abs(d));});
+    liveHeroFocus(row.items[S.cardIdx]);
     if(items&&items[S.cardIdx]){
       items[S.cardIdx].classList.add('foc');
       // Centrage horizontal DANS la rangée uniquement (jamais via scrollIntoView
       // inline:center qui décale tout l'écran quand on atteint le bord/Voir tout).
       const cont=$('ri'+S.rowIdx), card=items[S.cardIdx];
       if(cont&&card){
-        const cr=cont.getBoundingClientRect(), kr=card.getBoundingClientRect();
-        const delta=(kr.left+kr.width/2)-(cr.left+cr.width/2);
+        // Position calculée sur la mise en page (offsetLeft), pas sur le rendu :
+        // insensible à l'échelle de #app et aux transformations des thèmes.
+        const off=(card.offsetParent===cont)?card.offsetLeft:card.offsetLeft-cont.offsetLeft;
         const maxL=cont.scrollWidth-cont.clientWidth;
-        cont.scrollTo({left:Math.max(0,Math.min(maxL,cont.scrollLeft+delta)),behavior:'smooth'});
+        cont.scrollTo({left:Math.max(0,Math.min(maxL,off+card.offsetWidth/2-cont.clientWidth/2)),behavior:'smooth'});
       }
       // Sécurité : annuler tout décalage horizontal du body/page
       if(window.scrollX!==0) window.scrollTo(0,window.scrollY);

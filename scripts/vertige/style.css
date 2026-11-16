@@ -1,0 +1,78 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   PIPSILY — thème VERTIGE (5e interface). Par-dessus la feuille Nova.
+   Ce n'est pas un habillage : l'écran ne se comporte pas pareil.
+
+   · UNE rangée à l'écran, en carrousel 3D : la carte focalisée est au centre,
+     de face ; les voisines pivotent et reculent en profondeur (variables
+     --d / --a posées par focus()), chacune avec son reflet au sol
+   · l'écran entier EST le titre focalisé : fond, titre géant et résumé
+     suivent le curseur (THEME_LIVE_HERO), la lueur de l'affiche prend la
+     couleur dominante du film (--hc)
+   · haut / bas change de rayon comme on change de scène ; grand numéro de
+     rayon en filigrane
+   ═══════════════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#04050a;--safe:96px;--nav-top:24px;
+  --pw:236px;--ph:354px;--cw:420px;--ch:236px;--cr:14px;
+}
+html,body{background:var(--bg)}
+#bg{background:var(--bg);transition:none}
+.blob{display:none}
+#nav-pill{background:rgba(4,5,10,.45)}
+
+/* ─── L'écran = le titre focalisé ─────────────────────────────────────── */
+#home-view{position:relative}
+#hero,#home-view.browse #hero{position:absolute;inset:0;height:auto;transition:none;z-index:0}
+.hero-bd{background-position:center 14%}
+.hero-bd.show{opacity:.96;transform:scale(1.04);transition:opacity .55s ease,transform 9s linear}
+#hero-bg-grad{background:
+  linear-gradient(to right,rgba(4,5,10,.93) 0%,rgba(4,5,10,.62) 34%,rgba(4,5,10,.12) 66%,transparent 100%),
+  linear-gradient(to top,var(--bg) 0%,rgba(4,5,10,.86) 26%,rgba(4,5,10,.25) 52%,transparent 70%),
+  linear-gradient(to bottom,rgba(4,5,10,.6) 0%,transparent 20%)}
+#hero-poster,#hero.live-hero #hero-poster{display:none!important}
+#hero.live-hero .hero-bd.show{opacity:.4;filter:blur(70px) saturate(1.7);transform:scale(1.3)}
+#hero-info,#home-view.browse #hero-info{top:118px;bottom:auto;max-width:1000px;opacity:1;transform:none;pointer-events:auto}
+#home-view.browse #hero-info.swap{animation:heroInfoIn .45s var(--ease) both}
+#hero-title{font-size:84px;font-weight:900;line-height:.95;letter-spacing:-3.4px;max-width:1000px}
+#hero-plot{font-size:18px;max-width:700px;-webkit-line-clamp:2;margin-bottom:24px}
+#hero-acts{transition:opacity .2s var(--ease),transform .25s var(--ease)}
+#home-view.inrow #hero-acts{opacity:0;transform:translateY(10px)}
+.btn-hero.foc{box-shadow:0 0 0 3px #fff,0 0 60px rgba(var(--hc),.9);transform:scale(1.06)}
+
+/* ─── Le carrousel : une rangée, en profondeur ────────────────────────── */
+#content{position:absolute;left:0;right:0;bottom:0;height:640px;overflow:hidden;z-index:1;padding:0;counter-reset:rayon;
+  transition:opacity .25s ease}
+#home-view:not(.inrow) #content{opacity:.5}
+.row{display:none;position:absolute;inset:0;margin:0;counter-increment:rayon;animation:none}
+#home-view:not(.inrow) .row:first-child,.row.cur{display:block}
+.row.cur{animation:sceneIn .34s var(--ease) both}
+@keyframes sceneIn{from{opacity:0;transform:translateY(34px)}to{opacity:1;transform:translateY(0)}}
+.row-title{position:absolute;left:var(--safe);top:44px;z-index:2;align-items:flex-end;gap:20px;margin:0;padding:0;
+  font-size:19px;font-weight:800;letter-spacing:6px;text-transform:uppercase;color:#fff}
+.row-title::before{content:attr(data-n);font-size:132px;font-weight:900;line-height:.78;letter-spacing:-6px;
+  color:transparent;-webkit-text-stroke:2px rgba(255,255,255,.3)}
+.row-title-accent{display:none}
+.row-items{position:absolute;left:0;right:0;bottom:0;height:560px;align-items:flex-end;gap:14px;overflow-y:hidden;
+  padding:60px calc(50% - var(--pw) / 2) 118px;perspective:1500px;perspective-origin:50% 62%}
+.row:has(.card.live) .row-items{padding-left:calc(50% - var(--cw) / 2);padding-right:calc(50% - var(--cw) / 2)}
+.card{background:transparent;border:0;overflow:visible;transform-origin:50% 100%;
+  opacity:calc(1 - var(--a,0) * .12);z-index:calc(10 - var(--a,0));
+  transform:translateX(calc(var(--d,0) * -22px)) translateZ(calc(var(--a,0) * -110px)) rotateY(calc(var(--d,0) * -13deg));
+  transition:transform .32s var(--ease),opacity .32s ease}
+.card.foc{outline:none!important;box-shadow:none;border-color:transparent;opacity:1;z-index:20;
+  transform:translateZ(150px) scale(1.06)}
+.card-iw{border-radius:var(--cr);overflow:hidden;background:#0a0c14;
+  -webkit-box-reflect:below 10px linear-gradient(transparent 58%,rgba(0,0,0,.42));
+  transition:box-shadow .32s var(--ease)}
+.card.foc .card-iw{box-shadow:0 0 0 4px #fff,0 0 110px 10px rgba(var(--hc),.85),0 40px 90px rgba(0,0,0,.9)}
+.cinfo{display:none}
+.cbadge{top:10px;left:10px}
+.seeall-card .card-iw{border-radius:var(--cr)}
+.seeall-card.foc .card-iw{border-color:#fff}
+
+/* La grille « Voir tout » et la recherche restent à plat (Nova) */
+#grid-wrap .card,#search-results .card{opacity:1;transform:none;background:#121829;overflow:hidden;transition:transform .18s var(--ease),box-shadow .18s var(--ease)}
+#grid-wrap .card.foc,#search-results .card.foc{transform:translateY(-10px) scale(1.08);box-shadow:0 0 0 4px #fff,0 0 60px rgba(var(--hc),.7)}
+#grid-wrap .card-iw,#search-results .card-iw{-webkit-box-reflect:none;border-radius:0}
+#grid-wrap .cinfo,#search-results .cinfo{display:block}
+@media (prefers-reduced-motion:reduce){.card{transform:none}.card.foc{transform:scale(1.06)}}

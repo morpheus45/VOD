@@ -22,6 +22,7 @@ const src  = fs.readFileSync(path.join(ROOT, 'cosmos.html'), 'utf8');
 const THEMES = [
   { id: 'nova',  label: 'Nova',  title: 'PIPSILY Nova',  splash: '#070a12', css: ['nova/style.css'] },
   { id: 'bobine', label: 'Bobine', title: 'PIPSILY Bobine', splash: '#050403', css: ['nova/style.css', 'bobine/style.css'] },
+  { id: 'vertige', label: 'Vertige', title: 'PIPSILY Vertige', splash: '#04050a', css: ['nova/style.css', 'vertige/style.css'], liveHero: true },
 ];
 
 for (const T of THEMES) {
@@ -46,6 +47,7 @@ for (const T of THEMES) {
   // 2. Thème courant (routage de index.html, sélecteur d'interface, réglages)
   sub("localStorage.getItem('pf_theme') === 'cosmos'", "localStorage.getItem('pf_theme') === '" + T.id + "'");
   sub("const THEME_CUR='cosmos', THEME_LABEL='Cosmos TV';", "const THEME_CUR='" + T.id + "', THEME_LABEL='" + T.label + "';");
+  if (T.liveHero) sub('const THEME_LIVE_HERO=false;', 'const THEME_LIVE_HERO=true;');
   sub("' — PIPSILY Cosmos'", "' — PIPSILY " + T.label + "'");
   sub('<div id="voice-label">COSMOS · VOICE</div>', '<div id="voice-label">' + T.label.toUpperCase() + ' · VOICE</div>');
   sub('background:#060b16;display:flex;', 'background:' + T.splash + ';display:flex;');

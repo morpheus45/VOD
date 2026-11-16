@@ -17,8 +17,8 @@
       var _moderne = false;
       try { new Function("var o = {}; return o?.x;"); _moderne = true; } catch(e) {}
       if(!_moderne){
-        if(_theme==='cosmos' || _theme==='nova' || _theme==='bobine'){ try{ localStorage.removeItem('pf_theme'); }catch(e){} }
-      }else if(_theme==='nova' || _theme==='bobine'){ location.replace('./' + _theme + '.html'); }
+        if(_theme==='cosmos' || _theme==='nova' || _theme==='bobine' || _theme==='vertige'){ try{ localStorage.removeItem('pf_theme'); }catch(e){} }
+      }else if(_theme==='nova' || _theme==='bobine' || _theme==='vertige'){ location.replace('./' + _theme + '.html'); }
       else if(_theme==='cosmos' || (_theme===null && _isTV)){ location.replace('./cosmos.html'); }
     }catch(e){}
   </script>
